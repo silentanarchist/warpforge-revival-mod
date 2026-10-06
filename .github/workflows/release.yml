@@ -1,0 +1,40 @@
+# Publishes a Release when a version tag (for example v0.10.11) is pushed.
+# The build attached is the zip committed under releases/ for that version.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          zip="releases/WarpforgeRevival-${version}.zip"
+          if [ ! -f "$zip" ]; then
+            echo "No build found at $zip - commit the zip before pushing the tag." >&2
+            exit 1
+          fi
+          {
+            echo "Build for game version 1.35.0."
+            echo
+            echo "**Install**"
+            echo "1. Install MelonLoader 0.7.3 into the game folder and start the game once."
+            echo "2. Unzip, and copy the \`WarpforgeRevival\` folder into the game's \`Mods\` folder. Keep \`manifest.json\` next to the DLL."
+            echo "3. Start the game."
+            echo
+            echo "The zip's README.txt has the full steps. The source for this build is the code at this tag."
+          } > notes.md
+          gh release create "$TAG" "$zip" --title "Warpforge Revival mod ${version}" --notes-file notes.md
