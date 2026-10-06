@@ -12,9 +12,6 @@ Games Workshop. It contains no game files: you need your own copy of the game.
 ## What it does
 
 - **Sends the game's server requests to a revival server** instead of the closed ones (`PlayFabTransport.cs`).
-- **Lets the game start without Steam**, signing in with an id kept on your computer (`NoSteam.cs`).
-- **Protects your original game files.** The game's cache holds files that can no longer be downloaded;
-  the mod stops the game deleting them and keeps a second copy (`CacheGuard.cs`).
 - **Matches** run on the revival server's own match service. The game never contacts Photon's
   servers (`PhotonService.cs`, `Matchmaking.cs`).
 - **Global chat** runs through the revival server (`GlobalChat.cs`).
