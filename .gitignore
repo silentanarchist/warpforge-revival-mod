@@ -1,0 +1,11 @@
+# build output
+bin/
+obj/
+*.dll
+*.pdb
+# reference libraries: these come from MelonLoader and from the game, and are not ours to publish
+refs/
+# editor files
+.vs/
+.vscode/
+*.user

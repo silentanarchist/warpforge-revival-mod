@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Builds against:
+      RefsDir/net6    - .NET 6 runtime libraries (MelonLoader runs mods on .NET 6)
+      RefsDir/ml      - MelonLoader/net6 from the game folder
+      RefsDir/il2cpp  - MelonLoader/Il2CppAssemblies generated for this game
+    On Windows you can point RefsDir at copies of those folders.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>WarpforgeRevival</AssemblyName>
+    <RootNamespace>WarpforgeRevival</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <DebugType>embedded</DebugType>
+    <NoWarn>CA1416</NoWarn>
+    <RefsDir Condition="'$(RefsDir)' == ''">$(MSBuildThisFileDirectory)..\..\refs</RefsDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="$(RefsDir)\net6\*.dll" Private="false" />
+    <Reference Include="$(RefsDir)\ml\*.dll" Private="false" />
+    <Reference Include="$(RefsDir)\il2cpp\*.dll" Private="false" />
+  </ItemGroup>
+</Project>
