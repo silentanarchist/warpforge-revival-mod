@@ -27,6 +27,12 @@ Games Workshop. It contains no game files: you need your own copy of the game.
 
 Each file starts with a comment saying what it is for and why.
 
+## Download
+
+The latest build is [releases/WarpforgeRevival-0.10.11.zip](releases/WarpforgeRevival-0.10.11.zip)
+(open it and press "Download raw file"). It is built from the source in this repository and
+holds the mod, the `manifest.json` it needs, and a README with the steps below.
+
 ## Installing
 
 1. Install MelonLoader 0.7.3 into the game folder and start the game once.
