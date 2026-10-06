@@ -1,11 +1,16 @@
-# Publishes a Release when a version tag (for example v0.10.11) is pushed.
-# The build attached is the zip committed under releases/ for that version.
+# Publishes a Release for every build zip committed under releases/.
+# Adding releases/WarpforgeRevival-<version>.zip to main is all it takes: this creates the
+# tag v<version> and a Release with that zip attached. Builds that already have a Release
+# are left alone.
 name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+    paths:
+      - "releases/*.zip"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,25 +21,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create the release
+      - name: Create missing releases
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
         run: |
-          version="${TAG#v}"
-          zip="releases/WarpforgeRevival-${version}.zip"
-          if [ ! -f "$zip" ]; then
-            echo "No build found at $zip - commit the zip before pushing the tag." >&2
-            exit 1
-          fi
-          {
-            echo "Build for game version 1.35.0."
-            echo
-            echo "**Install**"
-            echo "1. Install MelonLoader 0.7.3 into the game folder and start the game once."
-            echo "2. Unzip, and copy the \`WarpforgeRevival\` folder into the game's \`Mods\` folder. Keep \`manifest.json\` next to the DLL."
-            echo "3. Start the game."
-            echo
-            echo "The zip's README.txt has the full steps. The source for this build is the code at this tag."
-          } > notes.md
-          gh release create "$TAG" "$zip" --title "Warpforge Revival mod ${version}" --notes-file notes.md
+          shopt -s nullglob
+          for zip in releases/WarpforgeRevival-*.zip; do
+            version="$(basename "$zip" .zip)"
+            version="${version#WarpforgeRevival-}"
+            tag="v${version}"
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "$tag already published"
+              continue
+            fi
+            {
+              echo "Build for game version 1.35.0."
+              echo
+              echo "**Install**"
+              echo "1. Install MelonLoader 0.7.3 into the game folder and start the game once."
+              echo "2. Unzip, and copy the \`WarpforgeRevival\` folder into the game's \`Mods\` folder. Keep \`manifest.json\` next to the DLL."
+              echo "3. Start the game."
+              echo
+              echo "The zip's README.txt has the full steps. The source for this build is the code at this tag."
+            } > notes.md
+            gh release create "$tag" "$zip" --target "$GITHUB_SHA" --title "Warpforge Revival mod ${version}" --notes-file notes.md
+            echo "published $tag"
+          done
