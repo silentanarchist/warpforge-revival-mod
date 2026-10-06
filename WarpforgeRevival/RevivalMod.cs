@@ -16,7 +16,7 @@ namespace WarpforgeRevival
     /// </summary>
     public class RevivalMod : MelonMod
     {
-        public const string Version = "0.10.10";
+        public const string Version = "0.10.11";
 
         internal static MelonLogger.Instance Log;
         internal static RevivalConfig Config;

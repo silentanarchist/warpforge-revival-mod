@@ -233,9 +233,8 @@ namespace WarpforgeRevival
         private static bool toldConnected;
 
         /// <summary>
-        /// A server that runs matches on its own Photon service is cutting its ties to the
-        /// publisher's, and chat already runs on the revival server: do not open the publisher's
-        /// Photon Chat connection either. ("photon": {"chat": "original"} keeps it.)
+        /// Chat runs on the revival server. The game's own chat connection went to its publisher's
+        /// Photon Chat service; that connection is never opened.
         /// </summary>
         [HarmonyPatch(typeof(Il2CppPhoton.Chat.ChatClient), nameof(Il2CppPhoton.Chat.ChatClient.Connect))]
         private static class NoPublisherChat
@@ -243,8 +242,6 @@ namespace WarpforgeRevival
             private static bool Prefix(Il2CppPhoton.Chat.ChatClient __instance, string appVersion, Il2CppPhoton.Chat.AuthenticationValues authValues, ref bool __result)
             {
                 if (server == null) return true;
-                for (int i = 0; i < 20 && !ServerSettings.Loaded; i++) System.Threading.Thread.Sleep(100);   // settings are still on their way
-                if (!ServerSettings.OwnPhoton || ServerSettings.KeepPhotonChat) return true;
                 if (!photonChatSkipped) RevivalMod.Log.Msg("[chat] not connecting to the publisher's Photon Chat; chat runs on the revival server");
                 photonChatSkipped = true;
                 // The game reads the player's own id back from the chat client, so it still needs

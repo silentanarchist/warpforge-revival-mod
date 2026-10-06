@@ -15,8 +15,8 @@ Games Workshop. It contains no game files: you need your own copy of the game.
 - **Lets the game start without Steam**, signing in with an id kept on your computer (`NoSteam.cs`).
 - **Protects your original game files.** The game's cache holds files that can no longer be downloaded;
   the mod stops the game deleting them and keeps a second copy (`CacheGuard.cs`).
-- **Matches** run on the server's own match service, or on a Photon app the server owner names
-  (`PhotonService.cs`, `Matchmaking.cs`).
+- **Matches** run on the revival server's own match service. The game never contacts Photon's
+  servers (`PhotonService.cs`, `Matchmaking.cs`).
 - **Global chat** runs through the revival server (`GlobalChat.cs`).
 - **Long Game**, a 60-card mode added by the revival (`LongGame.cs`).
 - **Profile additions:** win/loss record and skulls, friend codes, free renames (`ProfileStats.cs`, `ProfilePage.cs`).

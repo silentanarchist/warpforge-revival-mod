@@ -38,28 +38,13 @@ namespace WarpforgeRevival
         public static int ClassicDeckSize => classicDeckSize;
         public static int LongGameCopies(int rarity) => rarity >= 0 && rarity < longGameCopies.Length ? longGameCopies[rarity] : 0;
 
-        private static volatile string photonAppId, photonServer;
         private static volatile bool loaded;
+        private static volatile int matchPort;
 
         /// <summary>True once the server has answered (with settings or without) at least once.</summary>
         public static bool Loaded => loaded;
-        /// <summary>The server owner's own Photon Cloud app ("photon": {"appId": "..."}), or null to leave the game's as it is.</summary>
-        public static string PhotonAppId => photonAppId;
-        /// <summary>A self-hosted Photon server ("photon": {"server": "host:5055"}), or null.</summary>
-        public static string PhotonServer => photonServer;
-
-        private static volatile bool keepPhotonChat;
-        /// <summary>True when the server runs matches on a Photon service of its own.</summary>
-        public static bool OwnPhoton => photonAppId != null || photonServer != null || PhotonRevival;
-
-        private static volatile bool photonRevival;
-        private static volatile int photonRevivalPort;
-        /// <summary>"photon": {"service": "revival"}: matches run on the revival server's own match service.</summary>
-        public static bool PhotonRevival => photonRevival;
-        /// <summary>Port of that service ("photon": {"port": ...}); 0 = the server's usual port.</summary>
-        public static int PhotonRevivalPort => photonRevivalPort;
-        /// <summary>"photon": {"chat": "original"}: still connect to the publisher's Photon Chat.</summary>
-        public static bool KeepPhotonChat => keepPhotonChat;
+        /// <summary>Port of the server's match service ("matchPort"); 0 = the server's usual port.</summary>
+        public static int MatchPort => matchPort;
 
         private static volatile string creatorUrl;
 
@@ -94,8 +79,7 @@ namespace WarpforgeRevival
                     using var reply = await Http.GetAsync(url);
                     if (!reply.IsSuccessStatusCode)
                     {
-                        photonAppId = photonServer = null;
-                        photonRevival = false;
+                        matchPort = 0;
                         loaded = true;
                         if (turnSeconds != 0) RevivalMod.Log.Msg("[settings] the server no longer provides settings; using local values");
                         turnSeconds = 0;
@@ -116,30 +100,10 @@ namespace WarpforgeRevival
                         if (v.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || v.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) creator = v;
                     }
                     creatorUrl = creator;
-                    string appId = null, server = null;
-                    bool keepChat = false, revival = false;
-                    int revivalPort = 0;
-                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("photon", out var ph3) && ph3.ValueKind == JsonValueKind.Object)
-                    {
-                        revival = ph3.TryGetProperty("service", out var sv) && sv.ValueKind == JsonValueKind.String &&
-                                  string.Equals(sv.GetString(), "revival", StringComparison.OrdinalIgnoreCase);
-                        if (ph3.TryGetProperty("port", out var pp) && pp.ValueKind == JsonValueKind.Number) revivalPort = pp.GetInt32();
-                    }
-                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("photon", out var ph) && ph.ValueKind == JsonValueKind.Object)
-                    {
-                        if (ph.TryGetProperty("appId", out var pa) && pa.ValueKind == JsonValueKind.String && Guid.TryParse(pa.GetString(), out var g)) appId = g.ToString();
-                        if (ph.TryGetProperty("server", out var ps) && ps.ValueKind == JsonValueKind.String && ps.GetString().Trim().Length > 0) server = ps.GetString().Trim();
-                    }
-                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("photon", out var ph2) && ph2.ValueKind == JsonValueKind.Object &&
-                        ph2.TryGetProperty("chat", out var pc) && pc.ValueKind == JsonValueKind.String)
-                        keepChat = string.Equals(pc.GetString(), "original", StringComparison.OrdinalIgnoreCase);
-                    keepPhotonChat = keepChat;
-                    if (appId != photonAppId || server != photonServer || revival != photonRevival)
-                        RevivalMod.Log.Msg("[settings] server settings: match service " + (revival ? "the revival server's own" : server != null ? "self-hosted at " + server : appId != null ? "the server owner's Photon app" : "the game's original"));
-                    photonAppId = appId;
-                    photonServer = server;
-                    photonRevivalPort = revivalPort;
-                    photonRevival = revival;
+                    int port = 0;
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("matchPort", out var mp) && mp.ValueKind == JsonValueKind.Number)
+                        port = mp.GetInt32();
+                    matchPort = port > 0 && port < 65536 ? port : 0;
                     loaded = true;
                     bool offence = false;
                     if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("offenseCards", out var o) &&
