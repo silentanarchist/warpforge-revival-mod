@@ -45,6 +45,115 @@ namespace WarpforgeRevival
             }
         }
 
+        // ---------------------------------------------------------------- Classic or Skirmish health
+        // The final card data gives warlords their Skirmish health, and Classic adds to it through
+        // the mode's rules on the server. Practice against the AI always runs under the one event
+        // "PracticeEvent" whichever way its Classic/Skirmish switch is set, so the rules cannot differ
+        // there; the mod adds the Classic amount itself when the switch was on Classic.
+        private static bool practiceModeKnown;
+        private static PlayModes practiceMode;
+
+        [HarmonyPatch(typeof(PracticeModePopup), nameof(PracticeModePopup.BattleButtonOnClick))]
+        private static class Started
+        {
+            private static void Prefix(PracticeModePopup __instance)
+            {
+                try
+                {
+                    practiceMode = __instance.currentPlayMode;
+                    practiceModeKnown = true;
+                    RevivalMod.Log.Msg($"[practice] starting a practice match on {practiceMode}");
+                }
+                catch (Exception e) { practiceModeKnown = false; RevivalMod.Log.Warning("[practice] " + e.Message); }
+            }
+        }
+
+        // ---------------------------------------------------------------- the AI's deck follows the switch
+        // The game picks the AI's practice deck without looking at the Classic/Skirmish switch, so a
+        // Classic match could be played against a 12-card Skirmish deck (and the other way round).
+        // When the deck it picked is for the other mode, a practice deck for the chosen mode is used.
+        private static readonly System.Random Dice = new System.Random();
+
+        [HarmonyPatch(typeof(MatchData), nameof(MatchData.GetBotDeck))]
+        private static class AiDeck
+        {
+            private static void Postfix(MatchType matchType, ref PrebuiltDeck __result)
+            {
+                try
+                {
+                    if (!practiceModeKnown || matchType != MatchType.PracticeOffline) return;
+                    if (practiceMode != PlayModes.Classic && practiceMode != PlayModes.Skirmish) return;
+                    var picked = __result;
+                    if ((object)picked != null && picked.gameMode == practiceMode) return;
+                    var all = PlayerDataManager.singletonManager?.PrebuiltDeckCollection?.practiceDecks;
+                    if (all == null) return;
+                    var same = new System.Collections.Generic.List<PrebuiltDeck>();     // right mode and same difficulty
+                    var any = new System.Collections.Generic.List<PrebuiltDeck>();      // right mode
+                    for (int i = 0; i < all.Count; i++)
+                    {
+                        var d = all[i];
+                        if ((object)d == null || d.m_CachedPtr == IntPtr.Zero || d.gameMode != practiceMode) continue;
+                        var ids = d.cardLibraryIds;
+                        if (ids == null || ids.Count == 0) continue;
+                        any.Add(d);
+                        if ((object)picked != null && d.difficulty == picked.difficulty) same.Add(d);
+                    }
+                    var pool = same.Count > 0 ? same : any;
+                    if (pool.Count == 0)
+                    {
+                        RevivalMod.Log.Msg($"[practice] no {practiceMode} practice deck found for the AI; keeping '{((object)picked == null ? "none" : picked.deckName)}'");
+                        return;
+                    }
+                    var chosen = pool[Dice.Next(pool.Count)];
+                    RevivalMod.Log.Msg($"[practice] AI deck '{((object)picked == null ? "none" : picked.deckName)}' is not a {practiceMode} deck; using '{chosen.deckName}' ({chosen.cardLibraryIds.Count} cards)");
+                    __result = chosen;
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[practice] AI deck: " + e.Message); }
+            }
+        }
+
+        [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.SetupFullHero))]
+        private static class ClassicHealth
+        {
+            private static void Postfix(BattleManager __instance, bool isPlayer)
+            {
+                // What rules this match is really running under (written once per match, for both sides).
+                try
+                {
+                    if (isPlayer)
+                    {
+                        var rules = __instance.matchData?.GameplayData;
+                        RevivalMod.Log.Msg("[rules] match rules: " + ((object)rules == null ? "none found" :
+                            $"energy at start {rules.startingMana} (going first) / {rules.startingManaSecond} (going second), +{rules.manaPerTurn} per turn, " +
+                            $"second player bonus {rules.addedManaSecond}, carried over {rules.manaAccumulation}, deck {rules.deckSize}, hand limit {rules.handLimit}, " +
+                            $"warlord health change {rules.warlordLifeChange}") +
+                            $"; you go {(__instance.playerGoesFirst ? "first" : "second")}; starting energy you {__instance.GetStartingMana(true)}, opponent {__instance.GetStartingMana(false)}");
+                    }
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[rules] " + e.Message); }
+                try
+                {
+                    int bonus = ServerSettings.PracticeClassicLife;
+                    if (bonus == 0 || !practiceModeKnown || practiceMode != PlayModes.Classic) return;
+                    var modes = LiveOpsManager.GetHandler<GameModes>();
+                    var current = (object)modes == null ? null : modes.CurrentPlayingEvent;
+                    var data = (object)current == null ? null : current.GetBaseData();
+                    if ((object)data == null || data.eventId != "PracticeEvent") return;
+                    // The game adds the mode's own health change itself; only step in when the match has none.
+                    var own = __instance.matchData?.GameplayData;
+                    if ((object)own != null && own.warlordLifeChange != 0) return;
+                    var hero = __instance.GetHero(isPlayer);
+                    if ((object)hero == null) return;
+                    int before = hero.currentMaxHealth;
+                    hero.currentMaxHealth = before + bonus;
+                    hero.currentHealth = before + bonus;
+                    try { hero.UpdateHealthText(false); } catch { }
+                    RevivalMod.Log.Msg($"[practice] Classic practice: {(isPlayer ? "your" : "enemy")} warlord health {before} -> {before + bonus}");
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[practice] warlord health: " + e.Message); }
+            }
+        }
+
         // The first button is the player's own deck; its "Your deck" caption is a missing translation too.
         [HarmonyPatch(typeof(DeckSelectorMenuItemDemo), nameof(DeckSelectorMenuItemDemo.InitializeWithPlayerDeck))]
         private static class OwnDeckCaption

@@ -220,6 +220,7 @@ namespace WarpforgeRevival
         {
             private static void Prefix(Il2CppSystem.Object data)
             {
+                editorOpen = true; browseActive = false;
                 try
                 {
                     if (page != Page.Long) return;
@@ -383,7 +384,7 @@ namespace WarpforgeRevival
         [HarmonyPatch(typeof(DeckEditingWindow), nameof(DeckEditingWindow.Close))]
         private static class EditorClosed
         {
-            private static void Postfix() { editingLong = false; }
+            private static void Postfix() { editingLong = false; editorOpen = false; }
         }
 
         // ------------------------------------------------------------------ deck rules
@@ -533,6 +534,113 @@ namespace WarpforgeRevival
             }
         }
 
+        // ------------------------------------------------------------------ warlord health in the deck builder
+        // The deck builder shows a warlord with the health it has under the rules of the mode being
+        // built for (the game does that itself for Classic and Skirmish). Long Game's health is a
+        // multiplier applied by this mod, so the builder is told the Long Game figure here.
+        private static int builderNotes, browseNotes;
+        private static bool editorOpen;                  // a deck is being built or edited (any mode)
+
+        private static bool browseActive;                // the plain collection (no deck open) was the last card grid drawn
+
+        // (Hooking the function every card display goes through, BasicCardUI.SetRawCardData, broke
+        // card drawing in 0.11.2, so each screen is adjusted at its own, narrower, entry point.)
+
+        /// <summary>The health a warlord card should show right now, or -1 to leave what the game wrote.</summary>
+        private static int ShownHealth(RawCardScript item, int change, bool grid)
+        {
+            if ((object)item == null || item.cardType != CardTypeOptions.Hero) return -1;
+            if (page == Page.Long || editingLong)
+            {
+                double factor = ServerSettings.LongGameHealth;
+                if (factor <= 0 || Math.Abs(factor - 1.0) < 0.001) return -1;
+                int before = item.maxHealth + change;
+                int after = (int)Math.Round(before * factor, MidpointRounding.AwayFromZero);
+                if (builderNotes < 3) { builderNotes++; RevivalMod.Log.Msg($"[long] deck builder shows Long Game warlord health ('{item.cardName}' {before} -> {after}, {(grid ? "card grid" : "enlarged card")})"); }
+                return after;
+            }
+            // Browsing the collection (no deck being built): show warlords as Classic has them.
+            int classic = ServerSettings.PracticeClassicLife;
+            if (editorOpen || change != 0 || classic == 0) return -1;
+            if (grid) browseActive = true;
+            else if (!browseActive) return -1;
+            if (browseNotes < 3) { browseNotes++; RevivalMod.Log.Msg($"[cards] collection shows Classic warlord health ('{item.cardName}' {item.maxHealth} -> {item.maxHealth + classic}, {(grid ? "card grid" : "enlarged card")})"); }
+            return item.maxHealth + classic;
+        }
+
+        private static void ApplyGrid(CollectionCard card)
+        {
+            try
+            {
+                if ((object)card == null) return;
+                var ui = card.cardUI;
+                if ((object)ui == null) return;
+                var data = card.currentGameplayVariablesData;
+                int health = ShownHealth(card.Item, (object)data != null ? data.warlordLifeChange : 0, true);
+                if (health >= 0) ui.SetAltHealth(health);
+            }
+            catch (Exception e) { if (builderNotes < 6) { builderNotes++; RevivalMod.Log.Warning("[long] deck builder health: " + e.Message); } }
+        }
+
+        [HarmonyPatch(typeof(CollectionCard), nameof(CollectionCard.Config))]
+        private static class BuilderHealth
+        {
+            private static void Postfix(CollectionCard __instance) { ApplyGrid(__instance); }
+        }
+
+        // The grid writes each card's numbers again after setting it up, and again whenever the deck changes.
+        [HarmonyPatch(typeof(CardCollectionDisplay), nameof(CardCollectionDisplay.SetCell))]
+        private static class GridCell
+        {
+            private static void Postfix(Il2CppPolyAndCode.UI.ICell cell)
+            {
+                try { ApplyGrid((object)cell == null ? null : cell.TryCast<CollectionCard>()); }
+                catch (Exception e) { if (builderNotes < 6) { builderNotes++; RevivalMod.Log.Warning("[long] deck builder health (cell): " + e.Message); } }
+            }
+        }
+
+        [HarmonyPatch(typeof(CardCollectionDisplay), nameof(CardCollectionDisplay.UpdateCardVisuals))]
+        private static class GridRefresh
+        {
+            private static void Postfix(CollectionCard card) { ApplyGrid(card); }
+        }
+
+        // The deck editor has its own grid, which does the same rewriting.
+        [HarmonyPatch(typeof(DeckEditorCollectionDisplay), nameof(DeckEditorCollectionDisplay.SetCell))]
+        private static class EditorCell
+        {
+            private static void Postfix(Il2CppPolyAndCode.UI.ICell cell)
+            {
+                try { ApplyGrid((object)cell == null ? null : cell.TryCast<CollectionCard>()); }
+                catch (Exception e) { if (builderNotes < 6) { builderNotes++; RevivalMod.Log.Warning("[long] deck builder health (editor cell): " + e.Message); } }
+            }
+        }
+
+        [HarmonyPatch(typeof(DeckEditorCollectionDisplay), nameof(DeckEditorCollectionDisplay.DrawCell))]
+        private static class EditorRedraw
+        {
+            private static void Postfix(CollectionCard card) { ApplyGrid(card); }
+        }
+
+        // The enlarged card shown when one is clicked.
+        [HarmonyPatch(typeof(CardDisplayWindow), nameof(CardDisplayWindow.InitializeCardForDisplay))]
+        private static class EnlargedCard
+        {
+            private static void Postfix(CardDisplayWindow __instance, RawCardScript cardData, int index, int warlordHealthModifier)
+            {
+                try
+                {
+                    int health = ShownHealth(cardData, warlordHealthModifier, false);
+                    if (health < 0) return;
+                    var uis = __instance.cardUIs;
+                    if (uis == null || index < 0 || index >= uis.Length) return;
+                    var ui = uis[index];
+                    if ((object)ui != null) ui.SetAltHealth(health);
+                }
+                catch (Exception e) { if (builderNotes < 6) { builderNotes++; RevivalMod.Log.Warning("[long] enlarged card health: " + e.Message); } }
+            }
+        }
+
         // ------------------------------------------------------------------ warlord health
 
         [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.SetupFullHero))]
@@ -540,6 +648,7 @@ namespace WarpforgeRevival
         {
             private static void Postfix(BattleManager __instance, bool isPlayer)
             {
+                browseActive = false;
                 try { ApplyHand(__instance); } catch (Exception e) { RevivalMod.Log.Warning("[long] starting hand: " + e.Message); }
                 try
                 {

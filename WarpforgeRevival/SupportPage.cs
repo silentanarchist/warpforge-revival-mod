@@ -49,6 +49,15 @@ namespace WarpforgeRevival
             c.gameObject.SetActive(false);
         }
 
+        /// <summary>Switches on everything between a part of the page and the page itself. Returns how many were off.</summary>
+        private static int Show(Transform t, Transform root)
+        {
+            int n = 0;
+            for (; (object)t != null && t.Pointer != root.Pointer; t = t.parent)
+                if (!t.gameObject.activeSelf) { t.gameObject.SetActive(true); n++; }
+            return n;
+        }
+
         private static void Apply(SupportTab tab)
         {
             var faq = tab.faqButton;
@@ -80,12 +89,14 @@ namespace WarpforgeRevival
             TMP_Text title = null;
             string oldTitle = null;
             var seen = new List<string>();
+            var gone = new List<Transform>();
             foreach (var label in root.GetComponentsInChildren<TMP_Text>(true))
             {
                 if ((object)label == null) continue;
                 bool inFaq = Under(label.transform, faqT);
                 bool isIntro = (object)intro != null && label.Pointer == intro.Pointer;
-                seen.Add($"{label.name}='{label.text}'" + (inFaq ? " [button]" : isIntro ? " [intro]" : ""));
+                seen.Add($"{label.name}='{label.text}'" + (inFaq ? " [button]" : isIntro ? " [intro]" : "")
+                    + (label.gameObject.activeInHierarchy ? "" : " (not shown)"));
                 if (inFaq) { SetText(label, ButtonText); continue; }
                 if (isIntro) { SetText(label, Intro); continue; }
                 if ((object)title == null && (object)label.GetComponentInParent<EverguildButton>() == null)
@@ -96,7 +107,35 @@ namespace WarpforgeRevival
                     continue;
                 }
                 Hide(label);
+                gone.Add(label.transform);
             }
+
+            // What was hidden often sits in a row with its own icon (the link arrow beside the old
+            // privacy policy text). Hide the whole row: the largest part of the page around it that
+            // holds none of the three things this page keeps.
+            foreach (var extra in new Component[] { tab.contactButton, tab.privacyPolicyButton, tab.termsOfServiceButton, tab.supportButton })
+                if ((object)extra != null) gone.Add(extra.transform);
+            int rows = 0;
+            foreach (var t in gone)
+            {
+                var row = t;
+                while ((object)row.parent != null && row.parent.Pointer != root.Pointer && row.Pointer != root.Pointer
+                       && !Under(faqT, row.parent)
+                       && ((object)intro == null || !Under(intro.transform, row.parent))
+                       && ((object)title == null || !Under(title.transform, row.parent)))
+                    row = row.parent;
+                if (row.Pointer == t.Pointer || row.Pointer == root.Pointer) continue;
+                Hide(row);
+                rows++;
+            }
+            if (rows > 0 && !reported) RevivalMod.Log.Msg($"[support] hid {rows} leftover row(s) around the publisher's links");
+
+            // The phone layout of this page keeps the button and its introduction switched off and
+            // shows its own wording instead (which was just hidden with the rest of the publisher's
+            // text). Make sure the two things this page is for can be seen.
+            int shown = Show(faqT, root);
+            if ((object)intro != null) shown += Show(intro.transform, root);
+            if (shown > 0 && !reported) RevivalMod.Log.Msg($"[support] switched on {shown} hidden part(s) of the page so the button and its text show");
 
             // The tab's button down the side of the window carries the same word as the heading.
             int renamed = 0;
@@ -117,9 +156,61 @@ namespace WarpforgeRevival
                 }
             }
 
+            // the Login tab of the same window needs the same care (see AccountPage.Tick)
+            try
+            {
+                var window = tab.GetComponentInParent<SettingsMenu>();
+                if ((object)window != null) AccountPage.Remember(window.GetComponentInChildren<AccountTab>(true));
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[account] " + e.Message); }
+
+            // remembered for Tick: on a phone the layout changes again when the tab is opened
+            page = tab; pageRoot = root; pageButton = faqT; pageIntro = (object)intro != null ? intro.transform : null;
+            settledFrames = 0;
+
             if (reported) return;
             reported = true;
             RevivalMod.Log.Msg($"[support] page now opens {ServerSettings.CreatorUrl}; heading was '{oldTitle}', side tab labels renamed: {renamed}; texts found: {string.Join(" | ", seen)}");
+        }
+
+        private static SupportTab page;
+        private static Transform pageRoot, pageButton, pageIntro;
+        private static int settledFrames;
+        private static bool tickReported;
+
+        /// <summary>
+        /// Called every frame. The phone layout switches the button and its introduction off when the
+        /// tab is opened (after the set-up above has run) and shows its own wording, which this page
+        /// hides. So each time the tab comes into view, wait two frames for the layout to finish and
+        /// then switch the page's two parts back on.
+        /// </summary>
+        internal static void Tick()
+        {
+            if ((object)page == null) return;
+            try
+            {
+                if (page.Pointer == IntPtr.Zero || page.m_CachedPtr == IntPtr.Zero) { page = null; return; }   // the window was closed for good
+                if (!page.gameObject.activeInHierarchy) { settledFrames = 0; return; }
+                if (settledFrames < 0) return;                  // done for this opening of the tab
+                if (++settledFrames < 3) return;
+                settledFrames = -1;
+                int shown = Show(pageButton, pageRoot);
+                if ((object)pageIntro != null) shown += Show(pageIntro, pageRoot);
+                if (!tickReported)
+                {
+                    tickReported = true;
+                    var states = new List<string>();
+                    foreach (var label in pageRoot.GetComponentsInChildren<TMP_Text>(true))
+                        if ((object)label != null)
+                            states.Add($"{label.name}='{(label.text ?? "").Replace("\n", " ")}' {(label.gameObject.activeInHierarchy ? "on screen" : "off")}{(label.enabled ? "" : " (hidden by the mod)")}");
+                    RevivalMod.Log.Msg($"[support] tab opened: switched on {shown} part(s) the layout had turned off; texts now: {string.Join(" | ", states)}");
+                }
+            }
+            catch (Exception e)
+            {
+                page = null;
+                RevivalMod.Log.Warning("[support] " + e.Message);
+            }
         }
 
         [HarmonyPatch(typeof(SupportTab), nameof(SupportTab.OnSetup))]

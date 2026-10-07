@@ -97,6 +97,16 @@ namespace WarpforgeRevival
                 foreach (var m in type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly).Where(filter))
                 {
                     if (m.IsAbstract || m.ContainsGenericParameters) continue;
+#if ANDROID_TEST
+                    // On a phone (ARM64) the patching layer mishandles game methods that hand back a
+                    // struct (async methods do): the method then runs with scrambled arguments and
+                    // crashes. Leave those alone.
+                    if (m.ReturnType != typeof(void) && !m.ReturnType.IsPrimitive && !m.ReturnType.IsEnum && IsStruct(m.ReturnType))
+                    {
+                        RevivalMod.Log.Msg($"[diag] not tracing {type.Name}.{m.Name} (returns a struct)");
+                        continue;
+                    }
+#endif
                     try { harmony.Patch(m, prefix: trace); ok++; }
                     catch (Exception e) { RevivalMod.Log.Warning($"[diag] could not trace {type.Name}.{m.Name}: {e.Message}"); }
                 }
@@ -126,6 +136,10 @@ namespace WarpforgeRevival
             }
 
             // Unity's own Debug.Log / LogWarning (Addressables and some game code log through these directly).
+#if ANDROID_PORT
+            // Left out on a phone for now: the game writes a line per inventory item through these.
+            if (ok >= 0) { RevivalMod.Log.Msg($"[diag] tracing {ok} game methods"); return; }
+#endif
             try
             {
                 harmony.Patch(AccessTools.Method(typeof(UnityEngine.Debug), nameof(UnityEngine.Debug.Log), new[] { typeof(Il2CppSystem.Object) }),
@@ -153,6 +167,9 @@ namespace WarpforgeRevival
         {
             try
             {
+#if ANDROID_PORT
+                if (__originalMethod.Name == "UnpackInventory") InventoryStarted();
+#endif
                 int n = Counts.AddOrUpdate(__originalMethod, 1, (_, c) => c + 1);
                 if (n > MaxLinesPerMethod) return;
                 var t = __originalMethod.DeclaringType;
@@ -172,13 +189,69 @@ namespace WarpforgeRevival
             return str.Length > 80 ? str.Substring(0, 80) + "..." : str;
         }
 
+#if ANDROID_PORT
+        // Measuring why unpacking the inventory takes so much longer on a phone.
+        private static int gcAtStart = -1;
+        private static readonly System.Diagnostics.Stopwatch InventoryClock = new System.Diagnostics.Stopwatch();
+        internal static void InventoryStarted()
+        {
+            try
+            {
+                gcAtStart = Il2CppSystem.GC.CollectionCount(0);
+                RevivalMod.Log.Msg("[timing] loader hook calls before the inventory: " + Il2CppInterop.Runtime.Injection.HookStats.Snapshot()
+                    + $", content lookups {AddressablesRedirect.Lookups}");
+                InventoryClock.Restart();
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[timing] " + e.Message); }
+        }
+        private static void GameLog(string logString)
+        {
+            RevivalMod.Log.Msg("[game] " + logString);
+            try
+            {
+                if (logString != null && logString.StartsWith("Finished unpacking inventory") && gcAtStart >= 0)
+                {
+                    int collections = Il2CppSystem.GC.CollectionCount(0) - gcAtStart;
+                    RevivalMod.Log.Msg($"[timing] inventory took {InventoryClock.ElapsedMilliseconds} ms with {collections} memory clean-ups by the game");
+                    RevivalMod.Log.Msg("[timing] loader hook calls after the inventory:  " + Il2CppInterop.Runtime.Injection.HookStats.Snapshot()
+                        + $", content lookups {AddressablesRedirect.Lookups}");
+                    try
+                    {
+                        // how long one trip through a loader hook takes
+                        IntPtr type = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_type(Il2CppInterop.Runtime.Il2CppClassPointerStore<Il2CppSystem.Object>.NativeClassPtr);
+                        const int rounds = 20000;
+                        var trip = System.Diagnostics.Stopwatch.StartNew();
+                        for (int i = 0; i < rounds; i++) Il2CppInterop.Runtime.IL2CPP.il2cpp_class_from_il2cpp_type(type);
+                        trip.Stop();
+                        RevivalMod.Log.Msg($"[timing] one trip through a loader hook takes about {trip.Elapsed.TotalMilliseconds * 1000.0 / rounds:F2} microseconds");
+                    }
+                    catch (Exception e) { RevivalMod.Log.Warning("[timing] hook trip: " + e.Message); }
+                    var one = System.Diagnostics.Stopwatch.StartNew();
+                    Il2CppSystem.GC.Collect();
+                    RevivalMod.Log.Msg($"[timing] one memory clean-up takes {one.ElapsedMilliseconds} ms; game memory in use {Il2CppSystem.GC.GetTotalMemory(false) / (1024 * 1024)} MB");
+                }
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[timing] " + e.Message); }
+        }
+#else
         private static void GameLog(string logString) => RevivalMod.Log.Msg("[game] " + logString);
+#endif
         private static void GameLogWarning(string logString) => RevivalMod.Log.Warning("[game] " + logString);
         private static void GameLogError(string logString) => RevivalMod.Log.Error("[game] " + logString);
 
         private static void UnityLog(Il2CppSystem.Object message)
         {
-            try { RevivalMod.Log.Msg("[unity] " + message?.ToString()); } catch { }
+            try
+            {
+                string text = message?.ToString();
+#if ANDROID_TEST
+                // Written once per inventory item (thousands); on a phone writing them all out
+                // makes loading take several times longer.
+                if (text == "No listener registered to this event") return;
+#endif
+                RevivalMod.Log.Msg("[unity] " + text);
+            }
+            catch { }
         }
 
         private static void UnityLogWarning(Il2CppSystem.Object message)

@@ -55,6 +55,20 @@ namespace WarpforgeRevival
         /// <summary>Switches the pick step on or off. Safe to call repeatedly and from any thread.</summary>
         public static void Set(bool on)
         {
+#if ANDROID_PORT
+            // In the phone's code the "is this feature on" question is a function of its own, asked in
+            // exactly the same three places, so it is simply answered (see FeatureSwitch below) instead
+            // of changing machine code as on Windows.
+            lock (Gate)
+            {
+                if (on == applied) return;
+                applied = on;
+                RevivalMod.Log.Msg(on
+                    ? "[cards] Offence card step on: going first you pick an Offence card; going second you get your deck's Defence card"
+                    : "[cards] Offence card step off: standard rules (going second you get your deck's Defence card)");
+            }
+            return;
+#else
             lock (Gate)
             {
                 if (broken || on == applied) return;
@@ -93,7 +107,19 @@ namespace WarpforgeRevival
                 }
                 catch (Exception e) { broken = true; RevivalMod.Log.Warning("[cards] " + e); }
             }
+#endif
         }
+
+#if ANDROID_PORT
+        [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.ShouldUseEnviromentalEffects))]
+        private static class FeatureSwitch
+        {
+            private static void Postfix(ref bool __result)
+            {
+                if (applied) __result = true;
+            }
+        }
+#endif
 
         /// <summary>The cards offered in the pick step (the game itself would offer none here).</summary>
         [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.GetEnvEffectCards))]

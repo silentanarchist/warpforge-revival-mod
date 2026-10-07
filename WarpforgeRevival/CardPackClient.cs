@@ -44,7 +44,12 @@ namespace WarpforgeRevival
                 {
                     Timeout = TimeSpan.FromSeconds(RevivalMod.Config.TimeoutSeconds)
                 };
+                #if ANDROID_TEST
+                // a phone needs the Android build of the content files
+                var manifestJson = await http.GetStringAsync(server + "/api/v1/content/manifest?platform=android");
+#else
                 var manifestJson = await http.GetStringAsync(server + "/api/v1/content/manifest");
+#endif
                 using var manifest = JsonDocument.Parse(manifestJson);
                 var remoteVersion = manifest.RootElement.GetProperty("packVersion").GetString();
                 var sha = manifest.RootElement.GetProperty("sha256").GetString();

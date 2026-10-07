@@ -3,7 +3,11 @@
 A [MelonLoader](https://melonwiki.xyz/) mod that lets *Warhammer 40,000: Warpforge* run against a
 community-hosted server now that the game's own servers are closed.
 
-This repository is the complete source of `WarpforgeRevival.dll`. The server it talks to is in
+This repository is the complete source of `WarpforgeRevival.dll`, the Windows build. The same
+source also builds the Android mod (the parts marked `ANDROID_PORT`); the Android project, the
+patcher that puts the mod loader into the Android game, and the instructions for phones are in
+[warpforge-revival-mod-android](https://github.com/silentanarchist/warpforge-revival-mod-android).
+Versions are numbered together: `x.y.z-w` for Windows, `x.y.z-a` for Android. The server it talks to is in
 [warpforge-revival-server](https://github.com/silentanarchist/warpforge-revival-server).
 
 This is an unofficial fan project. It is not affiliated with or endorsed by Everguild or
@@ -19,6 +23,12 @@ Games Workshop. It contains no game files: you need your own copy of the game.
 - **Profile additions:** win/loss record and skulls, friend codes, free renames (`ProfileStats.cs`, `ProfilePage.cs`).
 - **Account link** to the server's card creator site, optional (`AccountPage.cs`).
 - **Updates itself** from the server it is connected to, after asking (`Updater.cs`).
+- **Stops the game contacting Unity's online services** (a sign-in that fails since the shutdown,
+  and usage reports to the publisher); the two voice-line switches those services carried are set
+  by the mod (`UnityServicesOff.cs`).
+- **Mode rules shown where you build decks:** warlord health for the mode being built, and the
+  practice Classic/Skirmish switch choosing the AI's deck and health (`LongGame.cs`, `PracticeMenu.cs`).
+- **Mod version** next to the game's in Settings > General (`VersionLabel.cs`).
 - Smaller fixes: the game keeps running in the background, scrollbars on long lists, missing text
   supplied by the server, menus for closed features hidden.
 
@@ -26,7 +36,7 @@ Each file starts with a comment saying what it is for and why.
 
 ## Download
 
-The latest build is [releases/WarpforgeRevival-0.10.12.zip](releases/WarpforgeRevival-0.10.12.zip)
+The latest build is [releases/WarpforgeRevival-0.11.9-w.zip](releases/WarpforgeRevival-0.11.9-w.zip)
 (open it and press "Download raw file"). It is built from the source in this repository and
 holds the mod, the `manifest.json` it needs, and a README with the steps below.
 

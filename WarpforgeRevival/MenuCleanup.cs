@@ -64,7 +64,16 @@ namespace WarpforgeRevival
         private static class OnAwake { private static void Postfix(NavigationPanelController __instance) => Apply(__instance); }
 
         [HarmonyPatch(typeof(NavigationPanelController), nameof(NavigationPanelController.OnInitializationComplete))]
-        private static class OnReady { private static void Postfix(NavigationPanelController __instance) => Apply(__instance); }
+        private static class OnReady
+        {
+            private static void Postfix(NavigationPanelController __instance)
+            {
+                Apply(__instance);
+#if ANDROID_PORT
+                AndroidUpdater.MenuShown();
+#endif
+            }
+        }
 
         [HarmonyPatch(typeof(NavigationPanelController), nameof(NavigationPanelController.OnEventsRefreshed))]
         private static class OnRefresh { private static void Postfix(NavigationPanelController __instance) => Apply(__instance); }

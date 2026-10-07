@@ -1,3 +1,4 @@
+#if !ANDROID_PORT   // Windows only; left out of the Android build
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -68,9 +69,12 @@ namespace WarpforgeRevival
                 using var manifest = JsonDocument.Parse(await http.GetStringAsync(serverUrl + "/api/v1/mod/manifest"));
                 var root = manifest.RootElement;
                 if (!root.TryGetProperty("available", out var av) || !av.GetBoolean()) return;
-                string remote = root.GetProperty("version").GetString();
+                // "version" stays in the form older builds understand; "label" is the name shown to people
+                string number = root.GetProperty("version").GetString();
+                string remote = root.TryGetProperty("label", out var lb) && lb.ValueKind == JsonValueKind.String ? lb.GetString() : number;
                 string sha = root.GetProperty("sha256").GetString();
-                if (!Version.TryParse(remote, out var rv) || !Version.TryParse(RevivalMod.Version, out var lv) || rv <= lv)
+                var rv = RevivalMod.Number(number); var lv = RevivalMod.Number(RevivalMod.Version);
+                if (rv == null || lv == null || rv <= lv)
                 {
                     RevivalMod.Log.Msg($"[update] mod is up to date (installed {RevivalMod.Version}, server has {remote})");
                     return;
@@ -129,3 +133,4 @@ namespace WarpforgeRevival
         }
     }
 }
+#endif

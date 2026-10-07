@@ -246,6 +246,51 @@ namespace WarpforgeRevival
             catch { }
         }
 
+        // ---------------------------------------------------------------- when the tab comes into view
+        private static AccountTab seen;
+        private static int seenFrames;
+        private static bool seenReported;
+
+        /// <summary>Told about the tab as soon as the Settings window is built (see SupportPage).</summary>
+        internal static void Remember(AccountTab tab)
+        {
+            if (!Usable(tab)) return;
+            seen = tab;
+            seenFrames = 0;
+        }
+
+        /// <summary>
+        /// Called every frame. The game lays this tab out again whenever it is opened - on a phone
+        /// quite differently from a PC - and that can undo the changes made above. So each time the
+        /// tab comes into view, wait two frames for the layout to finish and apply them once more.
+        /// </summary>
+        internal static void Tick()
+        {
+            if ((object)seen == null) return;
+            try
+            {
+                if (!Usable(seen)) { seen = null; return; }
+                if (!seen.gameObject.activeInHierarchy) { seenFrames = 0; return; }
+                if (seenFrames < 0) return;
+                if (++seenFrames < 3) return;
+                seenFrames = -1;
+                var tab = seen;
+                Apply(tab);
+                Say(tab, Status());
+                if (seenReported) return;
+                seenReported = true;
+                string State(Component c) => (object)c == null ? "missing" : c.gameObject.activeInHierarchy ? "on screen" : "off";
+                RevivalMod.Log.Msg("[account] tab opened: username box " + State(tab.emailInput) + ", password box " + State(tab.passwordInput)
+                    + ", link button " + State(tab.registerButton) + ", message line " + State(tab.errorMessage)
+                    + ", sign-in button " + State(tab.loginButton) + ", sign-out button " + State(tab.logoutButton));
+            }
+            catch (Exception e)
+            {
+                seen = null;
+                RevivalMod.Log.Warning("[account] " + e.Message);
+            }
+        }
+
         [HarmonyPatch(typeof(AccountTab), nameof(AccountTab.Refresh))]
         private static class OnRefresh
         {

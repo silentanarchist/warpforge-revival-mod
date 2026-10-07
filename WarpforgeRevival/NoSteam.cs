@@ -1,3 +1,4 @@
+#if !ANDROID_PORT   // Windows only; left out of the Android build
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -194,3 +195,4 @@ namespace WarpforgeRevival
         }
     }
 }
+#endif

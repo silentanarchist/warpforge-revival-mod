@@ -62,7 +62,8 @@ namespace WarpforgeRevival
         public static RevivalConfig Load()
         {
             var cat = MelonPreferences.CreateCategory("WarpforgeRevival", "Warpforge Revival");
-            cat.SetFilePath("UserData/WarpforgeRevival.cfg", autoload: true);
+            // A full path: on a phone the game's working folder is not the loader's folder.
+            cat.SetFilePath(System.IO.Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival.cfg"), autoload: true);
             var c = new RevivalConfig
             {
                 serverUrl = cat.CreateEntry("ServerUrl", DefaultServer,

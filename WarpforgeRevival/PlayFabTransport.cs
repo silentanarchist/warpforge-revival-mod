@@ -69,7 +69,9 @@ namespace WarpforgeRevival
                         if (h.Key == "X-Authorization" && !string.IsNullOrEmpty(h.Value) && h.Value != SessionTicket)
                         {
                             SessionTicket = h.Value;
+#if !ANDROID_TEST || ANDROID_PORT
                             AccountPage.SignedIn();
+#endif
                         }
                 }
                 catch (Exception e)
@@ -87,6 +89,31 @@ namespace WarpforgeRevival
                 Task.Run(async () =>
                 {
                     string body = null, error = null;
+#if ANDROID_TEST
+                    // test build: one more try when the connection itself fails, and the full reason in the log
+                    for (int attempt = 1; attempt <= 2 && body == null; attempt++)
+                    {
+                        try
+                        {
+                            using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = new ByteArrayContent(payload) };
+                            msg.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+                            foreach (var h in headers)
+                                if (!h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
+                                    msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                            using var resp = await Http.SendAsync(msg);
+                            body = await resp.Content.ReadAsStringAsync();
+                            error = null;
+                        }
+                        catch (Exception e)
+                        {
+                            string why = e.GetType().Name + ": " + e.Message;
+                            for (var inner = e.InnerException; inner != null; inner = inner.InnerException)
+                                why += " <- " + inner.GetType().Name + ": " + inner.Message;
+                            error = $"Revival server unreachable ({why})";
+                            RevivalMod.Log.Warning($"[playfab] {endpoint} attempt {attempt} failed: {why}");
+                        }
+                    }
+#else
                     try
                     {
                         using var msg = new HttpRequestMessage(HttpMethod.Post, url)
@@ -104,6 +131,7 @@ namespace WarpforgeRevival
                     {
                         error = $"Revival server unreachable ({e.GetType().Name}: {e.Message})";
                     }
+#endif
 
                     MainThread.Enqueue(() =>
                     {
@@ -112,6 +140,10 @@ namespace WarpforgeRevival
                         {
                             if (RevivalMod.Config.DiagnosticLogging)
                                 RevivalMod.Log.Msg($"[playfab] <- {endpoint} ({body.Length} bytes)");
+#if ANDROID_TEST
+                            // test build: show what the server answered when it is short (errors are short)
+                            if (body.Length < 600) RevivalMod.Log.Msg("[playfab]    " + body);
+#endif
                             http.OnResponse(body, container);
                         }
                         else

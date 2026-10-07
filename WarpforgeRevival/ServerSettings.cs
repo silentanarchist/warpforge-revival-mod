@@ -35,6 +35,14 @@ namespace WarpforgeRevival
         /// <summary>Event id of the Long Game mode, or null when the server has none.</summary>
         public static string LongGameEvent => longGameEvent;
         public static double LongGameHealth => longGameHealth;
+
+        private static volatile int practiceClassicLife;
+        /// <summary>
+        /// Health added to both warlords in a practice match against the AI when its Classic/Skirmish
+        /// switch is on Classic (the server's "practiceClassicWarlordLife"; 0 = nothing added). Those
+        /// matches all run under one event, so the mode rules on the server cannot tell the two apart.
+        /// </summary>
+        public static int PracticeClassicLife => practiceClassicLife;
         public static int ClassicDeckSize => classicDeckSize;
         public static int LongGameCopies(int rarity) => rarity >= 0 && rarity < longGameCopies.Length ? longGameCopies[rarity] : 0;
 
@@ -105,6 +113,11 @@ namespace WarpforgeRevival
                         port = mp.GetInt32();
                     matchPort = port > 0 && port < 65536 ? port : 0;
                     loaded = true;
+                    int life = 0;
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("practiceClassicWarlordLife", out var pl) && pl.ValueKind == JsonValueKind.Number)
+                        life = pl.GetInt32();
+                    if (life != practiceClassicLife) RevivalMod.Log.Msg($"[settings] server settings: practice on Classic adds {life} warlord health");
+                    practiceClassicLife = life;
                     bool offence = false;
                     if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("offenseCards", out var o) &&
                         (o.ValueKind == JsonValueKind.True || o.ValueKind == JsonValueKind.False))

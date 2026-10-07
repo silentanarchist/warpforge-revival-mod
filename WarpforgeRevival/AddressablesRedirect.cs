@@ -37,8 +37,12 @@ namespace WarpforgeRevival
             RevivalMod.Log.Msg("[addressables] location redirect installed");
         }
 
+        /// <summary>How often the game asked where a piece of content is (for timing work).</summary>
+        internal static long Lookups;
+
         private static string Transform(IResourceLocation location)
         {
+            Lookups++;
             string id = location.InternalId;
             try
             {
