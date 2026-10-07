@@ -26,7 +26,7 @@ Each file starts with a comment saying what it is for and why.
 
 ## Download
 
-The latest build is [releases/WarpforgeRevival-0.10.11.zip](releases/WarpforgeRevival-0.10.11.zip)
+The latest build is [releases/WarpforgeRevival-0.10.12.zip](releases/WarpforgeRevival-0.10.12.zip)
 (open it and press "Download raw file"). It is built from the source in this repository and
 holds the mod, the `manifest.json` it needs, and a README with the steps below.
 

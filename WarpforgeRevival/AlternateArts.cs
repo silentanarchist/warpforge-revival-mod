@@ -13,6 +13,8 @@ namespace WarpforgeRevival
     /// with the game; only the small definitions tying them to a card came from the dead servers.
     /// They are recreated here and handed to the game's own loader once the card library is ready.
     /// (Logan Grimnar is left out until the Space Wolves cards themselves are rebuilt.)
+    /// With the game's original card file on the server none of this is needed: each card then lists
+    /// its own styles, and the recreated copy is skipped.
     /// </summary>
     internal static class AlternateArts
     {
@@ -58,7 +60,7 @@ namespace WarpforgeRevival
         private static void Inject(Il2CppSystem.Collections.Generic.List<RawCardScript> cards)
         {
             injecting = true;
-            int made = 0;
+            int made = 0, native = 0;
             try
             {
                 var library = new AddressableAlternateArtCardLibrary();
@@ -73,6 +75,11 @@ namespace WarpforgeRevival
                             if ((object)c != null && c.uniqueId == d[0]) { original = c; break; }
                         }
                         if ((object)original == null) { RevivalMod.Log.Warning($"[styles] card {d[0]} not found; style skipped"); continue; }
+
+                        // A server with the game's original card file already has this style (the card
+                        // itself lists it), so there is nothing to recreate.
+                        var own = original.alternateArts;
+                        if (own != null && own.Count > 0) { native++; continue; }
 
                         var art = ScriptableObject.CreateInstance<AlternateArtCard>();
                         art.name = original.name + " (Hammer and Bolter)";
@@ -95,7 +102,9 @@ namespace WarpforgeRevival
             }
             catch (Exception e) { RevivalMod.Log.Warning("[styles] " + e); }
             finally { injecting = false; }
-            RevivalMod.Log.Msg($"[styles] {made} of {Defs.Length} card styles created");
+            RevivalMod.Log.Msg(native > 0
+                ? $"[styles] {native} card styles come with the original card file; {made} recreated"
+                : $"[styles] {made} of {Defs.Length} card styles created");
         }
 
         // The style's banner logo was a server download. Without it the banner is a white box, so
