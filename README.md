@@ -32,7 +32,7 @@ holds the mod, the `manifest.json` it needs, and a README with the steps below.
 
 ## Installing
 
-1. Install MelonLoader 0.7.3 into the game folder and start the game once.
+1. Install [MelonLoader 0.7.3](https://github.com/LavaGang/MelonLoader/releases/tag/v0.7.3) into the game folder and start the game once.
 2. Put `WarpforgeRevival.dll` in the game's `Mods` folder - either straight in `Mods`, or in
    `Mods\WarpforgeRevival\` together with a `manifest.json` (MelonLoader only loads mods from a
    sub-folder that has one).
