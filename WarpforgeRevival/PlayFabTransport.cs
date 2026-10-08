@@ -178,19 +178,33 @@ namespace WarpforgeRevival
                 }
             }
 #else
-            try
+            // A connection that the server or the network closed while it sat unused fails the moment
+            // it is used, before the request reaches the server. That one failure is tried once more
+            // on a new connection; anything slower is a real problem and is reported as it is.
+            for (int attempt = 1; attempt <= 2 && body == null; attempt++)
             {
-                using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = new ByteArrayContent(payload) };
-                msg.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
-                foreach (var h in headers)
-                    if (!h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
-                        msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
-                using var resp = await Http.SendAsync(msg);
-                body = await resp.Content.ReadAsStringAsync();
-            }
-            catch (Exception e)
-            {
-                error = $"Revival server unreachable ({e.GetType().Name}: {e.Message})";
+                var started = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
+                    using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = new ByteArrayContent(payload) };
+                    msg.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+                    foreach (var h in headers)
+                        if (!h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
+                            msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                    using var resp = await Http.SendAsync(msg);
+                    body = await resp.Content.ReadAsStringAsync();
+                    error = null;
+                }
+                catch (HttpRequestException e) when (attempt == 1 && started.ElapsedMilliseconds < 1000)
+                {
+                    error = $"Revival server unreachable ({e.GetType().Name}: {e.Message})";
+                    RevivalMod.Log.Msg($"[playfab] {endpoint}: a closed connection was reused ({e.Message}); trying again");
+                }
+                catch (Exception e)
+                {
+                    error = $"Revival server unreachable ({e.GetType().Name}: {e.Message})";
+                    break;
+                }
             }
 #endif
             return (body, error);

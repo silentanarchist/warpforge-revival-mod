@@ -20,7 +20,14 @@ namespace WarpforgeRevival
     {
         internal static HttpClient Client(TimeSpan timeout, bool gzip = false)
         {
-            var handler = new HttpClientHandler { ServerCertificateCustomValidationCallback = Check };
+            // A connection left open between requests is closed by the server after 30 seconds of
+            // quiet. Reusing one that is already closed fails at once ("An error occurred while
+            // sending the request"), so idle connections are let go well before that.
+            var handler = new SocketsHttpHandler
+            {
+                PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15),
+                SslOptions = new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = Verify },
+            };
             if (gzip) handler.AutomaticDecompression = DecompressionMethods.GZip;
             return new HttpClient(handler) { Timeout = timeout };
         }
@@ -39,9 +46,6 @@ namespace WarpforgeRevival
             }
             return roots = list;
         }
-
-        private static bool Check(HttpRequestMessage request, X509Certificate2 cert, X509Chain chain, SslPolicyErrors errors)
-            => Trusted(cert, chain, errors);
 
         /// <summary>The same check, for an encrypted connection the mod opens itself (the match tunnel).</summary>
         internal static bool Verify(object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors errors)
