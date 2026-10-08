@@ -17,9 +17,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.11.30-a";
+        public const string Version = "0.11.31-a";
 #else
-        public const string Version = "0.11.30-w";
+        public const string Version = "0.11.31-w";
 #endif
 
         /// <summary>
@@ -157,6 +157,9 @@ namespace WarpforgeRevival
             GameSignIn.Draw();
         }
 
+#if ANDROID_PORT
+        private static bool graphicsNoted;
+#endif
         public override void OnUpdate()
         {
             // The game freezes when its window loses focus, and a frozen game drops out of the match
@@ -170,6 +173,13 @@ namespace WarpforgeRevival
 #endif
             PlayFabTransport.Pump();
 #if ANDROID_PORT
+            if (!graphicsNoted)
+            {
+                // Which drawing system the engine really started (the graphics plugin only asks for one).
+                graphicsNoted = true;
+                try { Log.Msg("[graphics] the game draws with " + UnityEngine.SystemInfo.graphicsDeviceType + " (" + UnityEngine.SystemInfo.graphicsDeviceVersion + ", " + UnityEngine.SystemInfo.graphicsDeviceName + ")"); }
+                catch (Exception e) { Log.Msg("[graphics] could not read the drawing system: " + e.Message); }
+            }
             AndroidUpdater.Tick();
 #else
             Updater.Pump();
