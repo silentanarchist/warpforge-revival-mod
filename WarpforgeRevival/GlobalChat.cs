@@ -26,7 +26,11 @@ namespace WarpforgeRevival
 
         private static readonly HttpClient Http = Net.Client(TimeSpan.FromSeconds(15));
         private static readonly ConcurrentQueue<Incoming> Inbox = new ConcurrentQueue<Incoming>();
-        private static readonly ConcurrentDictionary<string, byte> Mine = new ConcurrentDictionary<string, byte>();
+        // The text of a message this game has just sent. The game draws its own message on screen
+        // straight after sending it; that copy is skipped (LocalCopy), so the player sees their message
+        // only as the server sends it back - with blocked words starred out, as everyone else sees it.
+        private static string justSent;
+        private static volatile bool pollSoon;
         private static string server;
         private static ChatGlobalManager manager;
         private static long since = -1;              // -1: nothing fetched yet, ask for the history
@@ -86,7 +90,7 @@ namespace WarpforgeRevival
                     string sender = "";
                     try { if (Alive(manager)) sender = manager.PlayerId ?? ""; } catch { }
                     string cid = Guid.NewGuid().ToString("N");
-                    Mine[cid] = 0;
+                    justSent = text;
                     RevivalMod.Log.Msg($"[chat] sending to {channelName} ({text.Length} characters)");
                     Task.Run(async () =>
                     {
@@ -95,6 +99,7 @@ namespace WarpforgeRevival
                             using var body = Body(w => { w.WriteString("channel", channelName); w.WriteString("sender", sender); w.WriteString("message", text); w.WriteString("cid", cid); });
                             using var reply = await Post("/playfab/Revival/ChatSend", body);
                             if (!reply.IsSuccessStatusCode) RevivalMod.Log.Warning($"[chat] the server refused the message ({(int)reply.StatusCode})");
+                            else pollSoon = true;             // fetch it back straight away
                         }
                         catch (Exception e) { RevivalMod.Log.Warning("[chat] message not sent: " + e.Message); }
                     });
@@ -124,6 +129,29 @@ namespace WarpforgeRevival
                         chatMessage.timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[chat] timestamp: " + e.Message); }
+            }
+        }
+
+        /// <summary>
+        /// Right after sending, the game hands its own message to ProcessReceivedChatMessage to
+        /// show it. That one call is skipped; the server's copy (filtered) is shown when it comes back.
+        /// </summary>
+        [HarmonyPatch(typeof(ChatGlobalManager), nameof(ChatGlobalManager.ProcessReceivedChatMessage))]
+        private static class LocalCopy
+        {
+            private static bool Prefix(string message)
+            {
+                try
+                {
+                    string sent = justSent;
+                    if (sent != null && message == sent)
+                    {
+                        justSent = null;
+                        return false;
+                    }
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[chat] " + e.Message); }
+                return true;
             }
         }
 
@@ -176,7 +204,6 @@ namespace WarpforgeRevival
 
         private static void Deliver(ChatGlobalManager m, Incoming msg)
         {
-            if (msg.Cid.Length > 0 && Mine.TryRemove(msg.Cid, out _)) return;     // typed here, already on screen
             var data = m.ParseChatMessage(msg.Message);
             if ((object)data == null) return;
             if (msg.History && !Shown(data.type)) return;
@@ -237,6 +264,7 @@ namespace WarpforgeRevival
                 catch (Exception e) { RevivalMod.Log.Warning("[chat] could not show a message: " + e.Message); }
             }
 
+            if (pollSoon && !polling) { pollSoon = false; nextPoll = 0f; }
             if (polling || now < nextPoll) return;
             string me = null;
             try { me = m.PlayerId; } catch { }
