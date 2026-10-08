@@ -71,6 +71,8 @@ namespace WarpforgeRevival
                 Apply(__instance);
 #if ANDROID_PORT
                 AndroidUpdater.MenuShown();
+#else
+                Updater.MenuShown();
 #endif
             }
         }
