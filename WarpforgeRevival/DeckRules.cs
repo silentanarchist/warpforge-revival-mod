@@ -24,6 +24,13 @@ namespace WarpforgeRevival
                     // Defensive cards are chosen in the deck editor (they fill the deck's defensive slot),
                     // so they must stay addable even though some carry the "can't add to deck" mark.
                     if (card.spellType == SpellType.DefensiveCard) return;
+                    // Dark Angels Secrets only come into play through other cards (see OffenceInCollection).
+                    if (card.spellType == SpellType.Secret && card.inventoryOptions == CardInventoryOptions.NotInInventory)
+                    {
+                        __result = false;
+                        error = "Secrets cannot be added to a deck.";
+                        return;
+                    }
                     if (card.inventoryOptions != CardInventoryOptions.CantAddToDeck && card.spellType != SpellType.OffensiveCard) return;
                     __result = false;
                     error = "Offensive cards cannot be added to a deck.";
