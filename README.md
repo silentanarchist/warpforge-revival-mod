@@ -61,6 +61,30 @@ holds the mod, the `manifest.json` it needs, and a README with the steps below.
    sub-folder that has one).
 3. Start the game. Settings are created in `UserData\WarpforgeRevival.cfg`; set `ServerUrl` there
    if you are not using the default server.
+4. Sign in, or make an account - see below.
+
+## Signing in and making an account
+
+When the server needs an account, this window appears while the game loads:
+
+![The sign-in window: Name and Password boxes, then Sign in, Create account and Quit](docs/sign-in-window.png)
+
+**New player? Make your account right here - there is no separate form.**
+
+1. In **Name**, type the name you want (2 to 30 letters, digits, `.` `'` `-` or `_`, no spaces).
+2. In **Password**, type the password you want (at least 6 characters, no spaces; do not reuse one
+   from another site).
+3. Press **Create account**. The account is made with what you typed and the game signs in.
+
+Pressing **Create account** with the boxes empty only says "Enter a name and a password." - fill
+them in first, then press it.
+
+**Already have an account** (made here or on the server's website)? Type its name and password
+and press **Sign in**. The game remembers the sign-in, so it asks only once on each computer or
+phone. The same account works everywhere and keeps the same decks and progress.
+
+Afterwards, on the server's website (its profile page) you can make a **recovery code** in case you
+forget your password. **Sign out** in **Settings > Account** signs out this device only.
 
 ## Building
 
