@@ -17,9 +17,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.11.33-a";
+        public const string Version = "0.11.34-a";
 #else
-        public const string Version = "0.11.33-w";
+        public const string Version = "0.11.34-w";
 #endif
 
         /// <summary>
