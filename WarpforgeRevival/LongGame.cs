@@ -469,6 +469,19 @@ namespace WarpforgeRevival
             catch { return false; }
         }
 
+        /// <summary>Event id of the game mode being played (null when not known).</summary>
+        private static string PlayingEventId()
+        {
+            try
+            {
+                var modes = LiveOpsManager.GetHandler<GameModes>();
+                var e = (object)modes == null ? null : modes.CurrentPlayingEvent;
+                var data = (object)e == null ? null : e.GetBaseData();
+                return (object)data == null ? null : data.eventId;
+            }
+            catch { return null; }
+        }
+
         private static void ApplyHand(PlayerHand hand) => ApplyHand(hand.manager);
 
         private static void ApplyHand(BattleManager battle)
@@ -480,11 +493,16 @@ namespace WarpforgeRevival
             bool isLong = InLongMatch();
             int first = isLong && ServerSettings.LongGameHand > 0 ? ServerSettings.LongGameHand : gameHand;
             int extra = isLong && ServerSettings.LongGameSecondExtra >= 0 ? ServerSettings.LongGameSecondExtra : gameSecondExtra;
+            // a game mode's own setting (its gameplayVariables on the server) comes first
+            string mode = PlayingEventId();
+            var (modeHand, modeExtra) = ServerSettings.ModeHand(mode);
+            if (modeHand > 0) first = modeHand;
+            if (modeExtra >= 0) extra = modeExtra;
             if (vars.startingHand != first || vars.secondExtraCards != extra)
             {
                 vars.startingHand = first;
                 vars.secondExtraCards = extra;
-                RevivalMod.Log.Msg($"[long] starting hand: {first} cards, +{extra} for the second player ({(isLong ? "Long Game" : "game default")})");
+                RevivalMod.Log.Msg($"[hand] starting hand: {first} cards, +{extra} for the second player ({(modeHand > 0 || modeExtra >= 0 ? mode : isLong ? "Long Game" : "game default")})");
             }
         }
 

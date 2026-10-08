@@ -30,6 +30,15 @@ namespace WarpforgeRevival
         private static volatile int longGameSecondExtra = -1; // extra cards for the second player (-1 = game default)
         public static int LongGameHand => longGameHand;
         public static int LongGameSecondExtra => longGameSecondExtra;
+
+        // "startingHands": {"RevivalSkirmish": {"startingHand": 4, "secondPlayerExtraCards": 0}} - added by
+        // the server from each mode's gameplayVariables in its GameModes.json.
+        private static volatile System.Collections.Generic.Dictionary<string, (int hand, int extra)> modeHands =
+            new System.Collections.Generic.Dictionary<string, (int, int)>();
+
+        /// <summary>The starting hand a game mode sets: (cards, extra for the second player); -1 where it sets none.</summary>
+        public static (int hand, int extra) ModeHand(string eventId) =>
+            eventId != null && modeHands.TryGetValue(eventId, out var h) ? h : (-1, -1);
         private static readonly int[] longGameCopies = new int[6];     // by CardRarity value (1 Common .. 4 Legendary)
 
         /// <summary>Event id of the Long Game mode, or null when the server has none.</summary>
@@ -158,6 +167,18 @@ namespace WarpforgeRevival
                         longGameEvent = id;
                     }
                     else longGameEvent = null;
+                    var hands = new System.Collections.Generic.Dictionary<string, (int, int)>();
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("startingHands", out var shs) && shs.ValueKind == JsonValueKind.Object)
+                        foreach (var m in shs.EnumerateObject())
+                        {
+                            if (m.Value.ValueKind != JsonValueKind.Object) continue;
+                            int h = m.Value.TryGetProperty("startingHand", out var hv) && hv.ValueKind == JsonValueKind.Number ? hv.GetInt32() : -1;
+                            int x = m.Value.TryGetProperty("secondPlayerExtraCards", out var xv) && xv.ValueKind == JsonValueKind.Number ? xv.GetInt32() : -1;
+                            hands[m.Name] = (h, x);
+                        }
+                    if (hands.Count != modeHands.Count)
+                        RevivalMod.Log.Msg($"[settings] server settings: starting hand set by {hands.Count} game mode(s)");
+                    modeHands = hands;
                     if (offence != offenseCards) RevivalMod.Log.Msg($"[settings] server settings: Offence cards {(offence ? "on" : "off")}");
                     offenseCards = offence;
                     BattlefieldCards.Set(offence);
