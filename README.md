@@ -22,13 +22,16 @@ has played, so expect bugs. Read the code before you rely on it, and please repo
 
 - **Sends the game's server requests to a revival server** instead of the closed ones (`PlayFabTransport.cs`).
 - **Matches** run on the revival server's own match service. The game never contacts Photon's
-  servers (`PhotonService.cs`, `Matchmaking.cs`).
+  servers (`PhotonService.cs`, `Matchmaking.cs`). The mod proves to the match service who is
+  connecting with a match ticket from the game server (`MatchTicket.cs`), and carries match
+  connections inside https when the server offers it (`MatchTunnel.cs`).
 - **Global chat** runs through the revival server (`GlobalChat.cs`).
 - **Custom Test**, a 60-card mode added by the revival (`LongGame.cs`).
 - **Profile additions:** win/loss record and skulls, friend codes, free renames (`ProfileStats.cs`, `ProfilePage.cs`).
 - **Accounts:** when a server requires one, a sign-in window appears while the game loads (or a
   game login file from the server's website is used); otherwise linking a site account is
-  optional (`GameSignIn.cs`, `AccountPage.cs`).
+  optional (`GameSignIn.cs`, `AccountPage.cs`). With an account, **Sign out** in Settings >
+  Account signs out this computer only; the account keeps its game progress.
 - **Encrypted connection:** a server address without `http://` is tried over https first, and a
   server that has answered over https is never contacted unencrypted again (`RevivalConfig.cs`, `Net.cs`).
 - **Updates itself** from the server it is connected to, after asking, and without asking when
@@ -46,7 +49,7 @@ Each file starts with a comment saying what it is for and why.
 
 ## Download
 
-The latest build is [releases/WarpforgeRevival-0.11.24-w.zip](releases/WarpforgeRevival-0.11.24-w.zip)
+The latest build is [releases/WarpforgeRevival-0.11.29-w.zip](releases/WarpforgeRevival-0.11.29-w.zip)
 (open it and press "Download raw file"). It is built from the source in this repository and
 holds the mod, the `manifest.json` it needs, and a README with the steps below.
 
