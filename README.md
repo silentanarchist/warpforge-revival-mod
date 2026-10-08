@@ -7,7 +7,9 @@ This repository is the complete source of `WarpforgeRevival.dll`, the Windows bu
 source also builds the Android mod (the parts marked `ANDROID_PORT`); the Android project, the
 patcher that puts the mod loader into the Android game, and the instructions for phones are in
 [warpforge-revival-mod-android](https://github.com/silentanarchist/warpforge-revival-mod-android).
-Versions are numbered together: `x.y.z-w` for Windows, `x.y.z-a` for Android. The server it talks to is in
+Versions are numbered `x.y.z.f-w` for Windows and `x.y.z.f-a` for Android: `x.y.z` is the shared code
+and always the same on both; `f` counts fixes made for one of them only, is left off while it is 0
+(`0.12.1-w`), and starts again with every new `x.y.z`. The server it talks to is in
 [warpforge-revival-server](https://github.com/silentanarchist/warpforge-revival-server).
 
 This is an unofficial fan project. It is not affiliated with or endorsed by Everguild or
@@ -25,7 +27,10 @@ has played, so expect bugs. Read the code before you rely on it, and please repo
   servers (`PhotonService.cs`, `Matchmaking.cs`). The mod proves to the match service who is
   connecting with a match ticket from the game server (`MatchTicket.cs`), and carries match
   connections inside https when the server offers it (`MatchTunnel.cs`).
-- **Global chat** runs through the revival server (`GlobalChat.cs`).
+- **Global chat** runs through the revival server (`GlobalChat.cs`). **Report message** on a player
+  goes to the server, where its admins see it; **Block player** is the game's own and hides that
+  player's messages for you only.
+- **AI opponent emotes** now and then instead of after every move (`BotEmotes.cs`).
 - **Custom Test**, a 60-card mode added by the revival (`LongGame.cs`).
 - **Profile additions:** win/loss record and skulls, friend codes, free renames (`ProfileStats.cs`, `ProfilePage.cs`).
 - **Accounts:** when a server requires one, a sign-in window appears while the game loads (or a
@@ -50,7 +55,7 @@ Each file starts with a comment saying what it is for and why.
 
 ## Download
 
-The latest build is [releases/WarpforgeRevival-0.12.0-w.zip](releases/WarpforgeRevival-0.12.0-w.zip)
+The latest build is [releases/WarpforgeRevival-0.12.1-w.zip](releases/WarpforgeRevival-0.12.1-w.zip)
 (open it and press "Download raw file"). It is built from the source in this repository and
 holds the mod, the `manifest.json` it needs, and a README with the steps below.
 
