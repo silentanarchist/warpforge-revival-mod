@@ -41,6 +41,13 @@ namespace WarpforgeRevival
         }
 
         private static bool Check(HttpRequestMessage request, X509Certificate2 cert, X509Chain chain, SslPolicyErrors errors)
+            => Trusted(cert, chain, errors);
+
+        /// <summary>The same check, for an encrypted connection the mod opens itself (the match tunnel).</summary>
+        internal static bool Verify(object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors errors)
+            => Trusted(cert == null ? null : cert as X509Certificate2 ?? new X509Certificate2(cert), chain, errors);
+
+        private static bool Trusted(X509Certificate2 cert, X509Chain chain, SslPolicyErrors errors)
         {
             if (errors == SslPolicyErrors.None) return true;
             // only a chain problem may be looked at again; a wrong name or a missing certificate never

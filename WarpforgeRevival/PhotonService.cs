@@ -47,6 +47,7 @@ namespace WarpforgeRevival
                 {
                     if (Address(out string host, out int port))
                     {
+                        MatchTunnel.Route(ref host, ref port, TimeSpan.Zero);
                         serverAddress = host + ":" + port;
                         return true;
                     }
@@ -89,6 +90,8 @@ namespace WarpforgeRevival
                         RevivalMod.Log.Warning("[match] the server address is not usable, so matches are not available");
                         return false;
                     }
+                    string server = host + ":" + port;
+                    MatchTunnel.Route(ref host, ref port, TimeSpan.FromSeconds(5));
                     var data = __instance.playerData;
                     string version = (object)data != null ? data.gameVersionWithEnviromentAndBundles : PhotonNetwork.gameVersion;
                     // Anything in the game that reconnects from its saved settings lands here too.
@@ -102,7 +105,7 @@ namespace WarpforgeRevival
                         s.AppID = AppName;
                         s.ChatAppID = "";
                     }
-                    string where = host + ":" + port;
+                    string where = server + (host == "127.0.0.1" ? " (encrypted)" : "");
                     if (announced != where) { announced = where; RevivalMod.Log.Msg("[match] matches use the revival server's match service at " + where); }
                     PhotonNetwork.SwitchToProtocol(Il2CppExitGames.Client.Photon.ConnectionProtocol.Tcp);
                     PhotonNetwork.ConnectToMaster(host, port, AppName, version);
