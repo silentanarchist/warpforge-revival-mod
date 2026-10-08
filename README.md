@@ -71,7 +71,7 @@ When the server needs an account, this window appears while the game loads:
 
 **New player? Make your account right here - there is no separate form.**
 
-1. In **Name**, type the name you want (2 to 30 letters, digits, `.` `'` `-` or `_`, no spaces).
+1. In **Name**, type the name you want (5 to 30 letters, digits, `.` `'` `-` or `_`, no spaces).
 2. In **Password**, type the password you want (at least 6 characters, no spaces; do not reuse one
    from another site).
 3. Press **Create account**. The account is made with what you typed and the game signs in.
