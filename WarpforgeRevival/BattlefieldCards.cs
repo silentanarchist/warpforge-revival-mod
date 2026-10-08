@@ -150,6 +150,28 @@ namespace WarpforgeRevival
         }
 #endif
 
+        /// <summary>
+        /// The army's "Normal Conditions" card (no Offence card): the one the game's battlefield list
+        /// names, or else the army's own copy in the card collection (the list misses some armies).
+        /// </summary>
+        private static RawCardScript NormalConditions(EnviromentalEffectCardsSO source, CardArmy army)
+        {
+            try
+            {
+                var listed = source.GetEmptyOffensiveCard(army);
+                if ((object)listed != null && listed.Pointer != IntPtr.Zero) return listed;
+            }
+            catch (Exception) { }
+            var every = PlayerDataManager.singletonManager?.allCardCollection;
+            if (every == null) return null;
+            for (int i = 0; i < every.Count; i++)
+            {
+                var c = every[i];
+                if ((object)c != null && c.Pointer != IntPtr.Zero && c.cardArmy == army && (c.name ?? "").StartsWith("Z-NC-")) return c;
+            }
+            return null;
+        }
+
         /// <summary>The cards offered in the pick step (the game itself would offer none here).</summary>
         [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.GetEnvEffectCards))]
         private static class Offer
@@ -199,6 +221,18 @@ namespace WarpforgeRevival
                                 if (string.IsNullOrEmpty(id) || id.Length > 8) continue;      // numbered cards only, not helper copies
                                 all.Add(c);
                             }
+                    }
+                    // Going first, the game's own list starts with "Normal Conditions": the choice of no
+                    // Offence card at all. Keep it first, as the game does.
+                    if (shouldUseOffensive && all.Count > 0)
+                    {
+                        var none = NormalConditions(source, warlord.cardArmy);
+                        if ((object)none != null)
+                        {
+                            bool there = false;
+                            for (int i = 0; i < all.Count; i++) if ((object)all[i] != null && all[i].Pointer == none.Pointer) { there = true; break; }
+                            if (!there) all.Insert(0, none);
+                        }
                     }
                     int count = all.Count;
                     if (count == 0)
