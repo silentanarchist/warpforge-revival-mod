@@ -155,6 +155,39 @@ namespace WarpforgeRevival
             }
         }
 
+#if ANDROID_PORT
+        /// <summary>
+        /// On a phone the keyboard's check mark ("done") sends the message, like Enter does on a
+        /// PC. The game only listens for the Enter key, which a phone keyboard never sends; the
+        /// input box reports the check mark as "submitted", so that now sends the message too.
+        /// </summary>
+        [HarmonyPatch(typeof(ChatPanel), nameof(ChatPanel.Start))]
+        private static class KeyboardSends
+        {
+            private static void Postfix(ChatPanel __instance)
+            {
+                try
+                {
+                    var input = __instance.inputField;
+                    if ((object)input == null) return;
+                    var panel = __instance;
+                    Action<string> send = text =>
+                    {
+                        try
+                        {
+                            if (string.IsNullOrWhiteSpace(text)) return;
+                            panel.TrySendMessage();
+                        }
+                        catch (Exception e) { RevivalMod.Log.Warning("[chat] keyboard send: " + e.Message); }
+                    };
+                    input.onSubmit.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<string>>(send));
+                    RevivalMod.Log.Msg("[chat] the keyboard's check mark sends a chat message");
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[chat] keyboard send not set up: " + e.Message); }
+            }
+        }
+#endif
+
         // ---------------------------------------------------------------- receiving
         private static void Poll()
         {
