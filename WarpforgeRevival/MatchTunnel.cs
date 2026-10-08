@@ -24,27 +24,43 @@ namespace WarpforgeRevival
         private static TcpListener listener;
         private static volatile string targetHost;
         private static volatile int targetPort;
-        private static Task<bool> probe;
+        private static Task<bool?> probe;           // true / false: the server's answer; null: no answer
         private static string probedFor;
-        private static volatile bool warned;
+        private static volatile string problem;
+        private static DateTime problemAt;
 
         /// <summary>
-        /// Starts asking the server (once per server address) whether it takes encrypted matches.
-        /// Only an https server is asked; a plain one never gets them.
+        /// Why the last match connection could not be encrypted, while it is recent (null otherwise).
+        /// The game's own "Error connecting to server" popup shows this instead (see PopupNotes).
         /// </summary>
-        internal static Task<bool> Probe()
+        internal static string Problem => problem != null && DateTime.UtcNow - problemAt < TimeSpan.FromMinutes(2) ? problem : null;
+
+        private static void Trouble(string why)
+        {
+            problem = why;
+            problemAt = DateTime.UtcNow;
+            RevivalMod.Log.Warning("[match] " + why);
+        }
+
+        /// <summary>
+        /// Starts asking the server whether it takes encrypted matches. A real answer is kept for
+        /// this server address; when the question itself failed (no answer), it is asked again the
+        /// next time, so one network hiccup does not decide the whole session. Only an https server
+        /// is asked; a plain one never gets them.
+        /// </summary>
+        internal static Task<bool?> Probe()
         {
             lock (Gate)
             {
                 string url = RevivalMod.Config.ServerUrl;
-                if (!RevivalMod.Config.Secure) return Task.FromResult(false);
-                if (probe != null && probedFor == url) return probe;
+                if (!RevivalMod.Config.Secure) return Task.FromResult<bool?>(false);
+                if (probe != null && probedFor == url && (!probe.IsCompleted || probe.Result.HasValue)) return probe;
                 probedFor = url;
                 return probe = Task.Run(() => Ask(url));
             }
         }
 
-        private static async Task<bool> Ask(string url)
+        private static async Task<bool?> Ask(string url)
         {
             for (int attempt = 0; attempt < 3; attempt++)
             {
@@ -58,11 +74,11 @@ namespace WarpforgeRevival
                 }
                 catch (Exception e)
                 {
-                    if (attempt == 2) RevivalMod.Log.Warning("[match] could not ask the server about encrypted matches (" + e.Message + "); matches are not encrypted this time");
+                    if (attempt == 2) RevivalMod.Log.Warning("[match] could not ask the server about encrypted matches (" + e.Message + "); it is asked again on the next connection");
                     else await Task.Delay(1000);
                 }
             }
-            return false;
+            return null;
         }
 
         /// <summary>
@@ -74,16 +90,27 @@ namespace WarpforgeRevival
         {
             var asked = Probe();
             if (!asked.IsCompleted && wait > TimeSpan.Zero) asked.Wait(wait);
-            if (!asked.IsCompleted || !asked.Result) return;
+            bool? answer = asked.IsCompleted ? asked.Result : null;
+            if (answer == false) return;                         // the server does not take them
+            if (answer == null)
+            {
+                // No answer from the server yet: this connection goes as it is (a server that
+                // requires encrypted matches will refuse it), and the next one asks again.
+                Trouble(asked.IsCompleted
+                    ? "the server could not be asked about encrypted matches, so this match connection is not encrypted - check the connection and try again"
+                    : "the server has not answered yet about encrypted matches, so this match connection is not encrypted - try again in a moment");
+                return;
+            }
             try
             {
                 int local = Start(host, port);
                 host = "127.0.0.1";
                 port = local;
+                problem = null;
             }
             catch (Exception e)
             {
-                if (!warned) { warned = true; RevivalMod.Log.Warning("[match] the encrypted match connection could not be started (" + e.Message + "); matches are not encrypted"); }
+                Trouble("the encrypted match connection could not be started on this device (" + e.Message + "); restart the game");
             }
         }
 
@@ -132,6 +159,7 @@ namespace WarpforgeRevival
                 tls = new SslStream(remote.GetStream(), false, Net.Verify);
                 using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
                     await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = host }, cts.Token);
+                problem = null;                     // this one worked
                 var plain = local.GetStream();
                 var up = Pipe(plain, tls);
                 var down = Pipe(tls, plain);
@@ -139,7 +167,7 @@ namespace WarpforgeRevival
             }
             catch (Exception e)
             {
-                RevivalMod.Log.Warning("[match] encrypted match connection failed: " + (e.InnerException?.Message ?? e.Message));
+                Trouble("the encrypted match connection to the server failed (" + (e.InnerException?.Message ?? e.Message) + ")");
             }
             finally
             {

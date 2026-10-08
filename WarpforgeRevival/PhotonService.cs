@@ -91,7 +91,7 @@ namespace WarpforgeRevival
                         return false;
                     }
                     string server = host + ":" + port;
-                    MatchTunnel.Route(ref host, ref port, TimeSpan.FromSeconds(5));
+                    MatchTunnel.Route(ref host, ref port, TimeSpan.FromSeconds(10));
                     var data = __instance.playerData;
                     string version = (object)data != null ? data.gameVersionWithEnviromentAndBundles : PhotonNetwork.gameVersion;
                     // Anything in the game that reconnects from its saved settings lands here too.
