@@ -126,6 +126,8 @@ namespace WarpforgeRevival
                         Content = new System.Net.Http.StringContent(System.Text.Encoding.UTF8.GetString(ms.ToArray()), System.Text.Encoding.UTF8, "application/json")
                     };
                     msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
+                    string login = op == "unlink" ? GameSignIn.Token() : null;      // the one saved sign-in to cancel
+                    if (login != null) msg.Headers.TryAddWithoutValidation("X-Revival-Login", login);
                     using var reply = await Http.SendAsync(msg);
                     using var doc = System.Text.Json.JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
                     var root = doc.RootElement;
@@ -135,7 +137,9 @@ namespace WarpforgeRevival
                         bool isTester = data.TryGetProperty("account", out var a) && a.ValueKind == System.Text.Json.JsonValueKind.Object &&
                                         a.TryGetProperty("tester", out var t) && t.ValueKind == System.Text.Json.JsonValueKind.True;
                         if (data.TryGetProperty("signedOut", out var so) && so.ValueKind == System.Text.Json.JsonValueKind.True)
-                            GameSignIn.SignedOut("This game was unlinked from its account. Start the game again and sign in.");
+                            GameSignIn.SignedOut(op == "unlink" && linked.Length > 0
+                                ? "Signed out of " + linked + " on this device. Start the game again to sign in - with this account or another one."
+                                : "This game was unlinked from its account. Start the game again and sign in.");
                         bool changed = linked != linkedName || isTester != tester;
                         linkedName = linked;
                         tester = isTester;
@@ -214,7 +218,7 @@ namespace WarpforgeRevival
                     {
                         var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
                         if ((object)loc != null) loc.enabled = false;
-                        label.text = linked ? "Unlink account" : "Link account";
+                        label.text = !linked ? "Link account" : SignedInWithAccount ? "Sign out" : "Unlink account";
                     }
                 }
 
@@ -226,6 +230,12 @@ namespace WarpforgeRevival
             }
             catch (Exception e) { RevivalMod.Log.Warning("[account] " + e.Message); }
         }
+
+        /// <summary>
+        /// True when this game signs in with a site account (a saved game login): the account and
+        /// its game player are then one thing, and the button only signs this computer or phone out.
+        /// </summary>
+        private static bool SignedInWithAccount => GameSignIn.Token() != null;
 
         private static string Status()
         {
@@ -351,7 +361,8 @@ namespace WarpforgeRevival
                     }
                     busy = true;
                     Apply(tab);
-                    Say(tab, linked ? "Unlinking..." : "Linking...");
+                    bool signOut = linked && SignedInWithAccount;
+                    Say(tab, !linked ? "Linking..." : signOut ? "Signing out..." : "Unlinking...");
                     Send(linked ? "unlink" : "link", name, pass, (ok, message) =>
                     {
                         busy = false;
