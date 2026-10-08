@@ -17,9 +17,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.11.34-a";
+        public const string Version = "0.11.35-a";
 #else
-        public const string Version = "0.11.34-w";
+        public const string Version = "0.11.35-w";
 #endif
 
         /// <summary>
@@ -181,9 +181,6 @@ namespace WarpforgeRevival
                 catch (Exception e) { Log.Msg("[graphics] could not read the drawing system: " + e.Message); }
             }
             AndroidUpdater.Tick();
-#else
-            Updater.Tick();
-            Updater.Pump();
 #endif
             SupportPage.Tick();
             AccountPage.Tick();

@@ -2,8 +2,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -12,132 +10,101 @@ namespace WarpforgeRevival
 {
     /// <summary>
     /// Keeps the mod itself up to date from the revival server (GET /api/v1/mod/manifest).
-    /// A newer build is downloaded into Mods\WarpforgeRevival and checked against the server's
-    /// checksum. If the running copy is somewhere else (straight in Mods, say) it is removed after
-    /// the update so the game never loads two copies. The game keeps the installed file open, so a small script swaps the files
-    /// once the game has closed and then starts it again.
-    /// AutoUpdate setting: Ask (default) asks in the game, once the main menu is up (like on
-    /// Android), Auto updates without asking, Off never checks.
+    ///
+    /// One way of updating, the same as on phones: when the server has a newer build - seen by the
+    /// check at start-up, or because the server refuses to sign in an outdated mod - the game's
+    /// sign-in window says so while the game loads, the build is downloaded and checked against the
+    /// server's checksum, and the game closes and starts again with it.
+    ///
+    /// Updates go to Mods\WarpforgeRevival\WarpforgeRevival.dll. If the running copy is somewhere
+    /// else (straight in Mods, say) it is removed after the update so the game never loads two
+    /// copies. The game keeps the installed file open, so a small script swaps the files once the
+    /// game has closed and then starts it again.
+    /// AutoUpdate setting: Off never checks; anything else updates.
     /// </summary>
     internal static class Updater
     {
-        private static volatile bool quitRequested;
-        private static volatile string offered;          // a newer build waiting for the player's answer
-        private static volatile string notice;           // something to tell the player in the game
-        private static volatile bool staged;             // downloaded; the game restarts to use it
-        private static bool asked;
-        private static float nextTry, menuShownAt = -1f;
-
         /// <summary>Where MelonLoader loaded this mod from (set at start-up; empty when unknown).</summary>
         internal static string LoadedFrom = "";
 
         private const string FileName = "WarpforgeRevival.dll";
+        private static string server, dataDir;
+        private static Task<bool> running;
+        private static readonly object Gate = new object();
+
         private static bool SameFile(string a, string b) =>
             string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
 
-        /// <summary>Called every frame on the main thread; closes the game once an update is staged.</summary>
-        public static void Pump()
+        private static bool UpdatesOff => (RevivalMod.Config.AutoUpdate ?? "").Trim().Equals("Off", StringComparison.OrdinalIgnoreCase);
+
+        public static void Start(string serverUrl, string data)
         {
-            if (!quitRequested) return;
-            quitRequested = false;
-            RevivalMod.Log.Msg("[update] closing the game to finish the update");
-            UnityEngine.Application.Quit();
-        }
-
-        private static string startServer, startData;
-
-        private static bool UpdatesOff => (RevivalMod.Config.AutoUpdate ?? "Ask").Trim().Equals("Off", StringComparison.OrdinalIgnoreCase);
-
-        public static void Start(string serverUrl, string dataDir)
-        {
-            startServer = serverUrl;
-            startData = dataDir;
+            server = serverUrl;
+            dataDir = data;
             if (UpdatesOff) return;
-            string mode = (RevivalMod.Config.AutoUpdate ?? "Ask").Trim();
-            Task.Run(() => Check(serverUrl, dataDir, mode.Equals("Auto", StringComparison.OrdinalIgnoreCase)));
-        }
-
-        /// <summary>The server refused to sign in because this mod is out of date: update without asking.</summary>
-        internal static async Task<bool> UpdateNow()
-        {
-            if (UpdatesOff || startServer == null) return false;
-            GameSignIn.Updating("This server needs a newer Warpforge Revival mod. Downloading it...");
-            bool ready = await Check(startServer, startData, true);
-            if (ready) GameSignIn.Updated("The new version is downloaded. The game closes and starts again to use it.", 3f);
-            else GameSignIn.UpdateFailed();
-            return ready;
-        }
-
-        /// <summary>Called when the main menu has been built (see MenuCleanup).</summary>
-        internal static void MenuShown()
-        {
-            if (menuShownAt < 0f) menuShownAt = UnityEngine.Time.realtimeSinceStartup;
-        }
-
-        /// <summary>True a few seconds after the menu appeared, so the game's own start-up popups go first.</summary>
-        private static bool MenuReady => menuShownAt >= 0f && UnityEngine.Time.realtimeSinceStartup - menuShownAt > 6f;
-
-        /// <summary>Called every frame on the main thread: asks about, and reports on, an update once the menu is up.</summary>
-        public static void Tick()
-        {
-            if (offered == null && notice == null) return;
-            float now = UnityEngine.Time.realtimeSinceStartup;
-            if (now < nextTry) return;
-            nextTry = now + 2f;
-            try
+            Task.Run(async () =>
             {
-                // Popups only work once the player is signed in and the menu has loaded.
-                if (PlayFabTransport.SessionTicket == null || !MenuReady) return;
-                var windows = Il2Cpp.SingletonBehaviour<Il2Cpp.WindowsManager>.Instance;
-                if ((object)windows == null) return;
-                if (notice != null)
+                try
                 {
-                    string text = notice;
-                    notice = null;
-                    if (staged)
+                    var m = await Manifest();
+                    if (m == null) return;
+                    if (!m.Value.newer)
                     {
-                        Action restart = () => { RevivalMod.Log.Msg("[update] restarting the game for the update"); quitRequested = true; };
-                        windows.ShowPopUp(text, false, false, "Restart now", Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(restart));
+                        RevivalMod.Log.Msg($"[update] mod is up to date (installed {RevivalMod.Version}, server has {m.Value.label})");
+                        return;
                     }
-                    else
-                        windows.ShowPopUp(text, false, true, "OK", Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action>((Action)(() => { })));
-                    return;
+                    RevivalMod.Log.Msg($"[update] server has mod {m.Value.label} (installed {RevivalMod.Version})");
+                    await Run("A newer Warpforge Revival mod is available from the server. Downloading it...");
                 }
-                if (offered != null && !asked)
-                {
-                    asked = true;
-                    string remote = offered;
-                    offered = null;
-                    Action yes = () =>
-                    {
-                        RevivalMod.Log.Msg("[update] update accepted");
-                        Task.Run(async () =>
-                        {
-                            bool ok = await Check(startServer, startData, true, true);
-                            if (!ok && !staged) notice = "The Warpforge Revival mod update could not be downloaded. MelonLoader\\Latest.log in the game folder says why.";
-                        });
-                    };
-                    Action no = () => RevivalMod.Log.Msg("[update] update declined");
-                    windows.ShowPopUp(
-                        $"A newer Warpforge Revival mod is available from your server.\n\nInstalled: {RevivalMod.Version}\nAvailable: {remote}\n\nInstall it now? The game closes and starts again.",
-                        false, true, "Install", "Later",
-                        Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(yes),
-                        Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(no));
-                }
-            }
-            catch (Exception e)
+                catch (Exception e) { RevivalMod.Log.Warning("[update] update check failed: " + e.Message); }
+            });
+        }
+
+        /// <summary>The server refused to sign in because this mod is out of date: update now.</summary>
+        internal static Task<bool> UpdateNow() => Run("This server needs a newer Warpforge Revival mod. Downloading it...");
+
+        /// <summary>One update at a time; a failed one may be tried again.</summary>
+        private static Task<bool> Run(string message)
+        {
+            if (UpdatesOff || server == null) return Task.FromResult(false);
+            lock (Gate)
             {
-                RevivalMod.Log.Warning("[update] could not show the update message: " + e.Message);
-                offered = null; notice = null;
+                if (running == null || (running.IsCompleted && !running.Result))
+                    running = Task.Run(() => Update(message));
+                return running;
             }
         }
 
-        /// <summary>True once a newer build is downloaded and the swap is arranged (the game then closes).</summary>
-        private static async Task<bool> Check(string serverUrl, string dataDir, bool auto, bool answered = false)
+        private struct Offer { public bool newer; public string label, sha, url; }
+
+        private static async Task<Offer?> Manifest()
         {
+            using var http = Net.Client(TimeSpan.FromSeconds(Math.Max(30, RevivalMod.Config.TimeoutSeconds)));
+            using var manifest = JsonDocument.Parse(await http.GetStringAsync(server + "/api/v1/mod/manifest"));
+            var root = manifest.RootElement;
+            if (!root.TryGetProperty("available", out var av) || !av.GetBoolean()) return null;
+            // "version" stays in the form older builds understand; "label" is the name shown to people
+            string number = root.GetProperty("version").GetString();
+            var rv = RevivalMod.Number(number); var lv = RevivalMod.Number(RevivalMod.Version);
+            return new Offer
+            {
+                newer = rv != null && lv != null && rv > lv,
+                label = root.TryGetProperty("label", out var lb) && lb.ValueKind == JsonValueKind.String ? lb.GetString() : number,
+                sha = root.GetProperty("sha256").GetString(),
+                url = root.GetProperty("url").GetString()
+            };
+        }
+
+        /// <summary>Downloads the newer build, arranges the swap, and lets the sign-in window close the game.</summary>
+        private static async Task<bool> Update(string message)
+        {
+            GameSignIn.Updating(message);
             try
             {
-                // Updates always go to Mods\WarpforgeRevival\WarpforgeRevival.dll.
+                var offer = await Manifest();
+                if (offer == null || !offer.Value.newer) throw new InvalidOperationException("the server has no newer mod to offer");
+                string remote = offer.Value.label;
+
                 string mods = MelonLoader.Utils.MelonEnvironment.ModsDirectory;
                 string folder = Path.Combine(mods, "WarpforgeRevival");
                 string dll = Path.Combine(folder, FileName);
@@ -150,31 +117,10 @@ namespace WarpforgeRevival
                 string fresh = dll + ".new";
                 try { if (File.Exists(fresh)) File.Delete(fresh); } catch { }
 
-                using var http = Net.Client(TimeSpan.FromSeconds(Math.Max(30, RevivalMod.Config.TimeoutSeconds)));
-                using var manifest = JsonDocument.Parse(await http.GetStringAsync(serverUrl + "/api/v1/mod/manifest"));
-                var root = manifest.RootElement;
-                if (!root.TryGetProperty("available", out var av) || !av.GetBoolean()) return false;
-                // "version" stays in the form older builds understand; "label" is the name shown to people
-                string number = root.GetProperty("version").GetString();
-                string remote = root.TryGetProperty("label", out var lb) && lb.ValueKind == JsonValueKind.String ? lb.GetString() : number;
-                string sha = root.GetProperty("sha256").GetString();
-                var rv = RevivalMod.Number(number); var lv = RevivalMod.Number(RevivalMod.Version);
-                if (rv == null || lv == null || rv <= lv)
-                {
-                    RevivalMod.Log.Msg($"[update] mod is up to date (installed {RevivalMod.Version}, server has {remote})");
-                    return false;
-                }
-
-                RevivalMod.Log.Msg($"[update] server has mod {remote} (installed {RevivalMod.Version})");
-                if (!auto)
-                {
-                    offered = remote;                // asked in the game once the menu is up, see Tick
-                    return false;
-                }
-
-                var data = await http.GetByteArrayAsync(serverUrl + root.GetProperty("url").GetString());
+                using var http = Net.Client(TimeSpan.FromSeconds(120));
+                var data = await http.GetByteArrayAsync(server + offer.Value.url);
                 string got = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
-                if (got != sha) throw new InvalidDataException("downloaded mod does not match the server's checksum");
+                if (got != offer.Value.sha) throw new InvalidDataException("downloaded mod does not match the server's checksum");
                 Directory.CreateDirectory(folder);
                 // MelonLoader only loads mods from a folder inside Mods when that folder holds a
                 // manifest.json. Without one the updated mod would silently stop loading.
@@ -203,15 +149,15 @@ namespace WarpforgeRevival
                 {
                     UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = dataDir
                 });
-                RevivalMod.Log.Msg($"[update] mod {remote} downloaded; the game restarts to use it");
-                staged = true;
-                if (auto && !answered) quitRequested = true;
-                else notice = $"Warpforge Revival mod {remote} is downloaded.\n\nThe game will now close and start again with the new version.";
+                RevivalMod.Log.Msg($"[update] mod {remote} downloaded; the game closes and starts again to use it");
+                // the sign-in window counts down and closes the game; the script then starts it again
+                GameSignIn.Updated($"Updated to {remote}. The game closes and starts again to use it.", 3f);
                 return true;
             }
             catch (Exception e)
             {
-                RevivalMod.Log.Warning("[update] update check failed: " + e.Message);
+                RevivalMod.Log.Warning("[update] could not update the mod: " + e.Message);
+                GameSignIn.UpdateFailed();
                 return false;
             }
         }

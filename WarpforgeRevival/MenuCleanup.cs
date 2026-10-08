@@ -69,11 +69,6 @@ namespace WarpforgeRevival
             private static void Postfix(NavigationPanelController __instance)
             {
                 Apply(__instance);
-#if ANDROID_PORT
-                AndroidUpdater.MenuShown();
-#else
-                Updater.MenuShown();
-#endif
             }
         }
 

@@ -149,7 +149,7 @@ namespace WarpforgeRevival
                 runInBackground = cat.CreateEntry("RunInBackground", true,
                     description: "Keep the game running when you click on another window. When it is off the game freezes in the background: a match you are waiting for is lost and your opponent sees you fall behind"),
                 autoUpdate = cat.CreateEntry("AutoUpdate", "Ask",
-                    description: "Mod updates from the server: Ask (confirm first), Auto (update without asking), Off (never check). Only use Ask/Auto with a server you trust"),
+                    description: "Mod updates from the server: Off never checks; any other value (Ask, Auto) updates in the game's sign-in window as soon as the server has a newer build. Only use updates with a server you trust"),
                 secureServer = cat.CreateEntry("SecureServer", "",
                     description: "Filled in by the mod: the server that has answered over an encrypted (https) connection. While it matches ServerUrl the mod refuses to fall back to an unencrypted one. Clear it only if that server has really stopped offering https"),
                 turnSeconds = cat.CreateEntry("TurnSeconds", 120,
