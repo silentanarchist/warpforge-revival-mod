@@ -13,6 +13,11 @@ Versions are numbered together: `x.y.z-w` for Windows, `x.y.z-a` for Android. Th
 This is an unofficial fan project. It is not affiliated with or endorsed by Everguild or
 Games Workshop. It contains no game files: you need your own copy of the game.
 
+**About AI use.** The code and documentation in this repository were written largely by an AI
+assistant (Anthropic's Claude), working under the maintainer's direction; the maintainer decided
+what to build and tested it in the game. Testing is by hand and limited to what the maintainer
+has played, so expect bugs. Read the code before you rely on it, and please report what you find.
+
 ## What it does
 
 - **Sends the game's server requests to a revival server** instead of the closed ones (`PlayFabTransport.cs`).
