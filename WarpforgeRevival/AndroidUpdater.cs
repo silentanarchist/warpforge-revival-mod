@@ -40,11 +40,13 @@ namespace WarpforgeRevival
             return rv != null && lv != null && rv > lv;
         }
 
+        private static bool UpdatesOff => (RevivalMod.Config.AutoUpdate ?? "Ask").Trim().Equals("Off", StringComparison.OrdinalIgnoreCase);
+
         public static void Start(string serverUrl)
         {
             string mode = (RevivalMod.Config.AutoUpdate ?? "Ask").Trim();
-            if (mode.Equals("Off", StringComparison.OrdinalIgnoreCase)) return;
             server = serverUrl;
+            if (UpdatesOff) return;
             auto = mode.Equals("Auto", StringComparison.OrdinalIgnoreCase);
             Task.Run(Check);
         }
@@ -53,7 +55,7 @@ namespace WarpforgeRevival
         {
             try
             {
-                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(Math.Max(30, RevivalMod.Config.TimeoutSeconds)) };
+                using var http = Net.Client(TimeSpan.FromSeconds(Math.Max(30, RevivalMod.Config.TimeoutSeconds)));
                 using var manifest = JsonDocument.Parse(await http.GetStringAsync(server + "/api/v1/mod/manifest?platform=android"));
                 var root = manifest.RootElement;
                 if (!root.TryGetProperty("available", out var av) || !av.GetBoolean())
@@ -81,6 +83,42 @@ namespace WarpforgeRevival
             }
         }
 
+        /// <summary>
+        /// The server refused to sign in because this mod is out of date: download and install its
+        /// build without asking, then close the game so the next start uses it.
+        /// </summary>
+        internal static async Task<bool> UpdateNow()
+        {
+            if (UpdatesOff || server == null) return false;
+            GameSignIn.Updating("This server needs a newer Warpforge Revival mod. Downloading it...");
+            string remote = null;
+            try
+            {
+                using var http = Net.Client(TimeSpan.FromSeconds(Math.Max(30, RevivalMod.Config.TimeoutSeconds)));
+                using var manifest = JsonDocument.Parse(await http.GetStringAsync(server + "/api/v1/mod/manifest?platform=android"));
+                var root = manifest.RootElement;
+                if (root.TryGetProperty("available", out var av) && av.GetBoolean())
+                {
+                    string number = root.GetProperty("version").GetString();
+                    if (Newer(number, RevivalMod.Version))
+                    {
+                        remote = root.TryGetProperty("label", out var lb) && lb.ValueKind == JsonValueKind.String ? lb.GetString() : number;
+                        offeredSha = root.GetProperty("sha256").GetString();
+                        offeredUrl = root.GetProperty("url").GetString();
+                    }
+                }
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[update] update check failed: " + e.Message); }
+            if (remote == null) { GameSignIn.UpdateFailed(); return false; }
+            offered = null;
+            asked = true;
+            await Install(remote);
+            notice = null;                       // told in the window below instead of the game's popup
+            if (!installed) { GameSignIn.UpdateFailed(); return false; }
+            GameSignIn.Updated($"Updated to {remote}. Open the game again to use it.", 5f);
+            return true;
+        }
+
         private static async Task Install(string remote)
         {
             try
@@ -92,7 +130,7 @@ namespace WarpforgeRevival
                     : Path.Combine(mods, FileName);
                 string fresh = dll + ".new";
 
-                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
+                using var http = Net.Client(TimeSpan.FromSeconds(120));
                 var data = await http.GetByteArrayAsync(server + offeredUrl);
                 string got = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
                 if (got != offeredSha) throw new InvalidDataException("downloaded mod does not match the server's checksum");
@@ -180,7 +218,7 @@ namespace WarpforgeRevival
         [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "getpid")] private static extern int getpid();
         [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "kill")] private static extern int kill(int pid, int sig);
 
-        private static void CloseApp()
+        internal static void CloseApp()
         {
             try
             {

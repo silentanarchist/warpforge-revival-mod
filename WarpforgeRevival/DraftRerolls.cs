@@ -11,7 +11,13 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class DraftRerolls
     {
+        // On the phone "pick confirmed" is three instructions long - too short to hook safely (see
+        // NoShortHooks) - so the count is put back when the pick is made, a moment earlier.
+#if ANDROID_PORT
+        [HarmonyPatch(typeof(DraftModeSelectPacksStateDemo), nameof(DraftModeSelectPacksStateDemo.PackSelected))]
+#else
         [HarmonyPatch(typeof(DraftModeSelectPacksStateDemo), nameof(DraftModeSelectPacksStateDemo.OnPackConfirmed))]
+#endif
         private static class NewChoice
         {
             private static void Postfix(DraftModeSelectPacksStateDemo __instance)

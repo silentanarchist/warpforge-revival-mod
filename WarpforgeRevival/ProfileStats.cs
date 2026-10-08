@@ -16,7 +16,7 @@ namespace WarpforgeRevival
     internal static class ProfileStats
     {
         private const string PanelName = "Revival Record";
-        private static readonly System.Net.Http.HttpClient Http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        private static readonly System.Net.Http.HttpClient Http = Net.Client(TimeSpan.FromSeconds(10));
         private static readonly Dictionary<string, string> Known = new Dictionary<string, string>();   // player id -> last text shown
         private static int asked;
         private static bool reported;
@@ -106,10 +106,21 @@ namespace WarpforgeRevival
             rt.pivot = new Vector2(0f, 1f);
             rt.sizeDelta = new Vector2(width, Mathf.Max(200f, top - bottom));
             rt.position = space.TransformPoint(new Vector3(right + 45f, top, 0f));
-            rt.SetAsLastSibling();
+            // Drawn just after the rank boxes, not last: windows the page opens over itself (the
+            // name change box, for one) come later in the page and must stay on top of the record.
+            Transform boxes = rank.transform;
+            while ((object)boxes.parent != null && boxes.parent.Pointer != space.Pointer) boxes = boxes.parent;
+            if ((object)boxes.parent != null)
+            {
+                int at = boxes.GetSiblingIndex();
+                rt.SetSiblingIndex(rt.GetSiblingIndex() > at ? at + 1 : at);
+            }
 
             if (reported) return;
             reported = true;
+            var order = new StringBuilder();
+            for (int i = 0; i < space.childCount; i++) order.Append(i == 0 ? "" : ", ").Append(space.GetChild(i).name);
+            RevivalMod.Log.Msg("[profile] page parts in drawing order: " + order);
             RevivalMod.Log.Msg($"[profile] record panel: rank boxes x {left:0}..{right:0}, y {bottom:0}..{top:0}; page right edge {(pr > float.MinValue ? pr.ToString("0") : "unknown")}; panel width {width:0}, font {label.fontSize:0}");
         }
 

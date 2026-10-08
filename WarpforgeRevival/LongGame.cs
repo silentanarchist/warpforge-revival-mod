@@ -49,7 +49,7 @@ namespace WarpforgeRevival
             return longEvent;
         }
 
-        private static bool IsLongEvent(IPlayEvent e)
+        internal static bool IsLongEvent(IPlayEvent e)
         {
             try
             {
@@ -423,7 +423,7 @@ namespace WarpforgeRevival
                     int have = __instance.CardCopiesInDeck(card);
                     if (have < limit) return;
                     __result = false;
-                    error = $"Long Game allows {limit} of a {card.cardRarity} card.";
+                    error = $"Custom Test allows {limit} of a {card.cardRarity} card.";
                     if (!copiesNoted) { copiesNoted = true; RevivalMod.Log.Msg($"[long] copy limit applied: '{card.cardName}' ({card.cardRarity}) is at {have} of {limit}"); }
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[long] copies: " + e.Message); }

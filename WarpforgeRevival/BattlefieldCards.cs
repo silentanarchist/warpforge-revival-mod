@@ -61,7 +61,8 @@ namespace WarpforgeRevival
             // of changing machine code as on Windows.
             lock (Gate)
             {
-                if (on == applied) return;
+                if (broken || on == applied) return;
+                if (!Answer(on)) { broken = true; return; }
                 applied = on;
                 RevivalMod.Log.Msg(on
                     ? "[cards] Offence card step on: going first you pick an Offence card; going second you get your deck's Defence card"
@@ -111,13 +112,41 @@ namespace WarpforgeRevival
         }
 
 #if ANDROID_PORT
-        [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.ShouldUseEnviromentalEffects))]
-        private static class FeatureSwitch
+        // The phone's "is this feature on" function is two instructions: "answer no; return". That
+        // is too short to hook safely (see NoShortHooks), so its first instruction is rewritten to
+        // "answer yes" - after checking that it is exactly what is expected - with the loader's own
+        // routine for changing code.
+        [DllImport("libdobby.so")] private static extern int DobbyCodePatch(IntPtr address, byte[] buffer, uint size);
+
+        private static readonly byte[] AnswerNo = { 0xE0, 0x03, 0x1F, 0x2A };     // mov w0, wzr
+        private static readonly byte[] AnswerYes = { 0x20, 0x00, 0x80, 0x52 };    // mov w0, #1
+        private static readonly byte[] Return = { 0xC0, 0x03, 0x5F, 0xD6 };       // ret
+
+        private static bool Answer(bool yes)
         {
-            private static void Postfix(ref bool __result)
+            try
             {
-                if (applied) __result = true;
+                var method = typeof(BattleManager).GetMethod(nameof(BattleManager.ShouldUseEnviromentalEffects));
+                var field = method == null ? null : Il2CppInterop.Common.Il2CppInteropUtils.GetIl2CppMethodInfoPointerFieldForGeneratedMethod(method);
+                IntPtr info = field == null ? IntPtr.Zero : (IntPtr)field.GetValue(null);
+                IntPtr code = info == IntPtr.Zero ? IntPtr.Zero : Marshal.ReadIntPtr(info);
+                if (code == IntPtr.Zero) { RevivalMod.Log.Warning("[cards] the feature check was not found; the Offence card step stays off on this device"); return false; }
+                byte[] expect = yes ? AnswerNo : AnswerYes, write = yes ? AnswerYes : AnswerNo;
+                for (int i = 0; i < 4; i++)
+                    if (Marshal.ReadByte(code, i) != expect[i] || Marshal.ReadByte(code, 4 + i) != Return[i])
+                    {
+                        RevivalMod.Log.Warning("[cards] unexpected game code at the feature check; the Offence card step is left as it is on this device");
+                        return false;
+                    }
+                int result = DobbyCodePatch(code, write, 4);
+                if (result != 0 || Marshal.ReadByte(code, 0) != write[0])
+                {
+                    RevivalMod.Log.Warning($"[cards] the feature check could not be changed (result {result}); the Offence card step is left as it is on this device");
+                    return false;
+                }
+                return true;
             }
+            catch (Exception e) { RevivalMod.Log.Warning("[cards] " + e); return false; }
         }
 #endif
 

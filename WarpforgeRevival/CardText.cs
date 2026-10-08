@@ -16,7 +16,7 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class CardText
     {
-        private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        private static readonly HttpClient Http = Net.Client(TimeSpan.FromSeconds(15));
         private static volatile Dictionary<string, (string name, string text)> table = new Dictionary<string, (string, string)>();
         private static string url;
         private static DateTime lastFetch = DateTime.MinValue;

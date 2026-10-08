@@ -38,7 +38,8 @@ namespace WarpforgeRevival
         {
             if (string.IsNullOrEmpty(modeId) || (object)lobby == null) return;
             string name = lobby.Name ?? "";
-            string tag = "#" + modeId;
+            // ...and with the rules it is played under, so an older mod is never matched with a newer one
+            string tag = "#" + modeId + "@" + RevivalMod.RulesTag;
             if (name.EndsWith(tag, StringComparison.Ordinal)) return;
             lobby = new TypedLobby(name + tag, lobby.Type);
             if (lobbyNoted != lobby.Name) { lobbyNoted = lobby.Name; RevivalMod.Log.Msg("[matchmaking] waiting area: " + lobby.Name); }

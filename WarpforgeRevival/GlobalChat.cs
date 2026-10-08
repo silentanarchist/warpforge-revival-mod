@@ -24,7 +24,7 @@ namespace WarpforgeRevival
 
         private sealed class Incoming { public long Id; public string Channel, Sender, Message, Cid; public bool History; }
 
-        private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        private static readonly HttpClient Http = Net.Client(TimeSpan.FromSeconds(15));
         private static readonly ConcurrentQueue<Incoming> Inbox = new ConcurrentQueue<Incoming>();
         private static readonly ConcurrentDictionary<string, byte> Mine = new ConcurrentDictionary<string, byte>();
         private static string server;
@@ -49,6 +49,15 @@ namespace WarpforgeRevival
             since = -1;                               // a new sign-in starts from the history again
         }
 
+        /// <summary>Sends a chat request as the signed-in player (the server refuses chat without a session).</summary>
+        private static Task<HttpResponseMessage> Post(string path, HttpContent body)
+        {
+            var msg = new HttpRequestMessage(HttpMethod.Post, server + path) { Content = body };
+            string ticket = PlayFabTransport.SessionTicket;
+            if (!string.IsNullOrEmpty(ticket)) msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
+            return Http.SendAsync(msg);
+        }
+
         private static StringContent Body(Action<Utf8JsonWriter> write)
         {
             using var ms = new System.IO.MemoryStream();
@@ -57,11 +66,18 @@ namespace WarpforgeRevival
         }
 
         // ---------------------------------------------------------------- sending
+        // On the phone PublishMessage is three instructions that jump into publishMessage - too short
+        // to hook safely (see NoShortHooks) - so the one it jumps into is hooked there.
+#if ANDROID_PORT
+        [HarmonyPatch(typeof(Il2CppPhoton.Chat.ChatClient), nameof(Il2CppPhoton.Chat.ChatClient.publishMessage))]
+#else
         [HarmonyPatch(typeof(Il2CppPhoton.Chat.ChatClient), nameof(Il2CppPhoton.Chat.ChatClient.PublishMessage))]
+#endif
         private static class Publish
         {
-            private static bool Prefix(string channelName, Il2CppSystem.Object message, ref bool __result)
+            private static bool Prefix(string __0, Il2CppSystem.Object __1, ref bool __result)
             {
+                string channelName = __0; var message = __1;
                 if (server == null) return true;
                 try
                 {
@@ -77,7 +93,7 @@ namespace WarpforgeRevival
                         try
                         {
                             using var body = Body(w => { w.WriteString("channel", channelName); w.WriteString("sender", sender); w.WriteString("message", text); w.WriteString("cid", cid); });
-                            using var reply = await Http.PostAsync(server + "/playfab/Revival/ChatSend", body);
+                            using var reply = await Post("/playfab/Revival/ChatSend", body);
                             if (!reply.IsSuccessStatusCode) RevivalMod.Log.Warning($"[chat] the server refused the message ({(int)reply.StatusCode})");
                         }
                         catch (Exception e) { RevivalMod.Log.Warning("[chat] message not sent: " + e.Message); }
@@ -121,7 +137,7 @@ namespace WarpforgeRevival
                 try
                 {
                     using var body = Body(w => w.WriteNumber("since", from));
-                    using var reply = await Http.PostAsync(server + "/playfab/Revival/ChatPoll", body);
+                    using var reply = await Post("/playfab/Revival/ChatPoll", body);
                     reply.EnsureSuccessStatusCode();
                     using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
                     var data = doc.RootElement.GetProperty("data");

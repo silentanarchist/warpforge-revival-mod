@@ -20,7 +20,7 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class PlayFabTransport
     {
-        private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        private static readonly HttpClient Http = Net.Client(TimeSpan.FromSeconds(30));
         private static readonly ConcurrentQueue<Action> MainThread = new ConcurrentQueue<Action>();
         // Keep in-flight containers referenced from managed code while the request runs.
         private static readonly HashSet<CallRequestContainer> InFlight = new HashSet<CallRequestContainer>();
@@ -65,6 +65,16 @@ namespace WarpforgeRevival
                     if (container.RequestHeaders != null)
                         foreach (var kv in container.RequestHeaders)
                             headers.Add(new KeyValuePair<string, string>(kv.Key, kv.Value));
+                    // the server may refuse sign-in to a mod older than it asks for
+                    headers.Add(new KeyValuePair<string, string>("X-Revival-Mod", RevivalMod.Version));
+                    headers.Add(new KeyValuePair<string, string>("X-Revival-Rules", RevivalMod.RulesTag));
+                    // at sign-in the server may also ask that this is the only mod, and the file it hands out
+                    if ((container.ApiEndpoint ?? "").Contains("/Client/Login"))
+                    {
+                        string others = RevivalMod.OtherMods();     // never an empty value: some senders drop those
+                        headers.Add(new KeyValuePair<string, string>("X-Revival-Others", others.Length > 0 ? others : "none"));
+                        headers.Add(new KeyValuePair<string, string>("X-Revival-Hash", RevivalMod.FileHash.Length > 0 ? RevivalMod.FileHash : "unknown"));
+                    }
                     foreach (var h in headers)
                         if (h.Key == "X-Authorization" && !string.IsNullOrEmpty(h.Value) && h.Value != SessionTicket)
                         {
@@ -86,52 +96,34 @@ namespace WarpforgeRevival
 
                 lock (InFlight) InFlight.Add(container);
                 var http = __instance;
+                bool login = (endpoint ?? "").Contains("/Client/Login");
+                if (login)
+                {
+                    // a saved sign-in with the server's website account (see GameSignIn)
+                    string token = GameSignIn.Token();
+                    if (token != null) headers.Add(new KeyValuePair<string, string>("X-Revival-Login", token));
+                }
                 Task.Run(async () =>
                 {
                     string body = null, error = null;
-#if ANDROID_TEST
-                    // test build: one more try when the connection itself fails, and the full reason in the log
-                    for (int attempt = 1; attempt <= 2 && body == null; attempt++)
+                    for (int round = 0; ; round++)
                     {
-                        try
+                        (body, error) = await Send(url, payload, headers, endpoint);
+                        if (!login) GameSignIn.Watch(body);
+                        if (login && GameSignIn.OutOfDate(body))
                         {
-                            using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = new ByteArrayContent(payload) };
-                            msg.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
-                            foreach (var h in headers)
-                                if (!h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
-                                    msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
-                            using var resp = await Http.SendAsync(msg);
-                            body = await resp.Content.ReadAsStringAsync();
-                            error = null;
+                            // the server needs a newer mod: update now instead of failing the sign-in
+                            if (await RevivalMod.UpdateForServer()) return;      // the game closes; nothing is handed back
+                            break;
                         }
-                        catch (Exception e)
-                        {
-                            string why = e.GetType().Name + ": " + e.Message;
-                            for (var inner = e.InnerException; inner != null; inner = inner.InnerException)
-                                why += " <- " + inner.GetType().Name + ": " + inner.Message;
-                            error = $"Revival server unreachable ({why})";
-                            RevivalMod.Log.Warning($"[playfab] {endpoint} attempt {attempt} failed: {why}");
-                        }
+                        string why = login && round < 8 ? GameSignIn.NeedsSignIn(body) : null;
+                        if (why == null) break;
+                        // the server wants a website account first: ask, then send the sign-in again
+                        string token = await GameSignIn.Ask(why);
+                        if (token == null) break;
+                        headers.RemoveAll(h => h.Key == "X-Revival-Login");
+                        headers.Add(new KeyValuePair<string, string>("X-Revival-Login", token));
                     }
-#else
-                    try
-                    {
-                        using var msg = new HttpRequestMessage(HttpMethod.Post, url)
-                        {
-                            Content = new ByteArrayContent(payload)
-                        };
-                        msg.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
-                        foreach (var h in headers)
-                            if (!h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
-                                msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
-                        using var resp = await Http.SendAsync(msg);
-                        body = await resp.Content.ReadAsStringAsync();
-                    }
-                    catch (Exception e)
-                    {
-                        error = $"Revival server unreachable ({e.GetType().Name}: {e.Message})";
-                    }
-#endif
 
                     MainThread.Enqueue(() =>
                     {
@@ -155,6 +147,53 @@ namespace WarpforgeRevival
                 });
                 return false; // skip the original UnityWebRequest path
             }
+        }
+
+        /// <summary>Sends one API call: (reply body, null) or (null, why it failed).</summary>
+        private static async Task<(string, string)> Send(string url, byte[] payload, List<KeyValuePair<string, string>> headers, string endpoint)
+        {
+            string body = null, error = null;
+#if ANDROID_TEST
+            // test build: one more try when the connection itself fails, and the full reason in the log
+            for (int attempt = 1; attempt <= 2 && body == null; attempt++)
+            {
+                try
+                {
+                    using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = new ByteArrayContent(payload) };
+                    msg.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+                    foreach (var h in headers)
+                        if (!h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
+                            msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                    using var resp = await Http.SendAsync(msg);
+                    body = await resp.Content.ReadAsStringAsync();
+                    error = null;
+                }
+                catch (Exception e)
+                {
+                    string why = e.GetType().Name + ": " + e.Message;
+                    for (var inner = e.InnerException; inner != null; inner = inner.InnerException)
+                        why += " <- " + inner.GetType().Name + ": " + inner.Message;
+                    error = $"Revival server unreachable ({why})";
+                    RevivalMod.Log.Warning($"[playfab] {endpoint} attempt {attempt} failed: {why}");
+                }
+            }
+#else
+            try
+            {
+                using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = new ByteArrayContent(payload) };
+                msg.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+                foreach (var h in headers)
+                    if (!h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
+                        msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                using var resp = await Http.SendAsync(msg);
+                body = await resp.Content.ReadAsStringAsync();
+            }
+            catch (Exception e)
+            {
+                error = $"Revival server unreachable ({e.GetType().Name}: {e.Message})";
+            }
+#endif
+            return (body, error);
         }
 
         // Fire-and-forget telemetry calls (screen time, device info) would still go to the real

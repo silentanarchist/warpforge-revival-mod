@@ -29,8 +29,9 @@ namespace WarpforgeRevival
             {
                 var uri = new Uri(RevivalMod.Config.ServerUrl);
                 host = uri.Host;
-                // An http address already names the game port; an https one goes through a web proxy that cannot carry this.
-                if (ServerSettings.MatchPort <= 0 && uri.Scheme == "http" && uri.Port > 0) port = uri.Port;
+                // A written port is the game port, which also carries matches. An https address with
+                // no port goes through a web proxy (443), which cannot carry them: the usual port then.
+                if (ServerSettings.MatchPort <= 0 && uri.Port > 0 && (uri.Scheme == "http" || !uri.IsDefaultPort)) port = uri.Port;
             }
             catch (UriFormatException) { }
             return !string.IsNullOrEmpty(host);

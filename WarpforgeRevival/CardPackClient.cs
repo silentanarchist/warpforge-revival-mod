@@ -40,10 +40,7 @@ namespace WarpforgeRevival
             try
             {
                 LoadCached();
-                using var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip })
-                {
-                    Timeout = TimeSpan.FromSeconds(RevivalMod.Config.TimeoutSeconds)
-                };
+                using var http = Net.Client(TimeSpan.FromSeconds(RevivalMod.Config.TimeoutSeconds), gzip: true);
                 #if ANDROID_TEST
                 // a phone needs the Android build of the content files
                 var manifestJson = await http.GetStringAsync(server + "/api/v1/content/manifest?platform=android");

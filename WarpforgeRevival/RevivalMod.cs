@@ -17,10 +17,24 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.11.9-a";
+        public const string Version = "0.11.24-a";
 #else
-        public const string Version = "0.11.9-w";
+        public const string Version = "0.11.24-w";
 #endif
+
+        /// <summary>
+        /// Raised whenever a release changes something both players of a match must agree on (how
+        /// the mod alters rules, cards or the match itself). Players are only matched with players
+        /// on the same number, so an older mod never meets a newer one in a match. It is the same
+        /// for Windows and Android, which is what keeps the two playing each other.
+        /// </summary>
+        public const int RulesVersion = 1;
+
+        /// <summary>The rules a match is played under: the mod's rules number plus the server's own ("rulesVersion" in its settings).</summary>
+        internal static string RulesTag
+        {
+            get { string server = ServerSettings.Rules; return "r" + RulesVersion + (string.IsNullOrEmpty(server) ? "" : "-" + server); }
+        }
 
         internal static MelonLogger.Instance Log;
         internal static RevivalConfig Config;
@@ -35,14 +49,48 @@ namespace WarpforgeRevival
             return System.Version.TryParse(dash < 0 ? text : text.Substring(0, dash), out var v) ? v : null;
         }
 
+        /// <summary>SHA-256 of this mod's own file as it was when the game started ("" if it could not be read).</summary>
+        internal static string FileHash = "";
+
+        /// <summary>
+        /// Names of every other mod and plugin the loader has running, comma separated ("" when this
+        /// mod is alone). A server can refuse to sign a game in when others are loaded, so that
+        /// everyone on it plays by the same rules.
+        /// </summary>
+        internal static string OtherMods()
+        {
+            var names = new System.Collections.Generic.List<string>();
+            try
+            {
+                foreach (var m in MelonBase.RegisteredMelons)
+                {
+                    if (m == null || m is RevivalMod) continue;
+                    string name = null;
+                    try { name = m.Info?.Name; } catch { }
+                    if (string.IsNullOrWhiteSpace(name)) { try { name = m.MelonAssembly?.Assembly?.GetName().Name; } catch { } }
+                    names.Add(string.IsNullOrWhiteSpace(name) ? "unnamed" : name.Replace(',', ' ').Trim());
+                }
+            }
+            catch (Exception e) { Log?.Warning("[mods] could not list the loaded mods: " + e.Message); names.Add("unknown"); }
+            return string.Join(", ", names);
+        }
+
         public override void OnInitializeMelon()
         {
             Log = LoggerInstance;
             Config = RevivalConfig.Load();
+            try
+            {
+                string file = MelonAssembly.Location ?? "";
+                if (file.Length > 0 && System.IO.File.Exists(file))
+                    using (var sha = System.Security.Cryptography.SHA256.Create())
+                        FileHash = Convert.ToHexString(sha.ComputeHash(System.IO.File.ReadAllBytes(file))).ToLowerInvariant();
+            }
+            catch (Exception e) { Log.Warning("[mods] could not read this mod's own file: " + e.Message); }
 #if !ANDROID_PORT   // Windows only
             try { Updater.LoadedFrom = MelonAssembly.Location ?? ""; } catch { }
 #endif
-            Log.Msg($"Warpforge Revival {Version} - server: {Config.ServerUrl}");
+            Log.Msg($"Warpforge Revival {Version} - server: {Config.ServerUrl}" + (Config.Secure ? " (encrypted)" : " (not encrypted)"));
 
             string dataDir = Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival");
             Directory.CreateDirectory(dataDir);
@@ -80,6 +128,35 @@ namespace WarpforgeRevival
         private float nextQuitCheck;
         private bool loggerNoted;
 
+        /// <summary>Closes the game for real (on a phone the game's own exit only puts it in the background).</summary>
+        internal static void QuitGame()
+        {
+#if ANDROID_PORT
+            AndroidUpdater.CloseApp();
+#else
+            UnityEngine.Application.Quit();
+#endif
+        }
+
+        /// <summary>
+        /// The server refused to sign in because this mod is out of date: fetch and install its build
+        /// now, without asking, and close the game so the next start uses it. False when that could
+        /// not be done (no update offered, updates switched off, download failed).
+        /// </summary>
+        internal static System.Threading.Tasks.Task<bool> UpdateForServer()
+        {
+#if ANDROID_PORT
+            return AndroidUpdater.UpdateNow();
+#else
+            return Updater.UpdateNow();
+#endif
+        }
+
+        public override void OnGUI()
+        {
+            GameSignIn.Draw();
+        }
+
         public override void OnUpdate()
         {
             // The game freezes when its window loses focus, and a frozen game drops out of the match
@@ -99,6 +176,7 @@ namespace WarpforgeRevival
 #endif
             SupportPage.Tick();
             AccountPage.Tick();
+            GameSignIn.Tick();
             FriendsLive.Tick();
             GlobalChat.Tick();
             AlternateArts.Tick();

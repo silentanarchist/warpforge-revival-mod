@@ -29,7 +29,7 @@ namespace WarpforgeRevival
                 try
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(marker));
-                    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+                    using var http = Net.Client(TimeSpan.FromSeconds(20));
                     var report = new System.Text.StringBuilder();
                     foreach (var bucket in Buckets)
                     foreach (var env in Environments)

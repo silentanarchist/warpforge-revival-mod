@@ -66,6 +66,11 @@ namespace WarpforgeRevival
             if (UnityEngine.Time.realtimeSinceStartup < next) return;
             next = UnityEngine.Time.realtimeSinceStartup + 15f;
             if (open.Pointer == IntPtr.Zero || open.m_CachedPtr == IntPtr.Zero) { open = null; return; }
+#if ANDROID_PORT
+            // On the phone "close the page" is too short to hook safely (see NoShortHooks), so a
+            // page that is no longer on screen is noticed here instead.
+            try { if (!open.gameObject.activeInHierarchy) { open = null; return; } } catch { open = null; return; }
+#endif
             if (!UnityEngine.Application.isFocused) return;     // no polling while the game is in the background
             Refresh();
         }
@@ -83,10 +88,12 @@ namespace WarpforgeRevival
             }
         }
 
+#if !ANDROID_PORT
         [HarmonyPatch(typeof(FriendsTab), nameof(FriendsTab.OnClose))]
         private static class Closed
         {
             private static void Postfix() => open = null;
         }
+#endif
     }
 }

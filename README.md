@@ -24,10 +24,15 @@ has played, so expect bugs. Read the code before you rely on it, and please repo
 - **Matches** run on the revival server's own match service. The game never contacts Photon's
   servers (`PhotonService.cs`, `Matchmaking.cs`).
 - **Global chat** runs through the revival server (`GlobalChat.cs`).
-- **Long Game**, a 60-card mode added by the revival (`LongGame.cs`).
+- **Custom Test**, a 60-card mode added by the revival (`LongGame.cs`).
 - **Profile additions:** win/loss record and skulls, friend codes, free renames (`ProfileStats.cs`, `ProfilePage.cs`).
-- **Account link** to the server's card creator site, optional (`AccountPage.cs`).
-- **Updates itself** from the server it is connected to, after asking (`Updater.cs`).
+- **Accounts:** when a server requires one, a sign-in window appears while the game loads (or a
+  game login file from the server's website is used); otherwise linking a site account is
+  optional (`GameSignIn.cs`, `AccountPage.cs`).
+- **Encrypted connection:** a server address without `http://` is tried over https first, and a
+  server that has answered over https is never contacted unencrypted again (`RevivalConfig.cs`, `Net.cs`).
+- **Updates itself** from the server it is connected to, after asking, and without asking when
+  the server refuses an outdated mod (`Updater.cs`).
 - **Stops the game contacting Unity's online services** (a sign-in that fails since the shutdown,
   and usage reports to the publisher); the two voice-line switches those services carried are set
   by the mod (`UnityServicesOff.cs`).
@@ -41,7 +46,7 @@ Each file starts with a comment saying what it is for and why.
 
 ## Download
 
-The latest build is [releases/WarpforgeRevival-0.11.9-w.zip](releases/WarpforgeRevival-0.11.9-w.zip)
+The latest build is [releases/WarpforgeRevival-0.11.24-w.zip](releases/WarpforgeRevival-0.11.24-w.zip)
 (open it and press "Download raw file"). It is built from the source in this repository and
 holds the mod, the `manifest.json` it needs, and a README with the steps below.
 

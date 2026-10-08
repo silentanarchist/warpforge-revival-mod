@@ -88,7 +88,7 @@ namespace WarpforgeRevival
         // server apply the account's permissions (in-game tester) to this player. The passphrase is
         // sent once to make the link and is not kept anywhere on this computer.
 
-        private static readonly System.Net.Http.HttpClient Http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        private static readonly System.Net.Http.HttpClient Http = Net.Client(TimeSpan.FromSeconds(15));
         private static volatile string linkedName;          // null: not asked yet, "": not linked
         private static volatile bool tester, busy;
         private static bool described;
@@ -134,6 +134,8 @@ namespace WarpforgeRevival
                         string linked = data.TryGetProperty("linked", out var l) ? l.GetString() ?? "" : "";
                         bool isTester = data.TryGetProperty("account", out var a) && a.ValueKind == System.Text.Json.JsonValueKind.Object &&
                                         a.TryGetProperty("tester", out var t) && t.ValueKind == System.Text.Json.JsonValueKind.True;
+                        if (data.TryGetProperty("signedOut", out var so) && so.ValueKind == System.Text.Json.JsonValueKind.True)
+                            GameSignIn.SignedOut("This game was unlinked from its account. Start the game again and sign in.");
                         bool changed = linked != linkedName || isTester != tester;
                         linkedName = linked;
                         tester = isTester;
@@ -291,6 +293,31 @@ namespace WarpforgeRevival
             }
         }
 
+        private static void Opened(AccountTab tab)
+        {
+            Apply(tab);
+            Say(tab, Status());
+            // the link may have been changed from the site since the game started
+            Send("status", null, null, (ok, message) => { Apply(tab); Say(tab, ok ? Status() : message, !ok); });
+        }
+
+#if ANDROID_PORT
+        // On the phone "open the page" is a single jump into "refresh the page" - too short to hook
+        // safely (see NoShortHooks) - so opening is noticed through the refresh it always causes.
+        private static float lastOpened = -100f;
+
+        [HarmonyPatch(typeof(AccountTab), nameof(AccountTab.Refresh))]
+        private static class OnRefresh
+        {
+            private static void Postfix(AccountTab __instance)
+            {
+                float now = Time.realtimeSinceStartup;
+                if (now - lastOpened < 3f) { Apply(__instance); return; }
+                lastOpened = now;
+                Opened(__instance);
+            }
+        }
+#else
         [HarmonyPatch(typeof(AccountTab), nameof(AccountTab.Refresh))]
         private static class OnRefresh
         {
@@ -300,15 +327,9 @@ namespace WarpforgeRevival
         [HarmonyPatch(typeof(AccountTab), nameof(AccountTab.OnOpen))]
         private static class OnOpen
         {
-            private static void Postfix(AccountTab __instance)
-            {
-                var tab = __instance;
-                Apply(tab);
-                Say(tab, Status());
-                // the link may have been changed from the site since the game started
-                Send("status", null, null, (ok, message) => { Apply(tab); Say(tab, ok ? Status() : message, !ok); });
-            }
+            private static void Postfix(AccountTab __instance) => Opened(__instance);
         }
+#endif
 
         // The page's main button links or unlinks.
         [HarmonyPatch(typeof(AccountTab), nameof(AccountTab.Register))]

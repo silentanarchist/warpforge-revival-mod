@@ -13,7 +13,7 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class ServerSettings
     {
-        private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        private static readonly HttpClient Http = Net.Client(TimeSpan.FromSeconds(10));
         private static string url;
         private static volatile int turnSeconds;          // 0 = the server did not say
         private static DateTime lastFetch = DateTime.MinValue;
@@ -55,6 +55,14 @@ namespace WarpforgeRevival
         public static int MatchPort => matchPort;
 
         private static volatile string creatorUrl;
+
+        private static volatile string rules = "";
+        /// <summary>
+        /// The server's own rules version ("rulesVersion" in its settings; "" when it has none). The
+        /// owner changes it when the cards or rules served change, so players who have not picked
+        /// the change up yet are not matched with players who have.
+        /// </summary>
+        public static string Rules => rules;
 
         /// <summary>
         /// Address of the card creator site: the server's "creatorUrl" setting when it has one
@@ -108,6 +116,17 @@ namespace WarpforgeRevival
                         if (v.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || v.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) creator = v;
                     }
                     creatorUrl = creator;
+                    string rv = "";
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("rulesVersion", out var rve) &&
+                        (rve.ValueKind == JsonValueKind.String || rve.ValueKind == JsonValueKind.Number))
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        foreach (char ch in rve.ToString())
+                            if (sb.Length < 16 && (char.IsLetterOrDigit(ch) || ch == '.' || ch == '-') && ch < 128) sb.Append(ch);
+                        rv = sb.ToString();
+                    }
+                    if (rv != rules) RevivalMod.Log.Msg("[settings] server settings: rules version " + (rv.Length > 0 ? rv : "not set"));
+                    rules = rv;
                     int port = 0;
                     if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("matchPort", out var mp) && mp.ValueKind == JsonValueKind.Number)
                         port = mp.GetInt32();

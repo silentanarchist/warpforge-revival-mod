@@ -41,14 +41,32 @@ namespace WarpforgeRevival
             UnityEngine.Application.Quit();
         }
 
+        private static string startServer, startData;
+
+        private static bool UpdatesOff => (RevivalMod.Config.AutoUpdate ?? "Ask").Trim().Equals("Off", StringComparison.OrdinalIgnoreCase);
+
         public static void Start(string serverUrl, string dataDir)
         {
+            startServer = serverUrl;
+            startData = dataDir;
+            if (UpdatesOff) return;
             string mode = (RevivalMod.Config.AutoUpdate ?? "Ask").Trim();
-            if (mode.Equals("Off", StringComparison.OrdinalIgnoreCase)) return;
             Task.Run(() => Check(serverUrl, dataDir, mode.Equals("Auto", StringComparison.OrdinalIgnoreCase)));
         }
 
-        private static async Task Check(string serverUrl, string dataDir, bool auto)
+        /// <summary>The server refused to sign in because this mod is out of date: update without asking.</summary>
+        internal static async Task<bool> UpdateNow()
+        {
+            if (UpdatesOff || startServer == null) return false;
+            GameSignIn.Updating("This server needs a newer Warpforge Revival mod. Downloading it...");
+            bool staged = await Check(startServer, startData, true);
+            if (staged) GameSignIn.Updated("The new version is downloaded. The game closes and starts again to use it.", 3f);
+            else GameSignIn.UpdateFailed();
+            return staged;
+        }
+
+        /// <summary>True once a newer build is downloaded and the swap is arranged (the game then closes).</summary>
+        private static async Task<bool> Check(string serverUrl, string dataDir, bool auto)
         {
             try
             {
@@ -65,10 +83,10 @@ namespace WarpforgeRevival
                 string fresh = dll + ".new";
                 try { if (File.Exists(fresh)) File.Delete(fresh); } catch { }
 
-                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(Math.Max(30, RevivalMod.Config.TimeoutSeconds)) };
+                using var http = Net.Client(TimeSpan.FromSeconds(Math.Max(30, RevivalMod.Config.TimeoutSeconds)));
                 using var manifest = JsonDocument.Parse(await http.GetStringAsync(serverUrl + "/api/v1/mod/manifest"));
                 var root = manifest.RootElement;
-                if (!root.TryGetProperty("available", out var av) || !av.GetBoolean()) return;
+                if (!root.TryGetProperty("available", out var av) || !av.GetBoolean()) return false;
                 // "version" stays in the form older builds understand; "label" is the name shown to people
                 string number = root.GetProperty("version").GetString();
                 string remote = root.TryGetProperty("label", out var lb) && lb.ValueKind == JsonValueKind.String ? lb.GetString() : number;
@@ -77,7 +95,7 @@ namespace WarpforgeRevival
                 if (rv == null || lv == null || rv <= lv)
                 {
                     RevivalMod.Log.Msg($"[update] mod is up to date (installed {RevivalMod.Version}, server has {remote})");
-                    return;
+                    return false;
                 }
 
                 RevivalMod.Log.Msg($"[update] server has mod {remote} (installed {RevivalMod.Version})");
@@ -89,7 +107,7 @@ namespace WarpforgeRevival
                         $"Installed: {RevivalMod.Version}\nAvailable: {remote}\nServer: {serverUrl}\n\n" +
                         "Install it now? The game will close and start again.",
                         "Warpforge Revival update", 0x4 | 0x20 | 0x40000 | 0x10000);
-                    if (answer != 6) { RevivalMod.Log.Msg("[update] update declined"); return; }
+                    if (answer != 6) { RevivalMod.Log.Msg("[update] update declined"); return false; }
                 }
 
                 var data = await http.GetByteArrayAsync(serverUrl + root.GetProperty("url").GetString());
@@ -125,10 +143,12 @@ namespace WarpforgeRevival
                 });
                 RevivalMod.Log.Msg($"[update] mod {remote} downloaded; restarting the game");
                 quitRequested = true;
+                return true;
             }
             catch (Exception e)
             {
                 RevivalMod.Log.Warning("[update] update check failed: " + e.Message);
+                return false;
             }
         }
     }
