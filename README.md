@@ -34,8 +34,9 @@ has played, so expect bugs. Read the code before you rely on it, and please repo
   Account signs out this computer only; the account keeps its game progress.
 - **Encrypted connection:** a server address without `http://` is tried over https first, and a
   server that has answered over https is never contacted unencrypted again (`RevivalConfig.cs`, `Net.cs`).
-- **Updates itself** from the server it is connected to, after asking, and without asking when
-  the server refuses an outdated mod (`Updater.cs`).
+- **Updates itself** from the server it is connected to: when the server has a newer build, the
+  sign-in window says so while the game loads, downloads it, and the game closes and starts
+  again with it (`Updater.cs`). `AutoUpdate = Off` in the settings file switches this off.
 - **Stops the game contacting Unity's online services** (a sign-in that fails since the shutdown,
   and usage reports to the publisher); the two voice-line switches those services carried are set
   by the mod (`UnityServicesOff.cs`).
