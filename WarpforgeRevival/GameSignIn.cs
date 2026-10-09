@@ -176,7 +176,7 @@ namespace WarpforgeRevival
             {
                 closingTitle = "Mod updated";
                 closingWhy = text;
-                closingButton = true;
+                closingButton = false;          // "Close now" froze the game on every system; the countdown closes it
                 closeAt = Time.realtimeSinceStartup + seconds;
             });
         }
