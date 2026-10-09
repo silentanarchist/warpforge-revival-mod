@@ -62,6 +62,8 @@ namespace WarpforgeRevival
                 {
                     url = RewriteUrl(container.FullUrl);
                     payload = container.Payload != null ? (byte[])container.Payload : Array.Empty<byte>();
+                    if ((container.ApiEndpoint ?? "").Contains("/Client/ExecuteCloudScript"))
+                        payload = WithoutDraftWarlords(payload);
                     if (container.RequestHeaders != null)
                         foreach (var kv in container.RequestHeaders)
                             headers.Add(new KeyValuePair<string, string>(kv.Key, kv.Value));
@@ -146,6 +148,33 @@ namespace WarpforgeRevival
                     });
                 });
                 return false; // skip the original UnityWebRequest path
+            }
+        }
+
+        private static readonly HashSet<string> DraftEntries = new HashSet<string> { "FreeDraftEntrance", "PayDraftEntrance" };
+
+        /// <summary>
+        /// Entering a draft, the game sends the warlords it would offer. A revival server picks a
+        /// run's warlords itself, from the player's collection, so that list is left out of the request.
+        /// </summary>
+        private static byte[] WithoutDraftWarlords(byte[] payload)
+        {
+            try
+            {
+                if (payload.Length == 0 || payload.Length > 1 << 20) return payload;
+                var root = System.Text.Json.Nodes.JsonNode.Parse(payload) as System.Text.Json.Nodes.JsonObject;
+                string fn = root?["FunctionName"]?.GetValue<string>();
+                if (fn == null || !DraftEntries.Contains(fn)) return payload;
+                var param = root["FunctionParameter"] as System.Text.Json.Nodes.JsonObject;
+                var data = (param?["Data"] as System.Text.Json.Nodes.JsonObject) ?? param;
+                if (data == null || !data.Remove("warlords")) return payload;
+                RevivalMod.Log.Msg($"[draft] {fn}: the server picks the warlords; the game's list is not sent");
+                return Encoding.UTF8.GetBytes(root.ToJsonString());
+            }
+            catch (Exception e)
+            {
+                RevivalMod.Log.Warning("[draft] could not read a draft request: " + e.Message);
+                return payload;
             }
         }
 
