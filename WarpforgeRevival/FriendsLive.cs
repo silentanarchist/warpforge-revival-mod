@@ -59,6 +59,17 @@ namespace WarpforgeRevival
             catch (Exception e) { busy = false; RevivalMod.Log.Warning("[friends] " + e.Message); }
         }
 
+        /// <summary>Redraws the friend list if it is open (a friend's online light changed).</summary>
+        internal static void Redraw()
+        {
+            try
+            {
+                var tab = open;
+                if ((object)tab != null && tab.Pointer != IntPtr.Zero && tab.m_CachedPtr != IntPtr.Zero) tab.FillInFriendsContainer();
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[friends] " + e.Message); }
+        }
+
         /// <summary>Called every frame from the mod's update loop.</summary>
         public static void Tick()
         {

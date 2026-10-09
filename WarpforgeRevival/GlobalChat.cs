@@ -219,6 +219,37 @@ namespace WarpforgeRevival
         }
 #endif
 
+        // ---------------------------------------------------------------- friends online
+        // The green light beside a friend came from Photon Chat, which the revival does not use. The
+        // server says with every chat answer which friends are online (their game is running) or in
+        // a match, for friends who have added this player back; the game's own status table is
+        // filled from that, and an open friend list is redrawn when anything changed.
+        private static volatile Dictionary<string, string> friendStatus;
+        private static Dictionary<string, string> friendShown;
+
+        private static void ShowFriendStatus(ChatGlobalManager m)
+        {
+            var now = friendStatus;
+            if (now == null || ReferenceEquals(now, friendShown)) return;
+            var before = friendShown;
+            friendShown = now;
+            bool changed = before == null || before.Count != now.Count;
+            try
+            {
+                var table = m.cachedPlayerStatus;
+                if ((object)table == null) { table = new Il2CppSystem.Collections.Generic.Dictionary<string, ChatPlayerStatus>(); m.cachedPlayerStatus = table; }
+                foreach (var kv in now)
+                {
+                    var status = kv.Value == "online" ? ChatPlayerStatus.Connected : kv.Value == "playing" ? ChatPlayerStatus.Away : ChatPlayerStatus.Disconnected;
+                    if (!changed && (!before.TryGetValue(kv.Key, out var old) || old != kv.Value)) changed = true;
+                    table[kv.Key] = status;
+                }
+                if (changed) FriendsLive.Redraw();
+            }
+            catch (Exception e) { if (!statusNoted) { statusNoted = true; RevivalMod.Log.Warning("[friends] online status: " + e.Message); } }
+        }
+        private static bool statusNoted;
+
         // ---------------------------------------------------------------- receiving
         private static void Poll()
         {
@@ -249,6 +280,13 @@ namespace WarpforgeRevival
                         n++;
                     }
                     since = Math.Max(0, data.GetProperty("last").GetInt64());
+                    if (data.TryGetProperty("friends", out var fr) && fr.ValueKind == JsonValueKind.Object)
+                    {
+                        var seen = new Dictionary<string, string>();
+                        foreach (var f in fr.EnumerateObject())
+                            if (f.Value.ValueKind == JsonValueKind.String) seen[f.Name] = f.Value.GetString();
+                        friendStatus = seen;
+                    }
                     if (!pollNoted) { pollNoted = true; RevivalMod.Log.Msg($"[chat] connected to the server chat ({n} earlier message(s))"); }
                     failNoted = false;
                 }
@@ -282,6 +320,7 @@ namespace WarpforgeRevival
             var m = manager;
             if (!Alive(m)) { manager = null; return; }
             float now = UnityEngine.Time.realtimeSinceStartup;
+            ShowFriendStatus(m);
 
             // Without Photon Chat nobody tells the game "chat is connected", and it is that moment
             // that marks chat as ready and notes who the player is. Say it ourselves.
