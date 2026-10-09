@@ -250,6 +250,55 @@ namespace WarpforgeRevival
         }
         private static bool statusNoted;
 
+        // ---------------------------------------------------------------- private messages
+        // Challenging a friend (and the answer to it) is a private message between two players. The
+        // game sent those through the publisher's Photon Chat, which the revival skips, so they never
+        // arrived. They go to the server instead, and come back to the other player with its chat poll.
+        private static readonly ConcurrentQueue<(string from, string data)> PrivateInbox = new ConcurrentQueue<(string, string)>();
+        private static bool privateNoted;
+
+        [HarmonyPatch(typeof(ChatGlobalManager), nameof(ChatGlobalManager.SendPrivateMessage), new[] { typeof(string), typeof(PrivateMessageData) })]
+        private static class PrivateOut
+        {
+            private static bool Prefix(ChatGlobalManager __instance, string player, PrivateMessageData messageData)
+            {
+                if (server == null || (object)messageData == null) return true;
+                try
+                {
+                    Remember(__instance);
+                    string json = Il2CppEverguild.Utils.JsonWrapper.SerializeObject(messageData);
+                    string kind = messageData.messageType.ToString();
+                    if (kind != "DuplicateConnectionCheck") RevivalMod.Log.Msg($"[chat] {kind} to {player}");
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            using var body = Body(w => { w.WriteString("to", player ?? ""); w.WriteString("data", json); });
+                            using var reply = await Post("/playfab/Revival/ChatPrivate", body);
+                            if (!reply.IsSuccessStatusCode && !privateNoted)
+                            {
+                                privateNoted = true;
+                                RevivalMod.Log.Warning($"[chat] the server did not pass on a {kind} message ({(int)reply.StatusCode})");
+                            }
+                        }
+                        catch (Exception e) { RevivalMod.Log.Warning("[chat] could not send a private message: " + e.Message); }
+                    });
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[chat] private message: " + e.Message); }
+                return false;
+            }
+        }
+
+        private static void ReceivePrivate(ChatGlobalManager m, string from, string data)
+        {
+            try
+            {
+                RevivalMod.Log.Msg($"[chat] private message from {from}");
+                m.OnPrivateMessage(from, new Il2CppSystem.Object(IL2CPP.ManagedStringToIl2Cpp(data)), "");
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[chat] could not deliver a private message: " + e.Message); }
+        }
+
         // ---------------------------------------------------------------- receiving
         private static void Poll()
         {
@@ -287,6 +336,11 @@ namespace WarpforgeRevival
                             if (f.Value.ValueKind == JsonValueKind.String) seen[f.Name] = f.Value.GetString();
                         friendStatus = seen;
                     }
+                    if (data.TryGetProperty("private", out var pm) && pm.ValueKind == JsonValueKind.Array)
+                        foreach (var p in pm.EnumerateArray())
+                            if (p.TryGetProperty("from", out var pf) && p.TryGetProperty("data", out var pd) &&
+                                pf.ValueKind == JsonValueKind.String && pd.ValueKind == JsonValueKind.String)
+                                PrivateInbox.Enqueue((pf.GetString(), pd.GetString()));
                     if (!pollNoted) { pollNoted = true; RevivalMod.Log.Msg($"[chat] connected to the server chat ({n} earlier message(s))"); }
                     failNoted = false;
                 }
@@ -321,6 +375,7 @@ namespace WarpforgeRevival
             if (!Alive(m)) { manager = null; return; }
             float now = UnityEngine.Time.realtimeSinceStartup;
             ShowFriendStatus(m);
+            while (PrivateInbox.TryDequeue(out var pm)) ReceivePrivate(m, pm.from, pm.data);
 
             // Without Photon Chat nobody tells the game "chat is connected", and it is that moment
             // that marks chat as ready and notes who the player is. Say it ourselves.
