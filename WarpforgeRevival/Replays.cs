@@ -15,9 +15,40 @@ namespace WarpforgeRevival
     /// name the game itself looks the recording up under is not readable from its files, so the
     /// mod reads the server's answer here and hands the game the recording. When the answer has
     /// no recording the game's own handling runs (and shows "Error loading match replay").
+    /// The replay's mulligan screen is moved on by itself (see Tick).
     /// </summary>
     internal static class Replays
     {
+        // A replay opens on the mulligan screen with the recorded swaps already marked and waits
+        // for Done, as if the viewer were playing. Done is pressed for them after a short look.
+        private const float MulliganShownSeconds = 2.5f;
+        private static float doneAt;
+
+        [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.SetupReplayMulliganStart))]
+        private static class MulliganShown
+        {
+            private static void Postfix() => doneAt = UnityEngine.Time.realtimeSinceStartup + MulliganShownSeconds;
+        }
+
+        [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.ClickMulliganDone))]
+        private static class MulliganDone
+        {
+            private static void Prefix() => doneAt = 0;          // pressed already (by the viewer or below)
+        }
+
+        /// <summary>Called every frame from the mod's update loop.</summary>
+        internal static void Tick()
+        {
+            if (doneAt <= 0 || UnityEngine.Time.realtimeSinceStartup < doneAt) return;
+            doneAt = 0;
+            try
+            {
+                var mulligan = UnityEngine.Object.FindObjectOfType<MulliganManager>();
+                if (mulligan != null) { mulligan.ClickMulliganDone(); RevivalMod.Log.Msg("[replay] mulligan shown, continuing"); }
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[replay] could not continue past the mulligan: " + e.Message); }
+        }
+
         [HarmonyPatch(typeof(PlayerDataManager), nameof(PlayerDataManager.ProcessMatchRecording))]
         private static class Load
         {
