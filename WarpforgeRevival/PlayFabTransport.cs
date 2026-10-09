@@ -183,6 +183,9 @@ namespace WarpforgeRevival
         private static async Task<(string, string)> Send(string url, byte[] payload, List<KeyValuePair<string, string>> headers, string endpoint)
         {
             string body = null, error = null;
+            // Both tries of one request carry the same id: when the first did reach the server after
+            // all, the server answers the second with the first one's answer instead of doing it twice.
+            string requestId = Guid.NewGuid().ToString("N");
 #if ANDROID_TEST
             // test build: one more try when the connection itself fails, and the full reason in the log
             for (int attempt = 1; attempt <= 2 && body == null; attempt++)
@@ -191,6 +194,7 @@ namespace WarpforgeRevival
                 {
                     using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = new ByteArrayContent(payload) };
                     msg.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+                    msg.Headers.TryAddWithoutValidation("X-Revival-Request", requestId);
                     foreach (var h in headers)
                         if (!h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
                             msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
@@ -218,6 +222,7 @@ namespace WarpforgeRevival
                 {
                     using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = new ByteArrayContent(payload) };
                     msg.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+                    msg.Headers.TryAddWithoutValidation("X-Revival-Request", requestId);
                     foreach (var h in headers)
                         if (!h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
                             msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
