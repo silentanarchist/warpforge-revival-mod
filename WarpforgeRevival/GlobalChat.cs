@@ -257,29 +257,44 @@ namespace WarpforgeRevival
         private static readonly ConcurrentQueue<(string from, string data)> PrivateInbox = new ConcurrentQueue<(string, string)>();
         private static bool privateNoted;
 
-        [HarmonyPatch(typeof(ChatGlobalManager), nameof(ChatGlobalManager.SendPrivateMessage), new[] { typeof(string), typeof(PrivateMessageData) })]
+        // Caught at the lowest level, the chat client's own send, which every private message goes
+        // through: on Windows the game's SendPrivateMessage is built into some of its callers (the
+        // online check before a challenge among them), so a patch on it was not reached from there.
+        [HarmonyPatch(typeof(Il2CppPhoton.Chat.ChatClient), nameof(Il2CppPhoton.Chat.ChatClient.sendPrivateMessage))]
         private static class PrivateOut
         {
-            private static bool Prefix(ChatGlobalManager __instance, string player, PrivateMessageData messageData)
+            private static bool Prefix(string __0, Il2CppSystem.Object __1, ref bool __result)
             {
-                if (server == null || (object)messageData == null) return true;
+                string target = __0; var message = __1;
+                if (server == null || (object)message == null) return true;
+                __result = true;
                 try
                 {
-                    Remember(__instance);
-                    string json = Il2CppEverguild.Utils.JsonWrapper.SerializeObject(messageData);
-                    string kind = messageData.messageType.ToString();
-                    if (kind != "DuplicateConnectionCheck") RevivalMod.Log.Msg($"[chat] {kind} to {player}");
+                    var str = message.TryCast<Il2CppSystem.String>();
+                    string json = (object)str != null ? IL2CPP.Il2CppStringToManaged(str.Pointer)
+                                                      : Il2CppEverguild.Utils.JsonWrapper.SerializeObject(message);
+                    if (string.IsNullOrEmpty(json)) return false;
+                    string me = PlayerDataManager.singletonManager?.playFabId;
+                    if (!string.IsNullOrEmpty(me) && string.Equals(me, target, StringComparison.OrdinalIgnoreCase))
+                        return false;                         // the game's notes to itself (duplicate sign-in check)
+                    string kind = Kind(json);
+                    RevivalMod.Log.Msg($"[chat] {kind} to {target}");
                     Task.Run(async () =>
                     {
                         try
                         {
-                            using var body = Body(w => { w.WriteString("to", player ?? ""); w.WriteString("data", json); });
+                            using var body = Body(w => { w.WriteString("to", target ?? ""); w.WriteString("data", json); });
                             using var reply = await Post("/playfab/Revival/ChatPrivate", body);
-                            if (!reply.IsSuccessStatusCode && !privateNoted)
+                            if (!reply.IsSuccessStatusCode)
                             {
-                                privateNoted = true;
-                                RevivalMod.Log.Warning($"[chat] the server did not pass on a {kind} message ({(int)reply.StatusCode})");
+                                if (!privateNoted) { privateNoted = true; RevivalMod.Log.Warning($"[chat] the server did not pass on a {kind} message ({(int)reply.StatusCode})"); }
+                                return;
                             }
+                            // The server answers the online check before a challenge itself when it has
+                            // seen the other player just now: the game only waits 4 seconds for that answer.
+                            using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
+                            if (doc.RootElement.TryGetProperty("data", out var d) && d.ValueKind == JsonValueKind.Object)
+                                TakePrivate(d);
                         }
                         catch (Exception e) { RevivalMod.Log.Warning("[chat] could not send a private message: " + e.Message); }
                     });
@@ -289,11 +304,37 @@ namespace WarpforgeRevival
             }
         }
 
+        private static readonly string[] Kinds = { "RefreshInvites", "Practice", "RemovePractice", "AcceptPractice", "CheckUserOnline", "AckUserOnline", "DuplicateConnectionCheck", "ExpelForDuplicateConnection" };
+
+        private static string Kind(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("messageType", out var t))
+                {
+                    if (t.ValueKind == JsonValueKind.String) return t.GetString();
+                    if (t.ValueKind == JsonValueKind.Number && t.TryGetInt32(out int i)) return i >= 0 && i < Kinds.Length ? Kinds[i] : i.ToString();
+                }
+            }
+            catch { }
+            return "private message";
+        }
+
+        private static void TakePrivate(JsonElement data)
+        {
+            if (data.TryGetProperty("private", out var pm) && pm.ValueKind == JsonValueKind.Array)
+                foreach (var p in pm.EnumerateArray())
+                    if (p.TryGetProperty("from", out var pf) && p.TryGetProperty("data", out var pd) &&
+                        pf.ValueKind == JsonValueKind.String && pd.ValueKind == JsonValueKind.String)
+                        PrivateInbox.Enqueue((pf.GetString(), pd.GetString()));
+        }
+
         private static void ReceivePrivate(ChatGlobalManager m, string from, string data)
         {
             try
             {
-                RevivalMod.Log.Msg($"[chat] private message from {from}");
+                RevivalMod.Log.Msg($"[chat] {Kind(data)} from {from}");
                 m.OnPrivateMessage(from, new Il2CppSystem.Object(IL2CPP.ManagedStringToIl2Cpp(data)), "");
             }
             catch (Exception e) { RevivalMod.Log.Warning("[chat] could not deliver a private message: " + e.Message); }
@@ -336,11 +377,7 @@ namespace WarpforgeRevival
                             if (f.Value.ValueKind == JsonValueKind.String) seen[f.Name] = f.Value.GetString();
                         friendStatus = seen;
                     }
-                    if (data.TryGetProperty("private", out var pm) && pm.ValueKind == JsonValueKind.Array)
-                        foreach (var p in pm.EnumerateArray())
-                            if (p.TryGetProperty("from", out var pf) && p.TryGetProperty("data", out var pd) &&
-                                pf.ValueKind == JsonValueKind.String && pd.ValueKind == JsonValueKind.String)
-                                PrivateInbox.Enqueue((pf.GetString(), pd.GetString()));
+                    TakePrivate(data);
                     if (!pollNoted) { pollNoted = true; RevivalMod.Log.Msg($"[chat] connected to the server chat ({n} earlier message(s))"); }
                     failNoted = false;
                 }
