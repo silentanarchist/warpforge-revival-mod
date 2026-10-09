@@ -270,9 +270,10 @@ namespace WarpforgeRevival
                 __result = true;
                 try
                 {
-                    var str = message.TryCast<Il2CppSystem.String>();
-                    string json = (object)str != null ? IL2CPP.Il2CppStringToManaged(str.Pointer)
-                                                      : Il2CppEverguild.Utils.JsonWrapper.SerializeObject(message);
+                    // The game hands over its message already as JSON text; ToString gives that text back.
+                    string json = message.ToString();
+                    if (string.IsNullOrEmpty(json) || json.TrimStart()[0] != '{')
+                        json = Il2CppEverguild.Utils.JsonWrapper.SerializeObject(message);
                     if (string.IsNullOrEmpty(json)) return false;
                     string me = PlayerDataManager.singletonManager?.playFabId;
                     if (!string.IsNullOrEmpty(me) && string.Equals(me, target, StringComparison.OrdinalIgnoreCase))
