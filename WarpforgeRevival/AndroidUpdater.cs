@@ -149,8 +149,11 @@ namespace WarpforgeRevival
 
         internal static void CloseApp()
         {
-            // The window asks on every drawing pass of a frame; close only once.
-            if (closeRequested) return;
+            // Asked again: the process outlived an earlier close and the app was opened again in it.
+            // That happened on an emulator: Android froze the closed app's process before the
+            // background thread below could end it, the next start woke the same process, which still
+            // remembered closing and closed again at once - every start, until a force stop.
+            if (closeRequested) { EndProcess(); return; }
             closeRequested = true;
             try
             {
@@ -169,26 +172,28 @@ namespace WarpforgeRevival
                 try { UnityEngine.AndroidJNI.ExceptionClear(); } catch { }
                 RevivalMod.Log.Warning("[update] could not close the app's screen the normal way (" + e.Message + "); ending the process only");
             }
-            // End the process a moment later, from a plain background thread. (This used to be done
-            // from the game's own per-frame update, but once the screen is closed the game is paused
-            // and no frames run: the process stayed alive, and was only ended when the player opened
-            // the app again - which looked like the game closing by itself shortly after starting.)
+            // End the process right here, a moment after the request: Android has the request by
+            // then (the call above returns once it has), and waiting longer risks the process being
+            // frozen as a closed app before it ends. (Ending it from the game's per-frame update
+            // never ran either: once the screen is closed no frames run.) A background thread
+            // stays as a second try.
             var ender = new System.Threading.Thread(() =>
             {
-                System.Threading.Thread.Sleep(800);
+                System.Threading.Thread.Sleep(1500);
                 EndProcess();
             });
             ender.IsBackground = true;
             ender.Start();
-            closeAt = UnityEngine.Time.realtimeSinceStartup + 3.0f;      // fallback, should the thread not get to it
+            System.Threading.Thread.Sleep(150);
+            EndProcess();
         }
 
         private static int ending;
 
         private static void EndProcess()
         {
-            if (System.Threading.Interlocked.Exchange(ref ending, 1) != 0) return;
-            RevivalMod.Log.Msg("[update] ending the process");
+            // logged once; the kill itself is always tried (an earlier one may not have gone through)
+            if (System.Threading.Interlocked.Exchange(ref ending, 1) == 0) RevivalMod.Log.Msg("[update] ending the process");
             try { kill(getpid(), 9); } catch { }
             try { System.Diagnostics.Process.GetCurrentProcess().Kill(); } catch { }
             Environment.Exit(0);
