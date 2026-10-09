@@ -86,7 +86,8 @@ namespace WarpforgeRevival
             return true;
         }
 
-        /// <summary>Puts the panel to the right of the rank boxes, level with their top.</summary>
+        /// <summary>Puts the panel to the right of the rank boxes: under the Warlord Mastery box when
+        /// that is showing, otherwise level with the rank boxes' top.</summary>
         private static void Place(ProfileTab tab, TMP_Text label)
         {
             var rank = tab.rankingSection;
@@ -104,8 +105,19 @@ namespace WarpforgeRevival
             var rt = label.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0f, 1f);
-            rt.sizeDelta = new Vector2(width, Mathf.Max(200f, top - bottom));
-            rt.position = space.TransformPoint(new Vector3(right + 45f, top, 0f));
+            // With the Warlord Mastery box showing, the record goes under it, in that box's column.
+            var mastery = tab.GetComponentInChildren<WarlordMasteryContainer>(false);
+            float ml = float.MaxValue, mr = float.MinValue, mt = float.MinValue, mb = float.MaxValue;
+            if ((object)mastery != null && Corners(mastery, space, ref ml, ref mr, ref mt, ref mb) && mb - bottom > 120f)
+            {
+                rt.sizeDelta = new Vector2(Mathf.Min(mr - ml - 20f, 680f), mb - 30f - bottom);
+                rt.position = space.TransformPoint(new Vector3(ml + 20f, mb - 30f, 0f));
+            }
+            else
+            {
+                rt.sizeDelta = new Vector2(width, Mathf.Max(200f, top - bottom));
+                rt.position = space.TransformPoint(new Vector3(right + 45f, top, 0f));
+            }
             // Drawn just after the rank boxes, not last: windows the page opens over itself (the
             // name change box, for one) come later in the page and must stay on top of the record.
             Transform boxes = rank.transform;

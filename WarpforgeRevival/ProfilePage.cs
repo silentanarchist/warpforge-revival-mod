@@ -7,7 +7,7 @@ namespace WarpforgeRevival
 {
     /// <summary>
     /// Player profile window on a revival server: the parts that depend on things the server does
-    /// not run (warlord mastery, forge, campaigns, alliances, avatar borders from events) are hidden,
+    /// not run (forge, campaigns, alliances, avatar borders from events) are hidden,
     /// and title plates get their text even though the wording template is missing.
     /// </summary>
     internal static class ProfilePage
@@ -17,15 +17,56 @@ namespace WarpforgeRevival
             if ((object)c != null && c.Pointer != IntPtr.Zero) c.gameObject.SetActive(false);
         }
 
-        // Warlord mastery / forge / campaign boxes: nothing behind them, and they crash without events.
+        // The right-hand boxes: Warlord Mastery is shown (the warlord with the most wins, from the
+        // win counts the server sends with every profile). Highest Forge Level and Current Campaign
+        // stay hidden: they look up Forge and Campaign events this server does not run, and crash
+        // without them.
         [HarmonyPatch(typeof(ProfileEventSection), nameof(ProfileEventSection.Initialize))]
-        private static class NoEventBoxes
+        private static class EventBoxes
         {
-            private static bool Prefix(ProfileEventSection __instance)
+            private static void Prefix(ProfileEventSection __instance)
             {
-                try { __instance.gameObject.SetActive(false); }
+                try { if (!__instance.gameObject.activeSelf) __instance.gameObject.SetActive(true); }
                 catch (Exception e) { RevivalMod.Log.Warning("[profile] " + e.Message); }
-                return false;
+            }
+        }
+
+        [HarmonyPatch(typeof(ForgePlayerContainer), nameof(ForgePlayerContainer.OnInitialize))]
+        private static class NoForgeBox
+        {
+            private static bool Prefix(ForgePlayerContainer __instance) { Hide(__instance); return false; }
+        }
+
+        [HarmonyPatch(typeof(CampaignProfileContainer), nameof(CampaignProfileContainer.OnInitialize))]
+        private static class NoCampaignBox
+        {
+            private static bool Prefix(CampaignProfileContainer __instance) { Hide(__instance); return false; }
+        }
+
+        [HarmonyPatch(typeof(WarlordMasteryContainer), nameof(WarlordMasteryContainer.OnInitialize))]
+        private static class WarlordMastery
+        {
+            // A player without a single win has no warlord to show: the box is hidden for them.
+            private static bool Prefix(WarlordMasteryContainer __instance, PlayerInfo context)
+            {
+                try
+                {
+                    var wins = (object)context != null ? context.GetVictoryCounters() : null;
+                    bool any = (object)wins != null && wins.Count > 0;
+                    __instance.gameObject.SetActive(any);
+                    return any;
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[profile] warlord mastery: " + e.Message); Hide(__instance); return false; }
+            }
+
+            private static Exception Finalizer(WarlordMasteryContainer __instance, Exception __exception)
+            {
+                if (__exception != null)
+                {
+                    RevivalMod.Log.Warning("[profile] warlord mastery could not be shown: " + __exception.Message);
+                    try { Hide(__instance); } catch { }
+                }
+                return null;
             }
         }
 
