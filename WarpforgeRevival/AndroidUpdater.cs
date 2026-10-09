@@ -145,8 +145,13 @@ namespace WarpforgeRevival
         [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "getpid")] private static extern int getpid();
         [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "kill")] private static extern int kill(int pid, int sig);
 
+        private static bool closeRequested;
+
         internal static void CloseApp()
         {
+            // The window asks on every drawing pass of a frame; close only once.
+            if (closeRequested) return;
+            closeRequested = true;
             try
             {
                 var none = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<UnityEngine.jvalue>(0);
@@ -178,8 +183,11 @@ namespace WarpforgeRevival
             closeAt = UnityEngine.Time.realtimeSinceStartup + 3.0f;      // fallback, should the thread not get to it
         }
 
+        private static int ending;
+
         private static void EndProcess()
         {
+            if (System.Threading.Interlocked.Exchange(ref ending, 1) != 0) return;
             RevivalMod.Log.Msg("[update] ending the process");
             try { kill(getpid(), 9); } catch { }
             try { System.Diagnostics.Process.GetCurrentProcess().Kill(); } catch { }

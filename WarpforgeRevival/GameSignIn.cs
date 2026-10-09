@@ -217,8 +217,17 @@ namespace WarpforgeRevival
             if (closingButton && GUI.Button(R(x + 40, y + 210, 220, 50), "Close now", button)) RevivalMod.QuitGame();
         }
 
+        private static float lastFrame;
+
         internal static void Tick()
         {
+            // The countdown only runs while the game is drawing. The game can stall for seconds while it
+            // loads; time spent stalled does not count, so the message is on screen for the full wait
+            // (a phone once closed straight after a stall, without the message ever being seen).
+            float now = Time.realtimeSinceStartup;
+            float gap = lastFrame > 0f ? now - lastFrame : 0f;
+            lastFrame = now;
+            if (closing && closeAt > 0 && gap > 0.5f) closeAt += gap;
             // closes even if the window cannot be drawn on this device
             if (closing && closeAt > 0 && Time.realtimeSinceStartup > closeAt + 1f) { RevivalMod.QuitGame(); return; }
             if (!open || drawn || Time.realtimeSinceStartup - askedAt < 10f) return;
