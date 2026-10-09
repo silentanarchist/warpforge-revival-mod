@@ -17,9 +17,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.12.7-a";
+        public const string Version = "0.12.8-a";
 #else
-        public const string Version = "0.12.7-w";
+        public const string Version = "0.12.8-w";
 #endif
 
         /// <summary>
@@ -106,6 +106,7 @@ namespace WarpforgeRevival
 #if !ANDROID_PORT   // Windows only
             NoSteam.Apply(HarmonyInstance);
 #endif
+            DraftPacks.Apply(HarmonyInstance);
             ServerSettings.Start(Config.ServerUrl);
             CardText.Start(Config.ServerUrl);
             GlobalChat.Start(Config.ServerUrl);

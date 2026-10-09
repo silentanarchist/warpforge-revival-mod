@@ -138,6 +138,7 @@ namespace WarpforgeRevival
                             // test build: show what the server answered when it is short (errors are short)
                             if (body.Length < 600) RevivalMod.Log.Msg("[playfab]    " + body);
 #endif
+                            DraftPacks.Watch(body);
                             http.OnResponse(body, container);
                         }
                         else
