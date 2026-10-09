@@ -71,7 +71,9 @@ namespace WarpforgeRevival
             Hide(tab.termsOfServiceButton);
             Hide(tab.supportButton);
 
-            faq.Initialize(ServerSettings.CreatorUrl);
+            // The game's own set-up has already given the button its click handler (which opens Url);
+            // only the address changes. Initialize would add a second handler: two browser tabs per click.
+            faq.Url = ServerSettings.CreatorUrl;
 
             // The line introducing the button: its nearest earlier neighbour that holds text and no button.
             TMP_Text intro = null;
