@@ -2,6 +2,8 @@ using System;
 using Il2Cpp;
 using Il2CppInterop.Runtime;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace WarpforgeRevival
 {
@@ -16,6 +18,11 @@ namespace WarpforgeRevival
         private const string Name = "RevivalTestersToggle";
 
         private static GameObject button;
+        // The button's picture: the game's own expansion-pass medallion (a servo-tool), loaded from the
+        // game's files by its asset id (40k_rewards_bt_missions_expansion pass, liveopsicons bundle).
+        private const string IconAsset = "89b680029c9624e6e905db2fc0a47a9d";
+        private static AsyncOperationHandle<Sprite> iconLoad;
+        private static bool iconAsked, iconDone;
         private static float nextCheck;
         private static bool shownLogged, hierarchyLogged;
 
@@ -34,6 +41,7 @@ namespace WarpforgeRevival
                 if (Alive(button))
                 {
                     if (button.activeSelf != want) button.SetActive(want);
+                    if (!iconDone) Icon();
                     return;
                 }
                 if (!want) return;
@@ -42,6 +50,7 @@ namespace WarpforgeRevival
                 var social = nav.GetToggle(NavigationPanelToggleType.Social);
                 if ((object)social == null) return;
                 button = Build(social.gameObject);
+                iconDone = false;                        // a new copy of the button needs the picture again
             }
             catch (Exception e)
             {
@@ -81,6 +90,29 @@ namespace WarpforgeRevival
             UnityEngine.Object.Destroy(holder);
             if (!shownLogged) { shownLogged = true; RevivalMod.Log.Msg("[testers] Testers button added to the menu bar (in-game tester)"); }
             return copy;
+        }
+
+        private static void Icon()
+        {
+            try
+            {
+                if (!iconAsked)
+                {
+                    iconAsked = true;
+                    iconLoad = new AssetReference(IconAsset).LoadAssetAsync<Sprite>();
+                    return;
+                }
+                if (!iconLoad.IsDone) return;
+                iconDone = true;
+                var sprite = iconLoad.Result;
+                if ((object)sprite == null) { RevivalMod.Log.Warning("[testers] icon not found in the game's files; the Social picture stays"); return; }
+                var img = button.transform.Find("Image");
+                var image = (object)img == null ? null : img.GetComponent<UnityEngine.UI.Image>();
+                if ((object)image == null) { RevivalMod.Log.Warning("[testers] no picture slot on the button"); return; }
+                image.sprite = sprite;
+                RevivalMod.Log.Msg("[testers] button picture set");
+            }
+            catch (Exception e) { iconDone = true; RevivalMod.Log.Warning("[testers] icon: " + e.Message); }
         }
 
         private static void Open()

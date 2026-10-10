@@ -10,6 +10,8 @@ Changes made on the server take effect for everyone at once; the ones listed her
 
 ### Changed
 - **Custom Test** is no longer on the Play screen. It is for testers only and is reached from Testers > Play.
+- **Testers button** has its own picture (a servo-tool medallion) instead of Social's helmets.
+- **Play screen:** Skirmish and Practice share the first column, one above the other, followed by Classic and then Draft, now called **Classic Draft**.
 
 ## 0.12.20-w - 2026-10-09
 
