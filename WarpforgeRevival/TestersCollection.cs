@@ -30,7 +30,7 @@ namespace WarpforgeRevival
         private static GameObject sourcePrefab;
         private static Sprite playIcon;
         private static int hidden;
-        private static float nextDress;
+        private static float nextDress, closedAt;
         private static bool placedLogged, switchOffChanged, unlitLogged;
         private static IntPtr groupPtr;
         private static bool buttonsLogged, dressedLogged;
@@ -198,7 +198,7 @@ namespace WarpforgeRevival
             {
                 float now = Time.realtimeSinceStartup;
                 bool slow = now >= nextDress;
-                if (slow) { nextDress = now + 0.25f; Highlight(); }
+                if (slow) { nextDress = now + 0.25f; Highlight(); DropWhenClosed(now); }
                 if (!Alive(copy) || !copy.isActiveAndEnabled) return;
                 if (slow) Dress(copy);           // the game re-labels its tab buttons; keep ours
                 var tab = copy.CurrentTab;
@@ -222,6 +222,33 @@ namespace WarpforgeRevival
                 else if (slow) { PlacePanel(panel.GetComponent<RectTransform>()); FitTiles(panel); }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[testers] play tab: " + e.Message); }
+        }
+
+        /// <summary>
+        /// Once closed, the Testers window is deleted (after a moment, so its closing animation finishes),
+        /// so it never stays loaded into a match. Opening it again makes a fresh one from the loaded file.
+        /// </summary>
+        private static void DropWhenClosed(float now)
+        {
+            if (!Alive(copy)) { copy = null; closedAt = 0; return; }
+            bool open;
+            try
+            {
+                open = copy.IsOpen() || copy.CurrentState != WindowState.Closed;
+                // still in the window manager's list (for example under the deck editor): keep it
+                var list = WindowsManager.Instance?.openWindows;
+                if (!open && list != null)
+                    for (int i = 0; i < list.Count; i++)
+                        if ((object)list[i] != null && list[i].Pointer == copy.Pointer) { open = true; break; }
+            }
+            catch { open = true; }
+            if (open) { closedAt = 0; return; }
+            if (closedAt == 0) { closedAt = now; return; }
+            if (now - closedAt < 1.5f) return;
+            UnityEngine.Object.Destroy(copy.gameObject);
+            copy = null;
+            closedAt = 0;
+            RevivalMod.Log.Msg("[testers] Testers window closed and removed");
         }
 
         /// <summary>
