@@ -1,7 +1,7 @@
 # Publishes a Release for every build zip committed under releases/.
 # Adding releases/WarpforgeRevival-<version>.zip to main is all it takes: this creates the
-# tag v<version> and a Release with that zip attached. Builds that already have a Release
-# are left alone.
+# tag v<version> and a Release with that zip attached, its notes being the install steps and
+# the version's section of CHANGELOG.md. Builds that already have a Release are left alone.
 name: Release
 
 on:
@@ -44,6 +44,13 @@ jobs:
               echo
               echo "The zip's README.txt has the full steps. The source for this build is the code at this tag."
             } > notes.md
+            # this version's section of CHANGELOG.md ("## <version> - date" up to the next "## ")
+            section="$(awk -v v="$version" '/^## /{ if (found) exit; if (index($0, "## " v " ") == 1 || $0 == "## " v) { found = 1; next } } found' CHANGELOG.md | sed 's/^### /#### /')"
+            if [ -n "$(printf '%s' "$section" | tr -d '[:space:]')" ]; then
+              { echo; echo "## What's new"; echo; printf '%s\n' "$section"; } >> notes.md
+            else
+              echo "no CHANGELOG.md section for $version"
+            fi
             gh release create "$tag" "$zip" --target "$GITHUB_SHA" --title "Warpforge Revival mod ${version}" --notes-file notes.md
             echo "published $tag"
           done
