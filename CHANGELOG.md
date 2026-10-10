@@ -6,7 +6,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 ## Unreleased
 
 ### New
-- **Testers window:** the Testers button opens a window laid out like Collection, with its own ribbon: **Play** (the tester-only modes, for now Custom Test; picking one opens its page), **Decks** (straight to the Custom Test deck list; Back closes the window) and **Collection** (the card list; for now Space Wolves are left out on purpose, to check it is separate from the normal Collection). The normal Collection > Decks still offers Custom Test (not yet confirmed).
+- **Testers window:** the Testers button opens a window laid out like Collection, with its own ribbon: **Play** (each tester-only mode's own Play-screen tile, for now Custom Test; picking one opens its page), **Decks** (straight to the Custom Test deck list; Back closes the window) and **Collection** (the card list; for now Space Wolves are left out on purpose, to check it is separate from the normal Collection). The normal Collection > Decks still offers Custom Test (not yet confirmed).
 
 ### Changed
 - **Custom Test** is no longer on the Play screen. It is for testers only and is reached from Testers > Play.
