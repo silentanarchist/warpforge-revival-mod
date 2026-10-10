@@ -5,17 +5,20 @@ Changes made on the server take effect for everyone at once; the ones listed her
 
 ## Unreleased
 
+## 0.12.34-w - 2026-10-10
+
 ### New
-- **Testers window:** the Testers button opens a window laid out like Collection, with its own ribbon: **Play** (each tester-only mode's own Play-screen tile, placed and sized as on the Play screen, for now Custom Test at full height; picking one opens its page), **Decks** (straight to the Custom Test deck list; Back closes the window) and **Cards** (the card list; for now Space Wolves are left out on purpose, to check it is separate from the normal Collection). While it is open the Testers button is lit in the menu bar, not Collection. The normal Collection > Decks still offers Custom Test.
+- **Testers window** (testers only): the Testers button in the menu bar opens a window laid out like Collection, with its own ribbon. **Play** shows the tester-only modes as Play-screen tiles (for now Custom Test, at full height). **Decks** goes straight to the Custom Test deck list; Back closes the window. **Cards** is the card list; for now Space Wolves are left out on purpose, to check it is separate from the normal Collection. While the window is open, the Testers button is lit in the menu bar, not Collection.
 
 ### Changed
-- **Collection > Decks:** Custom Test is no longer offered there; testers build its decks in Testers > Decks. Classic and Skirmish are both full-size tiles again (not yet confirmed).
-- **Custom Test** is no longer on the Play screen. It is for testers only and is reached from Testers > Play.
-- **Testers button** has its own picture (a servo-tool medallion) instead of Social's helmets.
-- **Play screen:** Skirmish and Practice share the first column, one above the other, followed by Classic and then Draft, now called **Classic Draft**.
+- **Custom Test** is no longer on the Play screen or in Collection > Decks. It is for testers only, through Testers > Play and Testers > Decks.
+- **Collection > Decks:** Classic and Skirmish are both full-size tiles again (not yet confirmed).
+- **Play screen:** Skirmish and Practice share the first column, one above the other, followed by Classic, then Draft, now called **Classic Draft**.
+- **Testers button** has its own picture (a servo-tool medallion) and no longer shows Social's helmets first.
+- **Classic Draft:** the three warlords offered are always from three different armies (a server change, already live for everyone).
 
 ### Fixes
-- **"Data update rate exceeded" and "Error connecting to server" popups** (seen mostly on the draft screen): the mod keeps fewer connections open to the server and tries a request once more when its connection fails or the server is too busy to take it, so these popups should show up far less often (not yet confirmed).
+- **"Data update rate exceeded" and "Error connecting to server" popups** (mostly on the draft screen): the mod keeps fewer connections open to the server and tries a request once more when its connection fails or the server is too busy to take it, so these popups should show up far less often (not yet confirmed).
 
 ## 0.12.20-w - 2026-10-09
 
