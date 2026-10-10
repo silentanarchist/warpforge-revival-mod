@@ -9,6 +9,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Testers window:** the Testers button opens a window laid out like Collection, with its own ribbon: **Play** (each tester-only mode's own Play-screen tile, placed and sized as on the Play screen, for now Custom Test at full height; picking one opens its page), **Decks** (straight to the Custom Test deck list; Back closes the window) and **Cards** (the card list; for now Space Wolves are left out on purpose, to check it is separate from the normal Collection). While it is open the Testers button is lit in the menu bar, not Collection. The normal Collection > Decks still offers Custom Test.
 
 ### Changed
+- **Collection > Decks:** Custom Test is no longer offered there; testers build its decks in Testers > Decks. Classic and Skirmish are both full-size tiles again (not yet confirmed).
 - **Custom Test** is no longer on the Play screen. It is for testers only and is reached from Testers > Play.
 - **Testers button** has its own picture (a servo-tool medallion) instead of Social's helmets.
 - **Play screen:** Skirmish and Practice share the first column, one above the other, followed by Classic and then Draft, now called **Classic Draft**.

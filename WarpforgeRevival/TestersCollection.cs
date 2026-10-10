@@ -38,6 +38,14 @@ namespace WarpforgeRevival
         private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
 
         /// <summary>True when this window is the Testers window (not the normal Collection).</summary>
+        internal static bool IsUnder(Transform t)
+        {
+            if (!Alive(copy)) return false;
+            for (; (object)t != null; t = t.parent)
+                if (t.Pointer == copy.transform.Pointer) return true;
+            return false;
+        }
+
         internal static bool IsCopy(GameWindow w) => Alive(copy) && (object)w != null && w.Pointer == copy.Pointer;
 
         internal static void Close()
