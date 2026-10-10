@@ -9,7 +9,7 @@ namespace WarpforgeRevival
     /// A "Testers" button in the bottom bar of the main menu, right after Social, shown only to
     /// players whose linked site account has the in-game tester role (People tab on the site;
     /// admins count as testers). The button is a copy of the Social button with Social's own
-    /// behaviour taken off it. What it opens is still to be built: for now it says so.
+    /// behaviour taken off it. It opens the Testers page (TestersPage).
     /// </summary>
     internal static class TestersTab
     {
@@ -30,6 +30,7 @@ namespace WarpforgeRevival
             try
             {
                 bool want = AccountPage.IsTester;
+                if (!want && TestersPage.IsOpen) TestersPage.Close();
                 if (Alive(button))
                 {
                     if (button.activeSelf != want) button.SetActive(want);
@@ -85,11 +86,10 @@ namespace WarpforgeRevival
         private static void Open()
         {
             RevivalMod.Log.Msg("[testers] Testers tab opened");
-            // The bottom-of-screen notice (UIMessageController) is not there on the main menu; the
-            // game's own message window is.
-            var windows = SingletonBehaviour<WindowsManager>.Instance;
-            if ((object)windows == null) { RevivalMod.Log.Warning("[testers] no window manager to show the page in"); return; }
-            windows.ShowPopUp("Testers\n\nNothing here yet. Tester tools will appear on this page.", false, true, "OK", null);
+            Il2CppTMPro.TMP_FontAsset gameFont = null;
+            try { var label = button.GetComponentInChildren<Il2CppTMPro.TMP_Text>(true); if ((object)label != null) gameFont = label.font; }
+            catch { }
+            TestersPage.Open(gameFont);                      // the page with its tabs (Play for now)
         }
 
         // What the copied button is made of, once, so the page behind it can be built to match.

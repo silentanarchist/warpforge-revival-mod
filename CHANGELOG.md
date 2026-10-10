@@ -5,7 +5,11 @@ Changes made on the server take effect for everyone at once; the ones listed her
 
 ## Unreleased
 
-Nothing yet.
+### New
+- **Testers page:** the Testers button opens a page with a **Play** tab. It lists the Custom Test mode; picking it opens the mode's page as before.
+
+### Changed
+- **Custom Test** is no longer on the Play screen. It is for testers only and is reached from Testers > Play.
 
 ## 0.12.20-w - 2026-10-09
 
