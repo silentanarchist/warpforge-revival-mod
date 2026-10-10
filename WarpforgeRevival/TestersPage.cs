@@ -10,9 +10,10 @@ using UnityEngine.UI;
 namespace WarpforgeRevival
 {
     /// <summary>
-    /// The page behind the Testers button: a full-screen panel with tabs. Play lists the game modes only
-    /// testers play (the Custom Test mode); Collection opens a separate test copy of the Collection screen;
-    /// Decks opens that copy on one tester mode's deck list (see TestersCollection). The server keeps those modes
+    /// Fallback page behind the Testers button, used only when the Testers window (a copy of the
+    /// Collection window, see TestersCollection) cannot be made: a plain panel with a Play tab listing
+    /// the game modes only testers play (the Custom Test mode). Its helpers also draw the Testers
+    /// window's Play tab. The server keeps those modes
     /// off everyone's Play screen ("showInMainMenu": false in GameModes.json); picking one here opens
     /// the mode's own page, the same one its Play-screen tile would open.
     /// Built from plain UI pieces with the game's own font, so it does not depend on any window's layout.
@@ -21,20 +22,20 @@ namespace WarpforgeRevival
     {
         private const string Name = "RevivalTestersPage";
         private static GameObject root;
-        private static TMP_FontAsset font;
+        internal static TMP_FontAsset font;
         private static Transform content;
-        private static readonly string[] Tabs = { "Play", "Collection", "Decks" };
-        private static readonly Button[] tabButtons = new Button[3];
+        private static readonly string[] Tabs = { "Play" };
+        private static readonly Button[] tabButtons = new Button[1];
         private static int current;                       // the tab shown, kept while the game runs
 
-        private static readonly Color Back = new Color(0.04f, 0.05f, 0.07f, 0.94f);
-        private static readonly Color Panel = new Color(0.11f, 0.12f, 0.15f, 1f);
-        private static readonly Color Line = new Color(0.79f, 0.64f, 0.29f, 1f);           // the game's gold
-        private static readonly Color Tile = new Color(0.16f, 0.18f, 0.22f, 1f);
-        private static readonly Color Dim = new Color(0.66f, 0.64f, 0.6f, 1f);
+        internal static readonly Color Back = new Color(0.04f, 0.05f, 0.07f, 0.94f);
+        internal static readonly Color Panel = new Color(0.11f, 0.12f, 0.15f, 1f);
+        internal static readonly Color Line = new Color(0.79f, 0.64f, 0.29f, 1f);           // the game's gold
+        internal static readonly Color Tile = new Color(0.16f, 0.18f, 0.22f, 1f);
+        internal static readonly Color Dim = new Color(0.66f, 0.64f, 0.6f, 1f);
 
         /// <summary>The modes on the Play tab: event ids. For now the Custom Test mode (the server's long-game event).</summary>
-        private static List<string> TesterModes()
+        internal static List<string> TesterModes()
         {
             var ids = new List<string>();
             if (!string.IsNullOrEmpty(ServerSettings.LongGameEvent)) ids.Add(ServerSettings.LongGameEvent);
@@ -94,9 +95,7 @@ namespace WarpforgeRevival
                 if (i != index && (object)under != null) UnityEngine.Object.Destroy(under.gameObject);
             }
             for (int i = content.childCount - 1; i >= 0; i--) UnityEngine.Object.Destroy(content.GetChild(i).gameObject);
-            if (index == 0) PlayTab();
-            else if (index == 1) CollectionTab();
-            else DecksTab();
+            PlayTab();
         }
 
         /// <summary>A tile in the tab's content area; row 0 at the top.</summary>
@@ -127,28 +126,6 @@ namespace WarpforgeRevival
             if (shown == 0) Empty("No tester modes are set up on this server right now.");
         }
 
-        private static void CollectionTab()
-        {
-            AddTile(0, "TestCollection", "Collection (test copy)",
-                 "A separate copy of the Collection screen. Space Wolves are left out on purpose, to show it is separate.",
-                 () => { Close(); TestersCollection.OpenCards(); });
-        }
-
-        private static void DecksTab()
-        {
-            int shown = 0;
-            foreach (var id in TesterModes())
-            {
-                var ev = Find(id);
-                if ((object)ev == null) continue;
-                var picked = ev;
-                string title = Label(ev, EventLabelReferenceType.Title, id);
-                AddTile(shown++, "Decks_" + id, title + " decks",
-                     "Build and edit decks for " + title + " only.", () => { Close(); TestersCollection.OpenDecks(picked, id); });
-            }
-            if (shown == 0) Empty("No tester modes with decks on this server right now.");
-        }
-
         internal static void Close()
         {
             if ((object)root != null && root.Pointer != IntPtr.Zero && root.m_CachedPtr != IntPtr.Zero) UnityEngine.Object.Destroy(root);
@@ -157,7 +134,7 @@ namespace WarpforgeRevival
             for (int i = 0; i < tabButtons.Length; i++) tabButtons[i] = null;
         }
 
-        private static LiveOpsEvent Find(string id)
+        internal static LiveOpsEvent Find(string id)
         {
             try
             {
@@ -167,7 +144,7 @@ namespace WarpforgeRevival
             catch (Exception e) { RevivalMod.Log.Warning($"[testers] {id}: {e.Message}"); return null; }
         }
 
-        private static string Label(LiveOpsEvent ev, EventLabelReferenceType type, string fallback)
+        internal static string Label(LiveOpsEvent ev, EventLabelReferenceType type, string fallback)
         {
             try
             {
@@ -198,7 +175,7 @@ namespace WarpforgeRevival
             return rt;
         }
 
-        private static Transform Box(Transform parent, string name, Color color, float x0, float y0, float x1, float y1)
+        internal static Transform Box(Transform parent, string name, Color color, float x0, float y0, float x1, float y1)
         {
             var go = new GameObject(name);
             go.AddComponent<RectTransform>();
@@ -208,7 +185,7 @@ namespace WarpforgeRevival
             return go.transform;
         }
 
-        private static TextMeshProUGUI Text(Transform parent, string name, string text, float size, TextAlignmentOptions align, Color color,
+        internal static TextMeshProUGUI Text(Transform parent, string name, string text, float size, TextAlignmentOptions align, Color color,
                                             float x0, float y0, float x1, float y1)
         {
             var go = new GameObject(name);
@@ -225,7 +202,7 @@ namespace WarpforgeRevival
             return t;
         }
 
-        private static Button Button(Transform parent, string name, string label, float x0, float y0, float x1, float y1, Color color)
+        internal static Button Button(Transform parent, string name, string label, float x0, float y0, float x1, float y1, Color color)
         {
             var box = Box(parent, name, color, x0, y0, x1, y1);
             var b = box.gameObject.AddComponent<Button>();
@@ -238,7 +215,7 @@ namespace WarpforgeRevival
             return b;
         }
 
-        private static void OnClick(Button b, Action action)
+        internal static void OnClick(Button b, Action action)
         {
             b.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() =>
             {

@@ -38,6 +38,7 @@ namespace WarpforgeRevival
             {
                 bool want = AccountPage.IsTester;
                 if (!want && TestersPage.IsOpen) TestersPage.Close();
+                if (!want) TestersCollection.Close();
                 if (Alive(button))
                 {
                     if (button.activeSelf != want) button.SetActive(want);
@@ -121,7 +122,8 @@ namespace WarpforgeRevival
             Il2CppTMPro.TMP_FontAsset gameFont = null;
             try { var label = button.GetComponentInChildren<Il2CppTMPro.TMP_Text>(true); if ((object)label != null) gameFont = label.font; }
             catch { }
-            TestersPage.Open(gameFont);                      // the page with its tabs (Play for now)
+            if ((object)gameFont != null) TestersPage.font = gameFont;
+            if (!TestersCollection.Open()) TestersPage.Open(gameFont);   // the Testers window; the plain page if it cannot be made
         }
 
         // What the copied button is made of, once, so the page behind it can be built to match.

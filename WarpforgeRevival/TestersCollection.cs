@@ -1,79 +1,79 @@
 using System;
+using System.Collections.Generic;
 using HarmonyLib;
 using Il2Cpp;
 using Il2CppEverguild.LiveOps;
+using Il2CppTMPro;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.UI;
 
 namespace WarpforgeRevival
 {
     /// <summary>
-    /// Testers page > Collection and Decks: a second, separate copy of the game's Collection screen.
-    /// The copy is made from the same window the Collection button in the menu bar opens, so it looks
-    /// and works the same, but it is its own object: what happens in it does not touch the normal one.
-    ///  - Collection: the copy opens on its card list. As a check that it really is separate, it leaves
-    ///    out every Space Wolves card (the normal Collection still shows them).
-    ///  - Decks: the copy opens straight on the deck list of one tester mode (for now Custom Test),
-    ///    skipping the "which format" picker; Back closes it. Any mode can be passed in, so more tester
-    ///    modes can get their own deck list later.
-    /// The normal Collection > Decks keeps every format, Custom Test included.
+    /// The Testers window, behind the Testers button in the menu bar. It is a separate copy of the
+    /// game's Collection window (made from the same window file the Collection button opens, with
+    /// its own loading handle, so the game's Collection is never touched), with its inner ribbon set
+    /// up for testers:
+    ///  - Play: the tester-only modes (for now Custom Test); picking one opens the mode's page.
+    ///    (The copy's Cosmetics tab, with its content swapped for this list.)
+    ///  - Decks: the copy's deck tab, opened straight on the Custom Test deck list (no format picker).
+    ///    Back closes the window. The window is given the mode, so other modes can be passed later.
+    ///  - Collection: the copy's card list. As a check that it is separate, Space Wolves are left out.
+    /// The Styles tab is hidden. The normal Collection > Decks keeps every format, Custom Test included.
     /// </summary>
     internal static class TestersCollection
     {
-        internal enum Mode { Cards, Decks }
-
-        private const string CopyName = "RevivalTestersCollection";
+        private const string CopyName = "RevivalTestersWindow", PanelName = "RevivalTestersPlay";
         private static CollectionScreen copy;
-        private static Mode mode;
-        private static string decksFor = "";
+        private static GameObject sourcePrefab;
+        private static Sprite playIcon;
         private static int hidden;
+        private static bool buttonsLogged, dressedLogged;
 
         private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
 
-        /// <summary>True when this window is the testers' copy (not the normal Collection).</summary>
+        /// <summary>True when this window is the Testers window (not the normal Collection).</summary>
         internal static bool IsCopy(GameWindow w) => Alive(copy) && (object)w != null && w.Pointer == copy.Pointer;
 
-        /// <summary>Open the copy on its card list (Space Wolves left out).</summary>
-        internal static void OpenCards()
+        internal static void Close()
         {
-            mode = Mode.Cards;
-            decksFor = "";
-            Open(null);
+            try { if (Alive(copy) && copy.IsOpen()) WindowsManager.Instance.CloseWindow(copy); }
+            catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }
         }
 
-        /// <summary>Open the copy on the deck list of one game mode (an event on this server).</summary>
-        internal static void OpenDecks(LiveOpsEvent ev, string id)
-        {
-            mode = Mode.Decks;
-            decksFor = id ?? "";
-            CollectionScreen.OpenDeckCollectionContext context = null;
-            try
-            {
-                var playEvent = (object)ev == null ? null : ev.TryCast<IPlayEvent>();
-                if ((object)playEvent == null) { RevivalMod.Log.Warning($"[testers] {id} is not a mode with decks"); return; }
-                context = new CollectionScreen.OpenDeckCollectionContext { eventReference = playEvent };
-            }
-            catch (Exception e) { RevivalMod.Log.Warning($"[testers] decks for {id}: {e.Message}"); return; }
-            Open(context);
-        }
-
-        private static void Open(CollectionScreen.OpenDeckCollectionContext context)
+        /// <summary>Open the Testers window. False when it could not be made (the caller falls back to the plain page).</summary>
+        internal static bool Open()
         {
             try
             {
                 var window = Copy();
-                if ((object)window == null) return;
+                if ((object)window == null) return false;
                 var wm = WindowsManager.Instance;
-                if ((object)wm == null) { RevivalMod.Log.Warning("[testers] window manager not ready"); return; }
-                hidden = 0;
-                if (window.IsOpen()) wm.CloseWindow(window);    // opened again: start over on the asked-for tab
-                wm.OpenWindow(window, context, true, null);
-                RevivalMod.Log.Msg(mode == Mode.Decks ? $"[testers] collection copy opened on the decks of {decksFor}"
-                                                      : "[testers] collection copy opened on its cards");
+                if ((object)wm == null) { RevivalMod.Log.Warning("[testers] window manager not ready"); return false; }
+                if (window.IsOpen()) return true;
+                wm.OpenWindow(window, DecksContext(), true, null);
+                RevivalMod.Log.Msg("[testers] Testers window opened");
+                return true;
             }
-            catch (Exception e) { RevivalMod.Log.Warning("[testers] could not open the collection copy: " + e); }
+            catch (Exception e) { RevivalMod.Log.Warning("[testers] could not open the Testers window: " + e); return false; }
         }
 
-        /// <summary>The copy, made the first time it is needed from the window behind the menu bar's Collection button.</summary>
+        /// <summary>The mode the Decks tab shows: the first tester mode on this server (Custom Test for now).</summary>
+        private static CollectionScreen.OpenDeckCollectionContext DecksContext()
+        {
+            foreach (var id in TestersPage.TesterModes())
+            {
+                var ev = TestersPage.Find(id);
+                var playEvent = (object)ev == null ? null : ev.TryCast<IPlayEvent>();
+                if ((object)playEvent == null) continue;
+                return new CollectionScreen.OpenDeckCollectionContext { eventReference = playEvent };
+            }
+            RevivalMod.Log.Warning("[testers] no tester mode for the Decks tab");
+            return null;
+        }
+
+        /// <summary>The window, made the first time from the window file behind the menu bar's Collection button.</summary>
         private static CollectionScreen Copy()
         {
             if (Alive(copy)) return copy;
@@ -82,52 +82,176 @@ namespace WarpforgeRevival
             var toggle = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Collection);
             if ((object)toggle == null) { RevivalMod.Log.Warning("[testers] menu bar Collection button not found"); return null; }
             var opener = toggle.GetComponentInChildren<OpenWindowButton>(true);
-            if ((object)opener == null) opener = toggle.GetComponentInParent<OpenWindowButton>();
             if ((object)opener == null) { RevivalMod.Log.Warning("[testers] Collection button has no window behind it"); return null; }
-
-            GameObject source = null;
-            string from;
             var prefabRef = opener.windowToOpenPrefab;
-            if ((object)prefabRef != null && prefabRef.RuntimeKeyIsValid())
+            if ((object)prefabRef == null || !prefabRef.RuntimeKeyIsValid())
             {
-                var loaded = prefabRef.LoadAssetAsync().WaitForCompletion();   // the game keeps it loaded once used
-                if ((object)loaded != null) source = loaded.gameObject;
-                from = "prefab " + prefabRef.AssetGUID;
-            }
-            else
-            {
-                if (Alive(opener.windowToOpenScene)) source = opener.windowToOpenScene.gameObject;
-                from = "scene window";
-            }
-            if ((object)source == null || (object)source.GetComponent<CollectionScreen>() == null)
-            {
-                RevivalMod.Log.Warning($"[testers] Collection window not found ({from})");
+                // a window that lives in the scene would have to be copied while in use; not done
+                RevivalMod.Log.Warning("[testers] the Collection window is not a window file; Testers window not made");
                 return null;
             }
+            if (!Alive(sourcePrefab))
+            {
+                // our own handle on the file: the game's reference object (and its handle) is left alone
+                var loaded = new AssetReference(prefabRef.AssetGUID).LoadAssetAsync<GameObject>().WaitForCompletion();
+                if (!Alive(loaded) || (object)loaded.GetComponent<CollectionScreen>() == null)
+                {
+                    RevivalMod.Log.Warning("[testers] Collection window file not loaded");
+                    return null;
+                }
+                sourcePrefab = loaded;
+            }
+            PlayIcon(nav);
 
-            var placement = source.GetComponent<GameWindow>().WindowsPlacement;
+            var placement = sourcePrefab.GetComponent<GameWindow>().WindowsPlacement;
             var anchor = WindowsManager.Instance.GetWindowAnchor(placement);
-            var go = UnityEngine.Object.Instantiate(source, anchor, false);
+            var go = UnityEngine.Object.Instantiate(sourcePrefab, anchor, false);
             go.name = CopyName;
             copy = go.GetComponent<CollectionScreen>();
-            copy.updateNavPanel = false;        // leave the menu bar alone: its Collection button opens the normal one
-            RevivalMod.Log.Msg($"[testers] collection copy made from the {from}, under {(object)anchor?.name ?? "no anchor"}");
+            copy.updateNavPanel = false;        // the menu bar's Collection button stays the normal Collection's
+            RevivalMod.Log.Msg($"[testers] Testers window made from the Collection window file {prefabRef.AssetGUID}");
             return copy;
         }
 
-        private static WindowTabBase FindTab(GameWindowWithTabs w, Il2CppSystem.Type type)
+        private static void PlayIcon(NavigationPanelController nav)
+        {
+            try
+            {
+                var play = nav.GetToggle(NavigationPanelToggleType.Main);
+                var img = (object)play == null ? null : play.transform.Find("Image");
+                var image = (object)img == null ? null : img.GetComponent<Image>();
+                if ((object)image != null) playIcon = image.sprite;
+            }
+            catch { }
+        }
+
+        private static WindowTabBase TabOf<T>(GameWindowWithTabs w) where T : WindowTabBase
         {
             var tabs = w.tabs;
             if (tabs == null) return null;
             for (int i = 0; i < tabs.Count; i++)
             {
                 var t = tabs[i];
-                if ((object)t != null && type.IsAssignableFrom(t.GetIl2CppType())) return t;
+                if ((object)t != null && (object)t.TryCast<T>() != null) return t;
             }
             return null;
         }
 
-        // The copy starts on the tab its button asked for.
+        /// <summary>The inner ribbon: Play, Decks, Collection; Styles hidden.</summary>
+        private static void Dress(GameWindowWithTabs w)
+        {
+            var buttons = w.Components?.TabButtons?.options;
+            if (buttons == null) return;
+            var order = new List<string>();
+            for (int i = 0; i < buttons.Count; i++)
+            {
+                var b = buttons[i];
+                if (b == null || (object)b.tab == null || (object)b.toggle == null) continue;
+                var t = b.toggle.transform;
+                if (!buttonsLogged) { buttonsLogged = true; LogHierarchy(t, 0); }
+                if ((object)b.tab.TryCast<AlternateArtCardCollectionTab>() != null) { t.gameObject.SetActive(false); continue; }
+                if ((object)b.tab.TryCast<CardbackCollectionTab>() != null) { Relabel(t, "PLAY", playIcon); t.SetSiblingIndex(0); order.Add("Play"); }
+                else if ((object)b.tab.TryCast<SelectDecksTab>() != null) { Relabel(t, "DECKS", null); t.SetSiblingIndex(1); order.Add("Decks"); }
+                else if ((object)b.tab.TryCast<CardCollectionTab>() != null) { Relabel(t, "COLLECTION", null); t.SetSiblingIndex(2); order.Add("Collection"); }
+            }
+            if (!dressedLogged) { dressedLogged = true; RevivalMod.Log.Msg($"[testers] Testers window ribbon: {string.Join(", ", order)}"); }
+        }
+
+        private static void Relabel(Transform button, string text, Sprite icon)
+        {
+            foreach (var loc in button.GetComponentsInChildren<Il2CppI2.Loc.Localize>(true)) loc.enabled = false;
+            foreach (var label in button.GetComponentsInChildren<TMP_Text>(true)) label.text = text;
+            if ((object)icon == null) return;
+            var img = button.Find("Image");
+            var image = (object)img == null ? null : img.GetComponent<Image>();
+            if ((object)image != null) image.sprite = icon;
+        }
+
+        private static void LogHierarchy(Transform t, int depth)
+        {
+            if (depth > 3) return;
+            var names = new System.Text.StringBuilder();
+            foreach (var c in t.GetComponents<Component>())
+                if ((object)c != null) names.Append(c.GetIl2CppType().Name).Append(' ');
+            RevivalMod.Log.Msg($"[testers] tab button {new string(' ', depth * 2)}{t.name}: {names}");
+            for (int i = 0; i < t.childCount; i++) LogHierarchy(t.GetChild(i), depth + 1);
+        }
+
+        /// <summary>Called every frame: while the Play tab is showing, its cosmetics content is swapped for the tester modes.</summary>
+        internal static void Tick()
+        {
+            try
+            {
+                if (!Alive(copy) || !copy.isActiveAndEnabled) return;
+                var tab = copy.CurrentTab;
+                if ((object)tab == null || (object)tab.TryCast<CardbackCollectionTab>() == null) return;
+                var t = tab.transform;
+                var panel = t.Find(PanelName);
+                for (int i = 0; i < t.childCount; i++)
+                {
+                    var child = t.GetChild(i);
+                    if ((object)panel != null && child.Pointer == panel.Pointer) continue;
+                    if (child.gameObject.activeSelf) child.gameObject.SetActive(false);
+                }
+                // the cosmetics list and its "owned" switch, wherever the window keeps them
+                var cardbacks = tab.TryCast<CardbackCollectionTab>();
+                var display = cardbacks.display;
+                if ((object)display != null && display.gameObject.activeSelf) display.gameObject.SetActive(false);
+                var owned = cardbacks.ownedToggle;
+                if ((object)owned != null && owned.gameObject.activeSelf) owned.gameObject.SetActive(false);
+                if ((object)panel == null) BuildPlay(t);
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[testers] play tab: " + e.Message); }
+        }
+
+        private static void BuildPlay(Transform tab)
+        {
+            var panel = new GameObject(PanelName);
+            var rt = panel.AddComponent<RectTransform>();
+            rt.SetParent(tab, false);
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var area = panel.transform;
+
+            TestersPage.Text(area, "Title", "Tester modes", 44, TextAlignmentOptions.Left, Color.white, 0.05f, 0.86f, 0.9f, 0.96f);
+            TestersPage.Text(area, "Note", "Modes only testers play. Not shown to other players.", 22, TextAlignmentOptions.Left, TestersPage.Dim, 0.05f, 0.8f, 0.9f, 0.86f);
+            int shown = 0;
+            foreach (var id in TestersPage.TesterModes())
+            {
+                var ev = TestersPage.Find(id);
+                if ((object)ev == null) { RevivalMod.Log.Warning($"[testers] mode {id} is not on this server"); continue; }
+                string title = TestersPage.Label(ev, EventLabelReferenceType.Title, id);
+                float top = 0.76f - shown * 0.22f;
+                var tile = TestersPage.Button(area, "Mode_" + id, "", 0.05f, top - 0.19f, 0.7f, top, TestersPage.Tile);
+                TestersPage.Box(tile.transform, "Edge", TestersPage.Line, 0, 0, 0.008f, 1);
+                TestersPage.Text(tile.transform, "Name", title, 34, TextAlignmentOptions.Left, Color.white, 0.05f, 0.45f, 0.95f, 0.92f);
+                TestersPage.Text(tile.transform, "Hint", "Open this mode's page: pick a deck and play.", 20, TextAlignmentOptions.Left, TestersPage.Dim, 0.05f, 0.1f, 0.95f, 0.45f);
+                var picked = ev;
+                TestersPage.OnClick(tile, () =>
+                {
+                    Close();
+                    RevivalMod.Log.Msg($"[testers] opening {id}");
+                    picked.OpenWindow();
+                });
+                shown++;
+            }
+            if (shown == 0)
+                TestersPage.Text(area, "Empty", "No tester modes are set up on this server right now.", 26, TextAlignmentOptions.Left, TestersPage.Dim, 0.05f, 0.6f, 0.9f, 0.75f);
+            RevivalMod.Log.Msg($"[testers] Play tab: {shown} mode(s)");
+        }
+
+        // Ribbon set up once the window's tabs exist.
+        [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.OpenTabs))]
+        private static class AfterOpenTabs
+        {
+            private static void Postfix(GameWindowWithTabs __instance)
+            {
+                try { if (IsCopy(__instance)) Dress(__instance); }
+                catch (Exception e) { RevivalMod.Log.Warning("[testers] ribbon: " + e.Message); }
+            }
+        }
+
+        // The window opens on Play.
         [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.GetStartingTab))]
         private static class StartingTab
         {
@@ -136,17 +260,15 @@ namespace WarpforgeRevival
                 try
                 {
                     if (!IsCopy(__instance)) return;
-                    var want = mode == Mode.Decks ? Il2CppInterop.Runtime.Il2CppType.Of<SelectDecksTab>()
-                                                  : Il2CppInterop.Runtime.Il2CppType.Of<CardCollectionTab>();
-                    var tab = FindTab(__instance, want);
+                    Dress(__instance);
+                    var tab = TabOf<CardbackCollectionTab>(__instance);
                     if ((object)tab != null) __result = tab;
-                    else RevivalMod.Log.Warning($"[testers] collection copy has no {want.Name}");
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }
             }
         }
 
-        // The separation check: the copy's card list leaves out Space Wolves.
+        // The separation check: the Testers window's card list leaves out Space Wolves.
         [HarmonyPatch(typeof(CardCollectionTab), "GetCollection")]
         private static class NoSpaceWolves
         {
@@ -164,13 +286,13 @@ namespace WarpforgeRevival
                         kept.Add(c);
                     }
                     __result = kept;
-                    if (left != hidden) { hidden = left; RevivalMod.Log.Msg($"[testers] collection copy: {kept.Count} cards shown, {left} Space Wolves left out"); }
+                    if (left != hidden) { hidden = left; RevivalMod.Log.Msg($"[testers] Testers collection: {kept.Count} cards shown, {left} Space Wolves left out"); }
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }
             }
         }
 
-        // Opened on one mode's decks, Back from the deck list closes the copy instead of showing the format picker.
+        // Back from the Custom Test deck list closes the window instead of showing the format picker.
         [HarmonyPatch(typeof(SelectDecksTab), nameof(SelectDecksTab.BackButtonClicked))]
         private static class BackCloses
         {
@@ -178,8 +300,8 @@ namespace WarpforgeRevival
             {
                 try
                 {
-                    if (mode != Mode.Decks || !IsCopy(__instance.Window)) return true;
-                    WindowsManager.Instance.CloseWindow(copy);
+                    if (!IsCopy(__instance.Window)) return true;
+                    Close();
                     return false;
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); return true; }
