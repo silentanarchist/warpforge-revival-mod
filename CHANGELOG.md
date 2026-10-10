@@ -3,6 +3,10 @@
 Newest first. Each release page on GitHub carries its own section from this file.
 Changes made on the server take effect for everyone at once; the ones listed here are those players notice.
 
+## Unreleased
+
+Nothing yet.
+
 ## 0.12.19-w - 2026-10-09
 
 Changes since 0.12.3.
