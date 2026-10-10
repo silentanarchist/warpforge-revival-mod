@@ -201,6 +201,14 @@ namespace WarpforgeRevival
                     using var resp = await Http.SendAsync(msg);
                     body = await resp.Content.ReadAsStringAsync();
                     error = null;
+                    if ((int)resp.StatusCode >= 500 && string.IsNullOrEmpty(body))
+                    {
+                        // the server turned the connection away before reading it (too busy): try once more
+                        RevivalMod.Log.Warning($"[playfab] {endpoint}: the server answered {(int)resp.StatusCode} with no reply" + (attempt == 1 ? "; trying again" : ""));
+                        body = null;
+                        error = $"Revival server busy ({(int)resp.StatusCode})";
+                        if (attempt == 1) await Task.Delay(1000);
+                    }
                 }
                 catch (Exception e)
                 {
@@ -229,11 +237,24 @@ namespace WarpforgeRevival
                     using var resp = await Http.SendAsync(msg);
                     body = await resp.Content.ReadAsStringAsync();
                     error = null;
+                    if ((int)resp.StatusCode >= 500 && string.IsNullOrEmpty(body))
+                    {
+                        // the server turned the connection away before reading it (too busy): try once more
+                        RevivalMod.Log.Warning($"[playfab] {endpoint}: the server answered {(int)resp.StatusCode} with no reply" + (attempt == 1 ? "; trying again" : ""));
+                        if (attempt == 1) { body = null; error = $"Revival server busy ({(int)resp.StatusCode})"; await Task.Delay(1000); }
+                        else { body = null; error = $"Revival server busy ({(int)resp.StatusCode})"; }
+                    }
                 }
-                catch (HttpRequestException e) when (attempt == 1 && started.ElapsedMilliseconds < 1000)
+                catch (HttpRequestException e) when (attempt == 1)
                 {
+                    // The connection failed (closed while unused, refused, or cut off) rather than the
+                    // server answering. Tried once more on a new connection: both tries carry the same
+                    // request id, so if the first did reach the server it is not carried out twice.
                     error = $"Revival server unreachable ({e.GetType().Name}: {e.Message})";
-                    RevivalMod.Log.Msg($"[playfab] {endpoint}: a closed connection was reused ({e.Message}); trying again");
+                    string why = e.Message;
+                    for (var inner = e.InnerException; inner != null; inner = inner.InnerException) why += " <- " + inner.Message;
+                    RevivalMod.Log.Msg($"[playfab] {endpoint}: the connection failed after {started.ElapsedMilliseconds} ms ({why}); trying again");
+                    if (started.ElapsedMilliseconds >= 1000) await Task.Delay(500);
                 }
                 catch (Exception e)
                 {

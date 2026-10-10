@@ -14,6 +14,9 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Testers button** has its own picture (a servo-tool medallion) instead of Social's helmets.
 - **Play screen:** Skirmish and Practice share the first column, one above the other, followed by Classic and then Draft, now called **Classic Draft**.
 
+### Fixes
+- **"Data update rate exceeded" and "Error connecting to server" popups** (seen mostly on the draft screen): the mod keeps fewer connections open to the server and tries a request once more when its connection fails or the server is too busy to take it, so these popups should show up far less often (not yet confirmed).
+
 ## 0.12.20-w - 2026-10-09
 
 Changes since 0.12.3 (the first release with a changelog).

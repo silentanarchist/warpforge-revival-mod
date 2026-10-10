@@ -18,19 +18,36 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class Net
     {
-        internal static HttpClient Client(TimeSpan timeout, bool gzip = false)
+        // All web clients share one set of connections (one for plain replies, one for gzip ones), at
+        // most MaxConnections open to the server at a time; more requests at once wait their turn.
+        // Each client used to keep its own connections, so one game could hold well over a dozen
+        // open, and the server serves at most a few dozen per address (a household shares one).
+        private const int MaxConnections = 8;
+        private static SocketsHttpHandler plain, zipped;
+        private static readonly object Gate = new object();
+
+        private static SocketsHttpHandler Handler(bool gzip)
         {
-            // A connection left open between requests is closed by the server after 30 seconds of
-            // quiet. Reusing one that is already closed fails at once ("An error occurred while
-            // sending the request"), so idle connections are let go well before that.
-            var handler = new SocketsHttpHandler
+            lock (Gate)
             {
-                PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15),
-                SslOptions = new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = Verify },
-            };
-            if (gzip) handler.AutomaticDecompression = DecompressionMethods.GZip;
-            return new HttpClient(handler) { Timeout = timeout };
+                ref SocketsHttpHandler h = ref gzip ? ref zipped : ref plain;
+                if (h != null) return h;
+                // A connection left open between requests is closed by the server after 30 seconds of
+                // quiet. Reusing one that is already closed fails at once ("An error occurred while
+                // sending the request"), so idle connections are let go well before that.
+                h = new SocketsHttpHandler
+                {
+                    PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15),
+                    MaxConnectionsPerServer = MaxConnections,
+                    SslOptions = new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = Verify },
+                };
+                if (gzip) h.AutomaticDecompression = DecompressionMethods.GZip;
+                return h;
+            }
         }
+
+        internal static HttpClient Client(TimeSpan timeout, bool gzip = false)
+            => new HttpClient(Handler(gzip), disposeHandler: false) { Timeout = timeout };
 
         private static X509Certificate2Collection roots;
         private static volatile bool told;
