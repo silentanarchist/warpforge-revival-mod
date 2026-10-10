@@ -20,7 +20,7 @@ namespace WarpforgeRevival
     ///    its content swapped for these tiles.)
     ///  - Decks: the copy's deck tab, opened straight on the Custom Test deck list (no format picker).
     ///    Back closes the window. The window is given the mode, so other modes can be passed later.
-    ///  - Collection: the copy's card list. As a check that it is separate, Space Wolves are left out.
+    ///  - Cards: the copy's card list. As a check that it is separate, Space Wolves are left out.
     /// The Styles tab is hidden. The normal Collection > Decks keeps every format, Custom Test included.
     /// </summary>
     internal static class TestersCollection
@@ -31,7 +31,8 @@ namespace WarpforgeRevival
         private static Sprite playIcon;
         private static int hidden;
         private static float nextDress;
-        private static bool placedLogged;
+        private static bool placedLogged, switchOffChanged, unlitLogged;
+        private static IntPtr groupPtr;
         private static bool buttonsLogged, dressedLogged;
 
         private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
@@ -155,7 +156,7 @@ namespace WarpforgeRevival
                 if ((object)b.tab.TryCast<AlternateArtCardCollectionTab>() != null) { if (t.gameObject.activeSelf) t.gameObject.SetActive(false); continue; }
                 if ((object)b.tab.TryCast<CardbackCollectionTab>() != null) { Relabel(t, "PLAY", playIcon); Place(t, 0); order.Add("Play"); }
                 else if ((object)b.tab.TryCast<SelectDecksTab>() != null) { Relabel(t, "DECKS", null); Place(t, 1); order.Add("Decks"); }
-                else if ((object)b.tab.TryCast<CardCollectionTab>() != null) { Relabel(t, "COLLECTION", null); Place(t, 2); order.Add("Collection"); }
+                else if ((object)b.tab.TryCast<CardCollectionTab>() != null) { Relabel(t, "CARDS", null); Place(t, 2); order.Add("Cards"); }
             }
             if (!dressedLogged) { dressedLogged = true; RevivalMod.Log.Msg($"[testers] Testers window ribbon: {string.Join(", ", order)}"); }
         }
@@ -228,12 +229,29 @@ namespace WarpforgeRevival
                 var wm = WindowsManager.Instance;
                 var current = (object)wm == null ? null : wm.CurrentWindow;
                 showing = Alive(copy) && copy.isActiveAndEnabled && (object)current != null && current.Pointer == copy.Pointer;
-                if (showing)
+                var nav = UnityEngine.Object.FindObjectOfType<NavigationPanelController>();
+                var col = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Collection);
+                var toggle = (object)col == null ? null : col.toggle;
+                var group = (object)toggle == null ? null : toggle.group;
+                if (showing && (object)toggle != null)
                 {
-                    var nav = UnityEngine.Object.FindObjectOfType<NavigationPanelController>();
-                    var col = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Collection);
-                    var toggle = (object)col == null ? null : col.toggle;
-                    if ((object)toggle != null && toggle.isOn) { toggle.SetIsOnWithoutNotify(false); toggle.RefreshVisuals(); }
+                    // the bar's buttons are a group that keeps one button on; let it have none while Testers is up
+                    if ((object)group != null && !group.allowSwitchOff)
+                    {
+                        if (!switchOffChanged) { switchOffChanged = true; groupPtr = group.Pointer; }
+                        group.allowSwitchOff = true;
+                    }
+                    if (toggle.isOn)
+                    {
+                        toggle.SetIsOnWithoutNotify(false);
+                        toggle.RefreshVisuals();
+                        if (!unlitLogged) { unlitLogged = true; RevivalMod.Log.Msg($"[testers] menu bar: Collection unlit ({(toggle.isOn ? "still on" : "off")})"); }
+                    }
+                }
+                else if (!showing && switchOffChanged && (object)group != null && group.Pointer == groupPtr)
+                {
+                    group.allowSwitchOff = false;    // back to the game's own setting
+                    switchOffChanged = false;
                 }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[testers] highlight: " + e.Message); }
