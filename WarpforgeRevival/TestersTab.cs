@@ -85,8 +85,11 @@ namespace WarpforgeRevival
         private static void Open()
         {
             RevivalMod.Log.Msg("[testers] Testers tab opened");
-            var notice = UIMessageController.Instance;
-            if ((object)notice != null) notice.ShowMessage("Testers: nothing here yet.", false);
+            // The bottom-of-screen notice (UIMessageController) is not there on the main menu; the
+            // game's own message window is.
+            var windows = SingletonBehaviour<WindowsManager>.Instance;
+            if ((object)windows == null) { RevivalMod.Log.Warning("[testers] no window manager to show the page in"); return; }
+            windows.ShowPopUp("Testers\n\nNothing here yet. Tester tools will appear on this page.", false, true, "OK", null);
         }
 
         // What the copied button is made of, once, so the page behind it can be built to match.
