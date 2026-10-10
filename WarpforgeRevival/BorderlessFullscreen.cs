@@ -1,5 +1,6 @@
 #if !ANDROID_PORT
 using System;
+using System.Runtime.InteropServices;
 using HarmonyLib;
 using Il2Cpp;
 using UnityEngine;
@@ -12,15 +13,24 @@ namespace WarpforgeRevival
     /// FullScreenWindow): a window the size of the screen, so alt-tab just switches away.
     /// Both when the player picks Fullscreen, and at start-up if the game comes up exclusive
     /// (Unity remembers the last mode in the registry). Windowed stays windowed.
+    /// The game is built with Unity's "visible in background" off, so even borderless it minimizes
+    /// itself when it loses focus (alt-tab). When that happens it is shown again behind the window
+    /// the player switched to, without taking focus, the way borderless games usually behave.
     /// </summary>
     internal static class BorderlessFullscreen
     {
-        private static bool startChecked;
-        private static float nextCheck;
+        private static bool startChecked, restoreLogged, wasFocused = true, restoredThisTime;
+        private static float nextCheck, nextRestore, lostAt;
+        private static IntPtr window;
 
-        /// <summary>Called every frame from the mod's update loop; checks a few times after start-up.</summary>
+        [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
+        [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int cmd);
+        private const int SW_SHOWNOACTIVATE = 4;
+
+        /// <summary>Called every frame from the mod's update loop.</summary>
         internal static void Tick()
         {
+            KeepVisible();
             if (startChecked) return;
             float now = Time.realtimeSinceStartup;
             if (now < nextCheck) return;
@@ -38,6 +48,29 @@ namespace WarpforgeRevival
                 startChecked = true;
             }
             catch (Exception e) { startChecked = true; RevivalMod.Log.Warning("[screen] " + e.Message); }
+        }
+
+        /// <summary>Borderless fullscreen and minimized while another program has focus: show it again, behind, unfocused.</summary>
+        private static void KeepVisible()
+        {
+            float now = Time.realtimeSinceStartup;
+            bool focused = Application.isFocused;
+            if (focused) { wasFocused = true; return; }
+            if (wasFocused) { wasFocused = false; lostAt = now; restoredThisTime = false; }
+            // only the minimize that comes with losing focus; a minimize the player asks for later
+            // (Win+D, the taskbar) is left alone
+            if (restoredThisTime || now - lostAt > 2f || now < nextRestore) return;
+            nextRestore = now + 0.25f;
+            try
+            {
+                if (Screen.fullScreenMode != FullScreenMode.FullScreenWindow) return;
+                if (window == IntPtr.Zero) window = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+                if (window == IntPtr.Zero || !IsIconic(window)) return;
+                ShowWindow(window, SW_SHOWNOACTIVATE);
+                restoredThisTime = true;
+                if (!restoreLogged) { restoreLogged = true; RevivalMod.Log.Msg("[screen] minimized on alt-tab: shown again behind the other window"); }
+            }
+            catch (Exception e) { nextRestore = now + 60f; RevivalMod.Log.Warning("[screen] " + e.Message); }
         }
 
         // The game's own switch: SetFullScreen(true) asked for the player-settings default, which can be exclusive.
