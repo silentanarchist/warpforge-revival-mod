@@ -13,7 +13,7 @@ Changes since 0.12.3.
 
 ### New
 - **Match replays.** Matches you play are recorded on the server; Replay in the battle log plays them back, also for other players' matches. The replay moves past the mulligan screen by itself.
-- **Friend challenges (direct connect)** now go through the revival server, between PC and phone too.
+- **Friend challenges (direct connect)** work again, between PC and phone too. For now a challenge can only be a Classic or Skirmish match.
 - **Friends list** shows who is online or in a match (once you have added each other).
 - **Profile:** the Warlord Mastery box is back (your warlord with the most wins).
 - **Draft:** the server chooses the packs offered each round. The draft screen has its title, help text and picture again, and the free entry button sits centred.
