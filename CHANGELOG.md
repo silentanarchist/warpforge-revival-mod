@@ -5,7 +5,8 @@ Changes made on the server take effect for everyone at once; the ones listed her
 
 ## Unreleased
 
-Nothing yet.
+### Fixes
+- Draft: the Free entry button sits centred under the screen's text.
 
 ## 0.12.19-w - 2026-10-09
 

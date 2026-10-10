@@ -8,7 +8,7 @@ namespace WarpforgeRevival
     /// <summary>
     /// Draft entry screen: the revival has no currency, so the two paid entries are removed and the
     /// free entry - normally available once per time window - is always open. The free button moves
-    /// to the middle of where the free and paid buttons stood, so the single button is centred.
+    /// under the middle of the screen's texts, so the single button is centred with them.
     /// (The screen's title, texts and picture come from the Draft mode's settings on the server.)
     /// </summary>
     internal static class DraftEntry
@@ -28,7 +28,7 @@ namespace WarpforgeRevival
                 {
                     free.gameObject.SetActive(true);
                     free.interactable = true;
-                    Centre(free, screen.premiumButton);
+                    Centre(free, screen.premiumButton, screen.titleText, screen.subtitleText);
                 }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[draft] entry screen: " + e.Message); }
@@ -37,10 +37,12 @@ namespace WarpforgeRevival
         private static readonly Dictionary<IntPtr, float> freeHome = new Dictionary<IntPtr, float>();
         private static bool placedNoted;
 
-        /// <summary>Puts the free button half way between its own place and the (hidden) paid button's.</summary>
-        private static void Centre(EverguildButton free, EverguildButton paid)
+        /// <summary>
+        /// Puts the free button under the middle of the screen's texts (title and description). If
+        /// those cannot be found, half way between its own place and the (hidden) paid button's.
+        /// </summary>
+        private static void Centre(EverguildButton free, EverguildButton paid, params Il2CppTMPro.TextMeshProUGUI[] texts)
         {
-            if ((object)paid == null || paid.Pointer == IntPtr.Zero) return;
             var ft = free.transform;
             var parent = ft.parent;
             if ((object)parent == null) return;
@@ -55,11 +57,26 @@ namespace WarpforgeRevival
                     le.ignoreLayout = true;
                 }
             }
-            float paidX = parent.InverseTransformPoint(paid.transform.position).x;
+            // middle of the texts' boxes (they are centred text), in the button's parent's space
+            float sum = 0f; int n = 0;
+            foreach (var t in texts)
+            {
+                if ((object)t == null || t.Pointer == IntPtr.Zero || !t.gameObject.activeInHierarchy) continue;
+                var rt = t.rectTransform;
+                sum += parent.InverseTransformPoint(rt.TransformPoint((UnityEngine.Vector3)rt.rect.center)).x;
+                n++;
+            }
+            string how;
             var p = ft.localPosition;
-            p.x = (home + paidX) / 2f;
+            if (n > 0) { p.x = sum / n; how = $"under the middle of the texts ({n})"; }
+            else if ((object)paid != null && paid.Pointer != IntPtr.Zero)
+            {
+                p.x = (home + parent.InverseTransformPoint(paid.transform.position).x) / 2f;
+                how = "half way to the paid button";
+            }
+            else return;
             ft.localPosition = p;
-            if (!placedNoted) { placedNoted = true; RevivalMod.Log.Msg($"[draft] free button moved from x {home:0} to {p.x:0} (paid button at {paidX:0})"); }
+            if (!placedNoted) { placedNoted = true; RevivalMod.Log.Msg($"[draft] free button moved from x {home:0} to {p.x:0}, {how}"); }
         }
 
         private static void Hide(EverguildButton button)
