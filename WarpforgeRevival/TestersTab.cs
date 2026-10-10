@@ -116,6 +116,21 @@ namespace WarpforgeRevival
             catch (Exception e) { iconDone = true; RevivalMod.Log.Warning("[testers] icon: " + e.Message); }
         }
 
+        /// <summary>Lights the Testers button while the Testers window is on screen (the menu bar's own buttons do the same).</summary>
+        internal static void Lit(bool on)
+        {
+            try
+            {
+                if (!Alive(button)) return;
+                var toggle = button.GetComponent<UnityEngine.UI.Toggle>();
+                if ((object)toggle == null || toggle.isOn == on) return;
+                toggle.SetIsOnWithoutNotify(on);
+                var ev = toggle.TryCast<EverguildToggle>();
+                if ((object)ev != null) ev.RefreshVisuals();
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[testers] highlight: " + e.Message); }
+        }
+
         private static void Open()
         {
             RevivalMod.Log.Msg("[testers] Testers tab opened");

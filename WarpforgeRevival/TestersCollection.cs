@@ -31,6 +31,7 @@ namespace WarpforgeRevival
         private static Sprite playIcon;
         private static int hidden;
         private static float nextDress;
+        private static bool placedLogged;
         private static bool buttonsLogged, dressedLogged;
 
         private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
@@ -181,22 +182,25 @@ namespace WarpforgeRevival
             for (int i = 0; i < t.childCount; i++) LogHierarchy(t.GetChild(i), depth + 1);
         }
 
-        /// <summary>Called every frame: while the Play tab is showing, its cosmetics content is swapped for the tester modes.</summary>
+        /// <summary>Called every frame: menu-bar highlight, our tab labels, and the Play tab's tiles.</summary>
         internal static void Tick()
         {
             try
             {
-                if (!Alive(copy) || !copy.isActiveAndEnabled) return;
                 float now = Time.realtimeSinceStartup;
-                if (now >= nextDress) { nextDress = now + 0.25f; Dress(copy); }   // the game re-labels its tab buttons; keep ours
+                bool slow = now >= nextDress;
+                if (slow) { nextDress = now + 0.25f; Highlight(); }
+                if (!Alive(copy) || !copy.isActiveAndEnabled) return;
+                if (slow) Dress(copy);           // the game re-labels its tab buttons; keep ours
                 var tab = copy.CurrentTab;
-                if ((object)tab == null || (object)tab.TryCast<CardbackCollectionTab>() == null) return;
+                bool onPlay = (object)tab != null && (object)tab.TryCast<CardbackCollectionTab>() != null;
+                var panel = copy.transform.Find(PanelName);
+                if ((object)panel != null && panel.gameObject.activeSelf != onPlay) panel.gameObject.SetActive(onPlay);
+                if (!onPlay) return;
                 var t = tab.transform;
-                var panel = t.Find(PanelName);
                 for (int i = 0; i < t.childCount; i++)
                 {
                     var child = t.GetChild(i);
-                    if ((object)panel != null && child.Pointer == panel.Pointer) continue;
                     if (child.gameObject.activeSelf) child.gameObject.SetActive(false);
                 }
                 // the cosmetics list and its "owned" switch, wherever the window keeps them
@@ -205,10 +209,84 @@ namespace WarpforgeRevival
                 if ((object)display != null && display.gameObject.activeSelf) display.gameObject.SetActive(false);
                 var owned = cardbacks.ownedToggle;
                 if ((object)owned != null && owned.gameObject.activeSelf) owned.gameObject.SetActive(false);
-                if ((object)panel == null) BuildPlay(t);
-                else FitTiles(panel);
+                if ((object)panel == null) BuildPlay(copy.transform);
+                else if (slow) { PlacePanel(panel.GetComponent<RectTransform>()); FitTiles(panel); }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[testers] play tab: " + e.Message); }
+        }
+
+        /// <summary>
+        /// The menu bar lights the button of the window type on screen, so with the Testers window up it lit
+        /// Collection. While the Testers window is the one on screen, Collection is switched off (without
+        /// opening anything) and the Testers button lit instead.
+        /// </summary>
+        private static void Highlight()
+        {
+            bool showing = false;
+            try
+            {
+                var wm = WindowsManager.Instance;
+                var current = (object)wm == null ? null : wm.CurrentWindow;
+                showing = Alive(copy) && copy.isActiveAndEnabled && (object)current != null && current.Pointer == copy.Pointer;
+                if (showing)
+                {
+                    var nav = UnityEngine.Object.FindObjectOfType<NavigationPanelController>();
+                    var col = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Collection);
+                    var toggle = (object)col == null ? null : col.toggle;
+                    if ((object)toggle != null && toggle.isOn) { toggle.SetIsOnWithoutNotify(false); toggle.RefreshVisuals(); }
+                }
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[testers] highlight: " + e.Message); }
+            TestersTab.Lit(showing);
+        }
+
+        /// <summary>Where the Play screen puts its tiles: right of the inner ribbon, same top and bottom as the Play screen's tiles.</summary>
+        private static void PlacePanel(RectTransform panel)
+        {
+            var parent = panel.parent.TryCast<RectTransform>();
+            if ((object)parent == null) return;
+            var pr = parent.rect;
+            float left = pr.xMin + 200, right = pr.xMax - 40, top = pr.yMax - pr.height * 0.17f, bottom = pr.yMin + pr.height * 0.045f;
+            var corners = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
+            var ribbon = copy.Components?.TabButtons;
+            var rib = (object)ribbon == null ? null : ribbon.GetComponent<RectTransform>();
+            if ((object)rib != null)
+            {
+                rib.GetWorldCorners(corners);
+                left = parent.InverseTransformPoint(corners[2]).x + 28;
+            }
+            // the Play screen's own tiles give the top and bottom
+            try
+            {
+                var menu = WindowsManager.Instance.BaseMenu;
+                var main = (object)menu == null ? null : menu.TryCast<MainMenuWindow>();
+                var tiles = (object)main == null ? null : main.currentLiveOpContainers;
+                if (tiles != null && tiles.Count > 0)
+                {
+                    float t = float.MinValue, b = float.MaxValue, r = float.MinValue;
+                    for (int i = 0; i < tiles.Count; i++)
+                    {
+                        var tile = tiles[i];
+                        var trt = (object)tile == null ? null : tile.GetComponent<RectTransform>();
+                        if ((object)trt == null) continue;
+                        trt.GetWorldCorners(corners);
+                        t = Mathf.Max(t, parent.InverseTransformPoint(corners[1]).y);
+                        b = Mathf.Min(b, parent.InverseTransformPoint(corners[0]).y);
+                        r = Mathf.Max(r, parent.InverseTransformPoint(corners[2]).x);
+                    }
+                    if (t > b + 10) { top = t; bottom = b; right = Mathf.Max(right, r); }
+                }
+            }
+            catch { }
+            panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
+            var size = new Vector2(Mathf.Max(10, right - left), Mathf.Max(10, top - bottom));
+            var centre = new Vector2((left + right) / 2, (top + bottom) / 2) - pr.center;
+            if ((panel.sizeDelta - size).sqrMagnitude > 1 || (panel.anchoredPosition - centre).sqrMagnitude > 1)
+            {
+                panel.sizeDelta = size;
+                panel.anchoredPosition = centre;
+                if (!placedLogged) { placedLogged = true; RevivalMod.Log.Msg($"[testers] Play tab area {size.x:0}x{size.y:0}"); }
+            }
         }
 
         /// <summary>The Play tab: each tester mode's own Play-screen tile, made the way the Play screen makes them.</summary>
@@ -216,18 +294,18 @@ namespace WarpforgeRevival
         {
             var panel = new GameObject(PanelName);
             var rt = panel.AddComponent<RectTransform>();
-            rt.SetParent(tab, false);
-            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            rt.SetParent(tab, false);           // the window itself, over its tabs
+            rt.SetAsLastSibling();
+            PlacePanel(rt);
 
             var row = new GameObject("Tiles");
             var rowRt = row.AddComponent<RectTransform>();
             rowRt.SetParent(rt, false);
-            rowRt.anchorMin = rowRt.anchorMax = rowRt.pivot = new Vector2(0, 0.5f);
-            rowRt.anchoredPosition = new Vector2(40, 0);
+            rowRt.anchorMin = rowRt.anchorMax = rowRt.pivot = new Vector2(0, 1);
+            rowRt.anchoredPosition = Vector2.zero;
             var layout = row.AddComponent<HorizontalLayoutGroup>();
-            layout.spacing = 30;
-            layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.spacing = 22;
+            layout.childAlignment = TextAnchor.UpperLeft;
             layout.childControlWidth = layout.childControlHeight = false;
             layout.childForceExpandWidth = layout.childForceExpandHeight = false;
             var fit = row.AddComponent<ContentSizeFitter>();
@@ -246,7 +324,7 @@ namespace WarpforgeRevival
                     if ((object)tile == null) { RevivalMod.Log.Warning($"[testers] {id} has no Play-screen tile"); continue; }
                     // a tile under a layout group: the layout places it, its own size is kept
                     var trt = tile.GetComponent<RectTransform>();
-                    if ((object)trt != null) { trt.anchorMin = trt.anchorMax = trt.pivot = new Vector2(0, 0.5f); }
+                    if ((object)trt != null) { trt.anchorMin = trt.anchorMax = trt.pivot = new Vector2(0, 1); }
                     var size = tile.gameObject.GetComponent<LayoutElement>() ?? tile.gameObject.AddComponent<LayoutElement>();
                     if ((object)trt != null) { size.preferredWidth = trt.rect.width; size.preferredHeight = trt.rect.height; }
                     RevivalMod.Log.Msg($"[testers] Play tab tile for {id}: {tile.name} {(object)trt?.rect.width ?? 0:0}x{(object)trt?.rect.height ?? 0:0}");
@@ -259,7 +337,7 @@ namespace WarpforgeRevival
             RevivalMod.Log.Msg($"[testers] Play tab: {shown} mode(s)");
         }
 
-        /// <summary>Tiles are as tall as on the Play screen; scaled down if the tab is shorter.</summary>
+        /// <summary>Tiles keep the Play screen's size; scaled down only if the area is smaller.</summary>
         private static void FitTiles(Transform panel)
         {
             var row = panel.Find("Tiles");
@@ -268,7 +346,7 @@ namespace WarpforgeRevival
             if ((object)rowRt == null || (object)area == null) return;
             float h = rowRt.rect.height, w = rowRt.rect.width;
             if (h <= 1 || w <= 1) return;
-            float scale = Mathf.Min(1f, area.rect.height * 0.9f / h, (area.rect.width - 80) / w);
+            float scale = Mathf.Min(1f, area.rect.height / h, area.rect.width / w);
             if (scale > 0 && Mathf.Abs(rowRt.localScale.x - scale) > 0.01f) rowRt.localScale = new Vector3(scale, scale, 1);
         }
 
