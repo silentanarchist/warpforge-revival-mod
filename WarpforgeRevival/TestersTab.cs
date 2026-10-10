@@ -32,6 +32,8 @@ namespace WarpforgeRevival
         internal static void Tick()
         {
             float now = Time.realtimeSinceStartup;
+            // the picture: asked for early, put on the button the frame it is ready
+            if (!iconDone && AccountPage.IsTester) { try { Icon(); } catch { } }
             if (now < nextCheck) return;
             nextCheck = now + 1f;
             try
@@ -42,7 +44,6 @@ namespace WarpforgeRevival
                 if (Alive(button))
                 {
                     if (button.activeSelf != want) button.SetActive(want);
-                    if (!iconDone) Icon();
                     return;
                 }
                 if (!want) return;
@@ -86,6 +87,10 @@ namespace WarpforgeRevival
                     new Action<bool>(on => { if (on) { toggle.SetIsOnWithoutNotify(false); Open(); } })));
             }
 
+            // Social's picture stays hidden until the Testers picture is on (it is loaded from the game's files)
+            var pic = copy.transform.Find("Image");
+            var picImage = (object)pic == null ? null : pic.GetComponent<UnityEngine.UI.Image>();
+            if ((object)picImage != null && !(iconLoad.IsValid() && iconLoad.IsDone && (object)iconLoad.Result != null)) picImage.enabled = false;
             copy.transform.SetParent(parent, false);
             copy.transform.SetSiblingIndex(social.transform.GetSiblingIndex() + 1);
             UnityEngine.Object.Destroy(holder);
@@ -103,17 +108,23 @@ namespace WarpforgeRevival
                     iconLoad = new AssetReference(IconAsset).LoadAssetAsync<Sprite>();
                     return;
                 }
-                if (!iconLoad.IsDone) return;
+                if (!iconLoad.IsDone || !Alive(button)) return;
                 iconDone = true;
                 var sprite = iconLoad.Result;
-                if ((object)sprite == null) { RevivalMod.Log.Warning("[testers] icon not found in the game's files; the Social picture stays"); return; }
                 var img = button.transform.Find("Image");
                 var image = (object)img == null ? null : img.GetComponent<UnityEngine.UI.Image>();
                 if ((object)image == null) { RevivalMod.Log.Warning("[testers] no picture slot on the button"); return; }
+                image.enabled = true;
+                if ((object)sprite == null) { RevivalMod.Log.Warning("[testers] icon not found in the game's files; the Social picture stays"); return; }
                 image.sprite = sprite;
                 RevivalMod.Log.Msg("[testers] button picture set");
             }
-            catch (Exception e) { iconDone = true; RevivalMod.Log.Warning("[testers] icon: " + e.Message); }
+            catch (Exception e)
+            {
+                iconDone = true;
+                RevivalMod.Log.Warning("[testers] icon: " + e.Message);
+                try { var img = button.transform.Find("Image"); if ((object)img != null) img.GetComponent<UnityEngine.UI.Image>().enabled = true; } catch { }
+            }
         }
 
         /// <summary>Lights the Testers button while the Testers window is on screen (the menu bar's own buttons do the same).</summary>
