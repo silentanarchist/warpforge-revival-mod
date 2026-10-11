@@ -228,6 +228,7 @@ namespace WarpforgeRevival
         {
             try
             {
+                if (kind == "RemovePractice") incoming.Remove(target);    // this player turned that friend's challenge down
                 if (kind == "RemovePractice" && outgoing != null && string.Equals(target, outgoingTo, StringComparison.OrdinalIgnoreCase))
                 {
                     outgoing = null;                                   // the challenger called it off
@@ -267,6 +268,7 @@ namespace WarpforgeRevival
                          : t.ValueKind == JsonValueKind.String ? (t.GetString() == "Practice" ? 1 : t.GetString() == "RemovePractice" ? 2 : -1) : -1;
                 if (type == 2) { incoming.Remove(from); return; }       // the challenger called it off
                 if (type != 1) return;
+                incoming.Clear();      // only the latest challenge counts: an earlier one's rules never reach another friend's match
                 refused.Remove(from);
                 if (!root.TryGetProperty("revivalRules", out var rr)) { incoming.Remove(from); return; }
                 if (json.Length > 4096) { Refuse(from, "too large"); return; }
@@ -438,6 +440,7 @@ namespace WarpforgeRevival
         {
             private static void Prefix(BattleManager __instance)
             {
+                try { if (active == null) FromIncoming(__instance); } catch (Exception e) { RevivalMod.Log.Warning("[challenge] " + e.Message); }
                 if (active == null) return;
                 try
                 {
@@ -463,6 +466,27 @@ namespace WarpforgeRevival
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[challenge] applying rules: " + e.Message); }
             }
+        }
+
+        /// <summary>
+        /// The friend's side: accepting goes straight to the match without the challenge-start call the
+        /// challenger's game makes, so the rules of the accepted challenge are looked up as the battle starts:
+        /// a friend match against the player whose challenge with rules arrived in the last 5 minutes.
+        /// </summary>
+        private static void FromIncoming(BattleManager battle)
+        {
+            if (incoming.Count == 0) return;
+            var md = battle.matchData;
+            if ((object)md == null || md.playMode != PlayModes.Duel) return;
+            string opponent = "";
+            try { opponent = UnityEngine.Object.FindObjectOfType<ChallengeManager>()?.currentOpponentPlayfabId ?? ""; } catch { }
+            float now = Time.realtimeSinceStartup;
+            (RuleSet rules, float at) got = default;
+            bool found = opponent.Length > 0 && incoming.TryGetValue(opponent, out got);
+            if (!found && opponent.Length == 0 && incoming.Count == 1) { got = incoming.Values.First(); found = true; opponent = incoming.Keys.First(); }
+            if (!found || now - got.at > 300f) { RevivalMod.Log.Msg($"[challenge] friend match: no challenge rules for '{opponent}'"); return; }
+            RevivalMod.Log.Msg($"[challenge] friend match with {opponent}: the accepted challenge's rules");
+            Apply(got.rules, null);
         }
 
         private static void Set(GameplayVariablesData gv, string key, RuleSet rules)
