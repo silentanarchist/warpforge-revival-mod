@@ -79,18 +79,26 @@ namespace WarpforgeRevival
             try { return UnityEngine.SceneManagement.SceneManager.GetActiveScene().name; } catch { return "?"; }
         }
 
-        // ---------------------------------------------------------------- black picture: wake the drawing up
-        // On the Pixel 6 Pro the game sometimes draws nothing but black once the menu loads (0.12.45 screenshots:
-        // brightness 0.000, no layer on top), until the phone is locked and unlocked; that briefly changes the
-        // drawing area's size (1440 -> 1441 -> 1440 lines) and the picture comes back. So when two checks in a
-        // row find the picture black while the game has focus, the mod does the same: the drawing area is made
-        // two lines smaller for half a second and then put back. If that cannot be done, the cameras are
-        // switched off and on instead. At most 4 tries a start-up; every step is logged.
-        private const int MaxFixes = 4;
-        private static int blackInRow, fixes, fixW, fixH;
+        // ---------------------------------------------------------------- black picture: find the cause
+        // On the Pixel 6 Pro the game sometimes draws nothing but black once the menu loads (screenshots:
+        // brightness 0.000, no layer on top) until the phone is locked and unlocked, which briefly changes the
+        // drawing area's size (1440 -> 1441 -> 1440 lines). Resizing does bring the picture back, but it does not
+        // say why it went. So when two checks in a row find the picture black while the game has focus, the
+        // drawing setup is written to the log, and the likely causes are tried one at a time, each checked after
+        // 1.5 s and undone if the picture stays black:
+        //   1. render scale nudged (99%): the render pipeline makes new in-between pictures at the same screen size;
+        //   2. anti-aliasing (MSAA) off;
+        //   3. HDR colour off;
+        //   4. the drawing area made 2 lines smaller and put back (what locking the phone does).
+        // The first step that brings the picture back is logged as FOUND and kept. Once per start-up.
+        private static int blackInRow, step = -1;
+        private static bool stepsDone, menuStateLogged;
         private static float restoreAt = -1f, recheckAt = -1f;
-        private static bool fixByCameras;
-        private static readonly List<Camera> switchedOff = new List<Camera>();
+        private static int fixW, fixH;
+        private static float savedScale = -1f;
+        private static int savedMsaa = -1;
+        private static int savedHdr = -1;
+        private static readonly string[] StepNames = { "render scale nudged to 99%", "anti-aliasing (MSAA) off", "HDR colour off", "drawing area 2 lines smaller for a moment" };
 
         /// <summary>Called every frame from the mod's update loop.</summary>
         internal static void Tick()
@@ -100,9 +108,9 @@ namespace WarpforgeRevival
             try
             {
                 float now = Time.realtimeSinceStartup;
-                if (restoreAt > 0 && now >= restoreAt) { restoreAt = -1f; Restore(); recheckAt = now + 2f; }
+                if (restoreAt > 0 && now >= restoreAt) { restoreAt = -1f; RestoreSize(); recheckAt = now + 1.5f; }
                 if (due) return;
-                if (recheckAt > 0 && now >= recheckAt) { recheckAt = -1f; due = true; reason = "check after waking the drawing up"; return; }
+                if (recheckAt > 0 && now >= recheckAt) { recheckAt = -1f; due = true; reason = "check after trying a cause"; return; }
                 if (shots >= MaxShots) return;
                 string scene = Scene();
                 if (scene != lastScene)
@@ -132,61 +140,135 @@ namespace WarpforgeRevival
             bool focused = Application.isFocused;
             RevivalMod.Log.Msg($"[screen] {reason} (scene {scene}, {Screen.width}x{Screen.height}, focused {focused}): {picture}; {Cameras()}; {layers}");
             bool black = picture.StartsWith("picture BLACK");
-            if (!black || !focused) { if (blackInRow > 0 && !black) RevivalMod.Log.Msg("[screen] the picture is back"); blackInRow = 0; return; }
+            if (!black && !menuStateLogged && scene.StartsWith("MainMenu")) { menuStateLogged = true; RevivalMod.Log.Msg("[screen] drawing setup with a normal picture: " + State()); }
+            if (step >= 0 && !stepsDone)
+            {
+                // the check after trying a cause
+                if (!black) { stepsDone = true; RevivalMod.Log.Msg($"[screen] FOUND: the picture came back after step {step + 1} ({StepNames[step]}); kept. Drawing setup now: " + State()); blackInRow = 0; return; }
+                RevivalMod.Log.Msg($"[screen] still black after step {step + 1} ({StepNames[step]}); undone");
+                Undo(step);
+                NextStep();
+                return;
+            }
+            if (!black || !focused) { if (blackInRow > 0 && !black) RevivalMod.Log.Msg("[screen] the picture is back by itself"); blackInRow = 0; return; }
             blackInRow++;
             if (blackInRow < 2) { recheckAt = Time.realtimeSinceStartup + 2f; return; }      // look again before acting
-            if (fixes >= MaxFixes) { if (fixes == MaxFixes) { fixes++; RevivalMod.Log.Warning("[screen] still black after 4 tries; lock and unlock the phone"); } return; }
-            Wake();
+            if (stepsDone || step >= 0) return;
+            RevivalMod.Log.Msg("[screen] the picture is black; drawing setup: " + State());
+            NextStep();
 #endif
         }
 
 #if ANDROID_PORT
-        private static void Wake()
+        private static UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset Urp()
         {
-            fixes++;
-            float now = Time.realtimeSinceStartup;
-            fixW = Screen.width; fixH = Screen.height;
-            if (!fixByCameras)
+            try
+            {
+                var rp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+                return (object)rp == null ? null : rp.TryCast<UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset>();
+            }
+            catch { return null; }
+        }
+
+        private static void NextStep()
+        {
+            var urp = Urp();
+            while (++step < StepNames.Length)
             {
                 try
                 {
-                    Screen.SetResolution(fixW, fixH - 2, true);      // the bool form: Screen.fullScreenMode is not available on phones
-                    RevivalMod.Log.Msg($"[screen] the picture is black: drawing area {fixW}x{fixH} -> {fixW}x{fixH - 2} for a moment (try {fixes})");
-                    restoreAt = now + 0.5f;
+                    switch (step)
+                    {
+                        case 0:
+                            if ((object)urp == null) continue;
+                            savedScale = urp.renderScale;
+                            urp.renderScale = savedScale > 0.995f ? 0.99f : savedScale + 0.01f;
+                            break;
+                        case 1:
+                            if ((object)urp == null || urp.msaaSampleCount <= 1) { RevivalMod.Log.Msg("[screen] step 2 skipped: anti-aliasing is already off"); continue; }
+                            savedMsaa = urp.msaaSampleCount;
+                            urp.msaaSampleCount = 1;
+                            break;
+                        case 2:
+                            if ((object)urp == null || !urp.supportsHDR) { RevivalMod.Log.Msg("[screen] step 3 skipped: HDR is already off"); continue; }
+                            savedHdr = 1;
+                            urp.supportsHDR = false;
+                            break;
+                        case 3:
+                            fixW = Screen.width; fixH = Screen.height;
+                            Screen.SetResolution(fixW, fixH - 2, true);      // the bool form: Screen.fullScreenMode is not available on phones
+                            restoreAt = Time.realtimeSinceStartup + 0.5f;
+                            RevivalMod.Log.Msg($"[screen] trying step {step + 1}: {StepNames[step]} ({fixW}x{fixH} -> {fixW}x{fixH - 2})");
+                            return;
+                    }
+                    RevivalMod.Log.Msg($"[screen] trying step {step + 1}: {StepNames[step]}");
+                    recheckAt = Time.realtimeSinceStartup + 1.5f;
                     return;
                 }
-                catch (Exception e)
-                {
-                    fixByCameras = true;
-                    RevivalMod.Log.Warning("[screen] the drawing area cannot be resized here (" + e.Message + "); switching the cameras off and on instead");
-                }
+                catch (Exception e) { RevivalMod.Log.Warning($"[screen] step {step + 1} ({StepNames[step]}) could not be tried: {e.Message}"); }
             }
-            try
-            {
-                switchedOff.Clear();
-                foreach (var c in Camera.allCameras)
-                    if ((object)c != null && c.enabled) { c.enabled = false; switchedOff.Add(c); }
-                RevivalMod.Log.Msg($"[screen] the picture is black: {switchedOff.Count} camera(s) off for a moment (try {fixes})");
-                restoreAt = now + 0.5f;
-            }
-            catch (Exception e) { RevivalMod.Log.Warning("[screen] could not switch the cameras: " + e.Message); }
+            stepsDone = true;
+            RevivalMod.Log.Warning("[screen] nothing tried brought the picture back; lock and unlock the phone");
         }
 
-        private static void Restore()
+        private static void Undo(int which)
         {
-            if (switchedOff.Count > 0)
-            {
-                foreach (var c in switchedOff) try { if ((object)c != null) c.enabled = true; } catch { }
-                RevivalMod.Log.Msg($"[screen] {switchedOff.Count} camera(s) on again");
-                switchedOff.Clear();
-                return;
-            }
             try
             {
-                Screen.SetResolution(fixW, fixH, true);
-                RevivalMod.Log.Msg($"[screen] drawing area back to {fixW}x{fixH}");
+                var urp = Urp();
+                switch (which)
+                {
+                    case 0: if ((object)urp != null && savedScale > 0) urp.renderScale = savedScale; break;
+                    case 1: if ((object)urp != null && savedMsaa > 0) urp.msaaSampleCount = savedMsaa; break;
+                    case 2: if ((object)urp != null && savedHdr == 1) urp.supportsHDR = true; break;
+                }
             }
+            catch (Exception e) { RevivalMod.Log.Warning("[screen] could not undo a step: " + e.Message); }
+        }
+
+        private static void RestoreSize()
+        {
+            try { Screen.SetResolution(fixW, fixH, true); RevivalMod.Log.Msg($"[screen] drawing area back to {fixW}x{fixH}"); }
             catch (Exception e) { RevivalMod.Log.Warning("[screen] could not put the drawing area back: " + e.Message); }
+        }
+
+        /// <summary>Everything about how the game draws that could leave the picture black, each read on its own.</summary>
+        private static string State()
+        {
+            var parts = new List<string>();
+            void Add(string name, Func<object> read)
+            {
+                try { parts.Add(name + " " + (read() ?? "null")); } catch (Exception e) { parts.Add(name + " ?(" + e.GetType().Name + ")"); }
+            }
+            Add("quality", () => QualitySettings.GetQualityLevel() + "/" + QualitySettings.names[QualitySettings.GetQualityLevel()]);
+            var urp = Urp();
+            Add("pipeline", () => (object)urp == null ? "not URP" : urp.name);
+            if ((object)urp != null)
+            {
+                Add("renderScale", () => urp.renderScale.ToString("0.00"));
+                Add("msaa", () => urp.msaaSampleCount);
+                Add("hdr", () => urp.supportsHDR);
+                Add("depthTexture", () => urp.supportsCameraDepthTexture);
+                Add("opaqueTexture", () => urp.supportsCameraOpaqueTexture);
+                Add("upscaling", () => urp.upscalingFilter);
+            }
+            Add("screen", () => Screen.width + "x" + Screen.height);
+            Add("display render", () => Display.main.renderingWidth + "x" + Display.main.renderingHeight);
+            Add("display system", () => Display.main.systemWidth + "x" + Display.main.systemHeight);
+            Add("activeRT", () => (object)RenderTexture.active == null ? "screen" : RenderTexture.active.name);
+            Add("fps target", () => Application.targetFrameRate);
+            Add("vsync", () => QualitySettings.vSyncCount);
+            try
+            {
+                foreach (var c in Camera.allCameras)
+                {
+                    if ((object)c == null) continue;
+                    var cam = c;
+                    Add("camera '" + cam.name + "'", () => $"enabled {cam.enabled}, depth {cam.depth}, rect {cam.rect}, pixels {cam.pixelRect}, clear {cam.clearFlags}, target {((object)cam.targetTexture == null ? "screen" : cam.targetTexture.name)}, hdr {cam.allowHDR}, msaa {cam.allowMSAA}, cull {cam.cullingMask}");
+                }
+            }
+            catch (Exception e) { parts.Add("cameras ?(" + e.Message + ")"); }
+            return string.Join("; ", parts);
         }
 #endif
 
