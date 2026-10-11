@@ -15,7 +15,8 @@ namespace WarpforgeRevival
     /// <summary>
     /// Bug reports from testers (plan: claude/tester-bug-reports.md in the project docs).
     ///
-    /// Manual: F8 on PC, or the small "Report bug" tab on the left edge of the screen (testers only).
+    /// Manual: F8 on PC, Settings > Mod > Report a bug, or in a match the small "Report bug" tab on
+    /// the left edge of the screen (testers only).
     /// The screen is captured first, then a short form asks for a title, type, how bad, and what
     /// happened; the mod adds the context (versions, device, scene, match rules), its last 400 log
     /// lines and the screenshot, and sends it to the server (POST /playfab/Revival/BugSubmit with the
@@ -394,11 +395,18 @@ namespace WarpforgeRevival
                     Form.Show(new Draft { Kind = "manual", Screenshot = shot, Log = RecentLog(), ContextJson = ContextJson(Context()), Category = "other", Severity = "annoying" });
                 }
                 if (Form.Open) { Form.Draw(); return; }
-                if (tester && menuReached && !GameSignIn.Busy) Form.DrawTab(() => captureNext = true);
+                // the tab only in matches; in the menus testers use Settings > Mod > Report a bug (or F8)
+                if (tester && scene.StartsWith("Battle", StringComparison.OrdinalIgnoreCase) && !GameSignIn.Busy) Form.DrawTab(() => captureNext = true);
             }
             catch (Exception ex) { RevivalMod.Log.Warning("[bugs] form: " + ex.Message); Form.Hide(); }
         }
         private static bool captureNext;
+
+        /// <summary>Starts a manual report (the screen is captured on the next frame). From the Mod page's button.</summary>
+        internal static void Request()
+        {
+            if (AccountPage.IsTester && !Form.Open) captureNext = true;
+        }
 
         /// <summary>The picture on screen now, at most 1280 pixels wide, as a plain BMP (never Unity's PNG/JPG encoders: they crashed the loader's .NET on a Pixel 6 Pro).</summary>
         private static byte[] Screenshot()

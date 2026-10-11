@@ -135,6 +135,7 @@ namespace WarpforgeRevival
             if (rows > 0 && !reported) RevivalMod.Log.Msg($"[support] hid {rows} leftover row(s) around the publisher's links");
 
             AddCheckButton(faq, faqT);
+            AddReportButton(faq, faqT);
 
             // The phone layout of this page keeps the button and its introduction switched off and
             // shows its own wording instead (which was just hidden with the rest of the publisher's
@@ -142,6 +143,7 @@ namespace WarpforgeRevival
             int shown = Show(faqT, root);
             if ((object)intro != null) shown += Show(intro.transform, root);
             if ((object)check != null) shown += Show(check, root);
+            ReportVisible(root);
             if (shown > 0 && !reported) RevivalMod.Log.Msg($"[support] switched on {shown} hidden part(s) of the page so the button and its text show");
 
             // The tab's button down the side of the window carries the same word as the heading.
@@ -243,6 +245,48 @@ namespace WarpforgeRevival
 
         private static float resetAt;
 
+        // ---- Report a bug (testers): a second copy, under Check for updates. Outside matches this is
+        // where testers start a report (F8 also works on PC; in a match there is a tab on the screen edge).
+        private const string ReportName = "WFR Report a bug";
+        private static Transform report;
+
+        private static void AddReportButton(UrlButton faq, Transform faqT)
+        {
+            var parent = faqT.parent;
+            if ((object)parent == null || (object)check == null) return;
+            var old = parent.Find(ReportName);
+            if ((object)old != null) { report = old; return; }
+            var go = UnityEngine.Object.Instantiate(faq.gameObject, parent, false);
+            go.name = ReportName;
+            report = go.transform;
+            report.SetSiblingIndex(check.GetSiblingIndex() + 1);
+            var url = go.GetComponent<UrlButton>();
+            if ((object)url != null) UnityEngine.Object.DestroyImmediate(url);
+            if ((object)parent.GetComponent<UnityEngine.UI.LayoutGroup>() == null)
+            {
+                var rt = report.Cast<RectTransform>();
+                var src = check.Cast<RectTransform>();
+                rt.anchoredPosition = src.anchoredPosition - new Vector2(0f, src.rect.height + 24f);
+            }
+            SetText(go.GetComponentInChildren<TMP_Text>(true), "Report a bug");
+            var button = go.GetComponent<UnityEngine.UI.Button>() ?? go.GetComponentInChildren<UnityEngine.UI.Button>(true);
+            if ((object)button == null) { RevivalMod.Log.Warning("[support] the report button has no button to click"); return; }
+            button.onClick.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(BugReport.Request)));
+            report.gameObject.SetActive(AccountPage.IsTester);
+        }
+
+        /// <summary>The report button only for testers (switched on by the phone layout fix like the others).</summary>
+        private static void ReportVisible(Transform root)
+        {
+            try
+            {
+                if ((object)report == null || report.Pointer == IntPtr.Zero) return;
+                if (AccountPage.IsTester) Show(report, root);
+                else if (report.gameObject.activeSelf) report.gameObject.SetActive(false);
+            }
+            catch { }
+        }
+
         private static SupportTab page;
         private static Transform pageRoot, pageButton, pageIntro;
         private static int settledFrames;
@@ -268,6 +312,7 @@ namespace WarpforgeRevival
                 int shown = Show(pageButton, pageRoot);
                 if ((object)pageIntro != null) shown += Show(pageIntro, pageRoot);
                 if ((object)check != null && check.Pointer != IntPtr.Zero) shown += Show(check, pageRoot);
+                ReportVisible(pageRoot);
                 if (!tickReported)
                 {
                     tickReported = true;
