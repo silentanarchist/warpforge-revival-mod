@@ -39,11 +39,11 @@ namespace WarpforgeRevival
             new Field("warlordLifeChange", "Warlord health change (added after the multiplier)", -20, 40),
             new Field("startingHand", "Starting hand (at most the hand limit)", 1, 10),
             new Field("secondPlayerExtraCards", "Extra cards for the second player", 0, 3),
+            new Field("drawCardsPerTurn", "Cards drawn per turn", 0, 5),
+            new Field("handLimit", "Hand limit", 3, 20),
             new Field("startingMana", "Starting mana (first player)", 0, 10),
             new Field("startingManaSecond", "Starting mana (second player)", 0, 10),
             new Field("manaPerTurn", "Mana gained per turn", 0, 5),
-            new Field("drawCardsPerTurn", "Cards drawn per turn", 0, 5),
-            new Field("handLimit", "Hand limit", 3, 20),
             new Field("overtimeTurn", "Overtime starts on turn", 5, 60),
             new Field("turnSeconds", "Turn timer (seconds)", 30, 300, 5),
         };
