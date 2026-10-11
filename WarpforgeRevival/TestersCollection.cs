@@ -258,6 +258,9 @@ namespace WarpforgeRevival
         /// </summary>
         private static void Highlight()
         {
+            // nothing to do while there is no Testers window and nothing of ours to put back: the look-ups
+            // below search the whole scene, and four times a second during loading that showed up as stutter
+            if (!Alive(copy) && !switchOffChanged) { TestersTab.Lit(false); return; }
             bool showing = false;
             try
             {

@@ -14,6 +14,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Custom Test warlord health:** the multiplier now applies to the warlord's own health first, and any health change is added after it.
 
 ### Fixes
+- **Phones: smoother loading screen**: the opening video stuttered while the game unpacked your collection, mostly from the game cleaning up its memory dozens of times; that clean-up now waits until the unpacking is done. The mod also no longer searches the whole screen for the Testers window four times a second while there is none (not yet confirmed).
 - **Phones: fewer crashes and freezes while loading** (seen on a Pixel 6 Pro): the mod now sets itself up with the game's memory clean-up paused for those few seconds (not yet confirmed).
 - **Phones: black screen once the menu loads** (seen on a Pixel 6 Pro; music plays, picture stays black until the phone is locked and unlocked): the mod now notices a black picture and wakes the drawing up by itself (not yet confirmed).
 - **Phones: start-up that could not load the mod properly** (seen on a Pixel 6 Pro, about one start in several): instead of a black loading screen that never ends, the game now says to close it fully and open it again.
