@@ -140,6 +140,7 @@ namespace WarpforgeRevival
         // is refreshed a few times over the next seconds (see GpuState), covering the scene unload, the
         // transition and the menu's first draws. Cheap, invisible, and so far the only thing short of a
         // surface rebuild that could stop the black menu.
+        private const bool PreventiveRefresh = false;
         private static string lastScene;
         private static int refreshesLeft;
         private static float refreshAt;
@@ -147,7 +148,11 @@ namespace WarpforgeRevival
         internal static void Tick()
         {
             float now = UnityEngine.Time.realtimeSinceStartup;
-            if (refreshesLeft > 0 && now >= refreshAt)
+            // 0.12.62: the three refreshes after the loading scene closed are off. They never prevented a
+            // black menu on the Pixel 6 Pro (4 black menus in 14 starts with them), and on a Pixel 8 Pro a
+            // one-frame black was seen at the transition right when they ran. The refresh stays as the
+            // first fix step in ScreenCheck, where it brought the picture back on the Pixel 8 Pro (00:23).
+            if (refreshesLeft > 0 && now >= refreshAt && PreventiveRefresh)
             {
                 refreshesLeft--;
                 refreshAt = now + 0.75f;
