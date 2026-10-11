@@ -235,8 +235,17 @@ namespace WarpforgeRevival
                     RevivalMod.Log.Msg($"[challenge] challenge to {target} called off");
                     return json;
                 }
-                if (kind != "Practice" || outgoing == null || !string.Equals(target, outgoingTo, StringComparison.OrdinalIgnoreCase)) return json;
-                if (Time.realtimeSinceStartup - outgoingAt > 300f) { outgoing = null; return json; }
+                if (kind != "Practice" || outgoing == null) return json;
+                // Only the challenge the menu just sent carries the rules. Any other challenge (another friend,
+                // or the same friend later from the friend list) is an ordinary one: the noted rules are dropped,
+                // so this game never plays custom rules its opponent was not sent.
+                if (!string.Equals(target, outgoingTo, StringComparison.OrdinalIgnoreCase) || Time.realtimeSinceStartup - outgoingAt > 15f)
+                {
+                    outgoing = null;
+                    if (!battleSeen) Restore();
+                    RevivalMod.Log.Msg($"[challenge] ordinary challenge to {target}; custom rules dropped");
+                    return json;
+                }
                 var root = JsonNode.Parse(json) as JsonObject;
                 if (root == null) return json;
                 root["revivalRules"] = outgoing.ToJson();
@@ -397,13 +406,15 @@ namespace WarpforgeRevival
                         __result = false;
                         return false;
                     }
+                    // the challenger's game calls this as it sends, before it knows the opponent's id
                     RuleSet rules = null;
-                    if (outgoing != null && string.Equals(opponent, outgoingTo, StringComparison.OrdinalIgnoreCase)) rules = outgoing;
+                    if (outgoing != null && (opponent.Length == 0 || string.Equals(opponent, outgoingTo, StringComparison.OrdinalIgnoreCase))) rules = outgoing;
                     else if (incoming.TryGetValue(opponent, out var got)) rules = got.rules;
-                    else if (incoming.Count == 1 && string.IsNullOrEmpty(opponent)) rules = incoming.Values.First().rules;
+                    else if (incoming.Count == 1 && opponent.Length == 0) rules = incoming.Values.First().rules;
                     RevivalMod.Log.Msg($"[challenge] challenge match starting with '{opponent}': {(rules == null ? "ordinary rules" : "custom rules")}");
-                    if (rules == null) { Restore(); return true; }
-                    Apply(rules, null);
+                    // nothing is cleared here for an ordinary one: rules already noted stay until the battle
+                    // (which only uses them in a friend match), a call-off, or 5 minutes
+                    if (rules != null && !ReferenceEquals(rules, active)) Apply(rules, null);
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[challenge] match start: " + e.Message); }
                 return true;
