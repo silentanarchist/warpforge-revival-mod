@@ -2,6 +2,10 @@
 # Adding releases/WarpforgeRevival-<version>.zip to main is all it takes: this creates the
 # tag v<version> and a Release with that zip attached, its notes being the install steps and
 # the version's section of CHANGELOG.md. Builds that already have a Release are left alone.
+#
+# Each new Release is also posted to Discord (title, link and the changelog section) when the
+# repository has a secret named DISCORD_WEBHOOK_URL holding a Discord channel webhook link.
+# To post a version again, run this workflow by hand and type the version in "announce".
 name: Release
 
 on:
@@ -11,6 +15,11 @@ on:
       - "releases/*.zip"
       - ".github/workflows/release.yml"
   workflow_dispatch:
+    inputs:
+      announce:
+        description: "Post this version to Discord again (for example 0.12.34-w). Leave empty for a normal run."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -24,8 +33,45 @@ jobs:
       - name: Create missing releases
         env:
           GH_TOKEN: ${{ github.token }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ANNOUNCE: ${{ inputs.announce }}
+          TITLE: "Warpforge Revival mod"
         run: |
           shopt -s nullglob
+
+          # a version's section of CHANGELOG.md ("## <version> - date" up to the next "## ")
+          changelog_section() {
+            awk -v v="$1" '/^## /{ if (found) exit; if (index($0, "## " v " ") == 1 || $0 == "## " v) { found = 1; next } } found' CHANGELOG.md
+          }
+
+          # Posts a version to Discord: title, link to its Release, and its changelog section.
+          # Does nothing without the DISCORD_WEBHOOK_URL secret, and never fails the run.
+          announce() {
+            local version="$1" tag="v$1" body
+            if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+              echo "no DISCORD_WEBHOOK_URL secret: $tag not posted to Discord"
+              return 0
+            fi
+            # Discord shows "### " headings unevenly inside a post, so they become bold lines
+            body="$(changelog_section "$version" | sed -E 's/^### +(.*)$/**\1**/')"
+            if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
+              body="See the release page for what changed."
+            fi
+            jq -n --arg title "$TITLE $version" \
+                  --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" \
+                  --arg body "$body" '
+              { allowed_mentions: { parse: [] },
+                embeds: [ { title: $title, url: $url,
+                            description: (if ($body | length) > 3900
+                                          then $body[0:3900] + "\n... (the rest is on the release page)"
+                                          else $body end) } ] }' > discord.json
+            if curl -fsS -o /dev/null -H "Content-Type: application/json" -d @discord.json "$DISCORD_WEBHOOK_URL"; then
+              echo "posted $tag to Discord"
+            else
+              echo "::warning::could not post $tag to Discord"
+            fi
+          }
+
           for zip in releases/WarpforgeRevival-*.zip; do
             version="$(basename "$zip" .zip)"
             version="${version#WarpforgeRevival-}"
@@ -44,8 +90,7 @@ jobs:
               echo
               echo "The zip's README.txt has the full steps. The source for this build is the code at this tag."
             } > notes.md
-            # this version's section of CHANGELOG.md ("## <version> - date" up to the next "## ")
-            section="$(awk -v v="$version" '/^## /{ if (found) exit; if (index($0, "## " v " ") == 1 || $0 == "## " v) { found = 1; next } } found' CHANGELOG.md | sed 's/^### /#### /')"
+            section="$(changelog_section "$version" | sed 's/^### /#### /')"
             if [ -n "$(printf '%s' "$section" | tr -d '[:space:]')" ]; then
               { echo; echo "## What's new"; echo; printf '%s\n' "$section"; } >> notes.md
             else
@@ -53,4 +98,15 @@ jobs:
             fi
             gh release create "$tag" "$zip" --target "$GITHUB_SHA" --title "Warpforge Revival mod ${version}" --notes-file notes.md
             echo "published $tag"
+            announce "$version"
           done
+
+          # a manual run with "announce" filled in posts that version again
+          if [ -n "$ANNOUNCE" ]; then
+            ANNOUNCE="${ANNOUNCE#v}"
+            if gh release view "v$ANNOUNCE" >/dev/null 2>&1; then
+              announce "$ANNOUNCE"
+            else
+              echo "::warning::there is no release v$ANNOUNCE to post"
+            fi
+          fi
