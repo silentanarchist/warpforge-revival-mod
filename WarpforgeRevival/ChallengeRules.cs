@@ -110,13 +110,16 @@ namespace WarpforgeRevival
                 return HandFits(r.Values) ? r : null;                                          // starting hands within the hand limit
             }
 
+            /// <summary>The rules in a few short lines, for the challenge popup.</summary>
             public string Describe(string modeName)
             {
-                var lines = new List<string> { "Mode: " + modeName };
-                foreach (var f in Fields)
-                    if (Values.TryGetValue(f.Key, out int v))
-                        lines.Add($"{f.Label}: {Show(f.Key, v)}");
-                return string.Join("\n", lines);
+                int G(string k) => Get(k) ?? 0;
+                int change = G("warlordLifeChange");
+                return $"Mode: {modeName}\n" +
+                       $"Warlord health: {Show("warlordHealthMultiplier", G("warlordHealthMultiplier"))}, then {(change >= 0 ? "+" : "")}{change}\n" +
+                       $"Starting hand: {G("startingHand")} (+{G("secondPlayerExtraCards")} for the second player) · hand limit {G("handLimit")}\n" +
+                       $"Mana: starts {G("startingMana")} / {G("startingManaSecond")} (first / second player), +{G("manaPerTurn")} per turn\n" +
+                       $"Cards drawn per turn: {G("drawCardsPerTurn")} · overtime from turn {G("overtimeTurn")} · turn timer {G("turnSeconds")} s";
             }
         }
 
@@ -225,7 +228,7 @@ namespace WarpforgeRevival
             try
             {
                 if (kind != "Practice" || outgoing == null || !string.Equals(target, outgoingTo, StringComparison.OrdinalIgnoreCase)) return json;
-                if (Time.realtimeSinceStartup - outgoingAt > 120f) { outgoing = null; return json; }
+                if (Time.realtimeSinceStartup - outgoingAt > 300f) { outgoing = null; return json; }
                 var root = JsonNode.Parse(json) as JsonObject;
                 if (root == null) return json;
                 root["revivalRules"] = outgoing.ToJson();
@@ -259,8 +262,11 @@ namespace WarpforgeRevival
                 RevivalMod.Log.Msg($"[challenge] {from} challenges with custom rules: {rr.GetRawText()}");
                 var wm = WindowsManager.Instance;
                 if ((object)wm != null)
-                    wm.ShowPopUp($"{who} challenges you with custom rules:\n\n{rules.Describe(mode)}\n\nAccept the challenge in your friend list to play by these rules.",
+                {
+                    wm.ShowPopUp($"{FriendName(from, who)} challenges you with custom rules\n\n{rules.Describe(mode)}\n\nAccept it in your friend list to play by these rules.",
                                  false, true, "OK", (Il2CppSystem.Action)null);
+                    biggerPopup = Time.realtimeSinceStartup;
+                }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] " + e.Message); }
         }
@@ -280,6 +286,47 @@ namespace WarpforgeRevival
                                                    "Both players should update the mod and try again.", false, true, "OK", (Il2CppSystem.Action)null);
             }
             catch { }
+        }
+
+        private static float biggerPopup = -1f;
+
+        private static string FriendName(string id, string fallback)
+        {
+            try
+            {
+                var fl = PlayerDataManager.singletonManager?.friendsData?.friendList;
+                if (fl != null)
+                    for (int i = 0; i < fl.Count; i++)
+                        if ((object)fl[i] != null && fl[i].id == id && !string.IsNullOrEmpty(fl[i].name)) return fl[i].name;
+            }
+            catch { }
+            return fallback;
+        }
+
+        /// <summary>
+        /// The game's popup sizes its text to fit, so the rules came out small: once it is on screen, its
+        /// text is allowed to be larger (and the box taller where the popup lets it grow).
+        /// </summary>
+        private static void EnlargePopup()
+        {
+            if (biggerPopup < 0) return;
+            if (Time.realtimeSinceStartup - biggerPopup > 3f) { biggerPopup = -1f; return; }
+            try
+            {
+                var popup = WindowsManager.Instance?.PopupWindow;
+                if ((object)popup == null || !popup.isActiveAndEnabled) return;
+                foreach (var t in popup.GetComponentsInChildren<Il2CppTMPro.TMP_Text>(true))
+                {
+                    if (t.text == null || !t.text.Contains("custom rules")) continue;
+                    t.enableAutoSizing = true;
+                    t.fontSizeMax = Math.Max(t.fontSizeMax, 40f);
+                    t.fontSizeMin = Math.Max(t.fontSizeMin, 24f);
+                    t.fontSize = 36f;
+                    biggerPopup = -1f;
+                    RevivalMod.Log.Msg("[challenge] rules popup text enlarged");
+                }
+            }
+            catch (Exception e) { biggerPopup = -1f; RevivalMod.Log.Warning("[challenge] popup: " + e.Message); }
         }
 
         // ---------------------------------------------------------------- the match
@@ -328,8 +375,8 @@ namespace WarpforgeRevival
                     }
                     playEvent = ev;
                     Apply(rules, ev);
-                    outgoing = null;
-                    incoming.Remove(opponent);
+                    // kept until the battle starts: the game sends its challenge message again when the
+                    // player re-sends, and every copy must carry the rules
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[challenge] match start: " + e.Message); }
                 return true;
@@ -339,18 +386,38 @@ namespace WarpforgeRevival
         private static void Apply(RuleSet rules, IPlayEvent ev)
         {
             Restore();
-            var gv = Variables(ev);
             active = rules;
             activeAt = Time.realtimeSinceStartup;
             battleSeen = false;
-            if ((object)gv != null)
+            RevivalMod.Log.Msg($"[challenge] next match with custom rules in {rules.EventId}: {rules.ToJson()["v"]?.ToJsonString()}");
+        }
+
+        // The match's own copy of the rules (MatchData.GameplayData: a friend match runs under the
+        // practice mode's rules, not the chosen mode's) gets the challenge's values as the battle starts,
+        // before the warlords and hands are set up.
+        [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.StartBattleManager))]
+        private static class BattleStart
+        {
+            private static void Prefix(BattleManager __instance)
             {
-                activeVars = gv;
-                saved.Clear();
-                Set(gv, "warlordLifeChange", rules); Set(gv, "startingMana", rules); Set(gv, "startingManaSecond", rules);
-                Set(gv, "manaPerTurn", rules); Set(gv, "drawCardsPerTurn", rules); Set(gv, "handLimit", rules); Set(gv, "overtimeTurn", rules);
+                if (active == null) return;
+                try
+                {
+                    var gv = __instance.matchData?.GameplayData;
+                    if ((object)gv == null) { RevivalMod.Log.Warning("[challenge] the match has no rules object; custom rules not applied"); return; }
+                    if ((object)activeVars != null) foreach (var kv in saved) Write(activeVars, kv.Key, kv.Value);
+                    activeVars = gv;
+                    saved.Clear();
+                    Set(gv, "warlordLifeChange", active); Set(gv, "startingMana", active); Set(gv, "startingManaSecond", active);
+                    Set(gv, "manaPerTurn", active); Set(gv, "drawCardsPerTurn", active); Set(gv, "handLimit", active); Set(gv, "overtimeTurn", active);
+                    battleSeen = true;
+                    outgoing = null;
+                    incoming.Clear();
+                    RevivalMod.Log.Msg($"[challenge] custom rules applied to this match: mana {gv.startingMana}/{gv.startingManaSecond} +{gv.manaPerTurn}, " +
+                                       $"draw {gv.drawCardsPerTurn}, hand limit {gv.handLimit}, overtime {gv.overtimeTurn}, health change {gv.warlordLifeChange}");
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[challenge] applying rules: " + e.Message); }
             }
-            RevivalMod.Log.Msg($"[challenge] match with custom rules in {rules.EventId}: {rules.ToJson()["v"]?.ToJsonString()}");
         }
 
         private static void Set(GameplayVariablesData gv, string key, RuleSet rules)
@@ -406,6 +473,7 @@ namespace WarpforgeRevival
         /// <summary>Called every frame: puts the mode's rules back when the custom match has ended.</summary>
         internal static void Tick()
         {
+            EnlargePopup();
             if (active == null) return;
             float now = Time.realtimeSinceStartup;
             if (now < nextCheck) return;
@@ -414,7 +482,7 @@ namespace WarpforgeRevival
             {
                 bool inBattle = (object)UnityEngine.Object.FindObjectOfType<BattleManager>() != null;
                 if (inBattle) battleSeen = true;
-                else if (battleSeen || now - activeAt > 180f) Restore();
+                else if (battleSeen || now - activeAt > 300f) Restore();
             }
             catch { }
         }
