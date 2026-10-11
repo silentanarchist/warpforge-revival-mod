@@ -65,10 +65,19 @@ jobs:
                             description: (if ($body | length) > 3900
                                           then $body[0:3900] + "\n... (the rest is on the release page)"
                                           else $body end) } ] }' > discord.json
-            if curl -fsS -o /dev/null -H "Content-Type: application/json" -d @discord.json "$DISCORD_WEBHOOK_URL"; then
+            # the secret is the plain Discord link; a copy that still ends in /github (the form a
+            # GitHub webhook uses) is accepted too
+            local url code
+            url="$(printf '%s' "$DISCORD_WEBHOOK_URL" | tr -d '[:space:]')"
+            url="${url%/}"
+            url="${url%/github}"
+            code="$(curl -sS -o discord-reply.txt -w '%{http_code}' -H "Content-Type: application/json" -d @discord.json "$url" || true)"
+            if [ "${code:0:1}" = "2" ]; then
               echo "posted $tag to Discord"
             else
-              echo "::warning::could not post $tag to Discord"
+              echo "::warning::could not post $tag to Discord (answer $code)"
+              head -c 600 discord-reply.txt 2>/dev/null || true
+              echo
             fi
           }
 
