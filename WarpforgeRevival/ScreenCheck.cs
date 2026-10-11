@@ -10,7 +10,7 @@ namespace WarpforgeRevival
     /// chased (Pixel 6 Pro, 2026-10-10: the game loads and plays its music, but the screen stays black).
     /// At set moments of a start-up (and a few seconds after each scene change) the picture the game
     /// has just drawn is read back, its brightness noted in the log and a small copy saved as
-    /// UserData/WarpforgeRevival/screens/screen-NN.png (collected by "0 - get phone logs.bat").
+    /// UserData/WarpforgeRevival/screens/screen-NN.bmp (collected by "0 - get phone logs.bat").
     /// A black copy means the game itself draws black; a normal one while the phone shows black means
     /// the picture is lost between the game and the screen. Any full-screen dark layer of the menus
     /// (for example a fade that never fades back) is named in the log too.
@@ -119,14 +119,17 @@ namespace WarpforgeRevival
 #if ANDROID_PORT
         private static string Picture(int n)
         {
-            Texture2D full = null, small = null;
+            Texture2D full = null;
             try
             {
                 int w = Screen.width, h = Screen.height;
                 if (w <= 0 || h <= 0) return "no drawing area";
                 full = new Texture2D(w, h, TextureFormat.RGB24, false);
                 full.ReadPixels(new Rect(0, 0, w, h), 0, 0, false);
-                small = new Texture2D(SmallW, SmallH, TextureFormat.RGB24, false);
+                // the small copy is written as a plain BMP by hand: Unity's own PNG encoder aborts the
+                // loader's .NET on this phone (0.12.44 crashed at the first screenshot)
+                int rowBytes = (SmallW * 3 + 3) & ~3;
+                var bmp = new byte[54 + rowBytes * SmallH];
                 double sum = 0;
                 int lit = 0;
                 float max = 0f;
@@ -134,24 +137,26 @@ namespace WarpforgeRevival
                     for (int x = 0; x < SmallW; x++)
                     {
                         var c = full.GetPixel(x * w / SmallW, y * h / SmallH);
-                        small.SetPixel(x, y, c);
+                        int o = 54 + y * rowBytes + x * 3;     // BMP rows run bottom-up, like the texture's
+                        bmp[o] = (byte)(Mathf.Clamp01(c.b) * 255f);
+                        bmp[o + 1] = (byte)(Mathf.Clamp01(c.g) * 255f);
+                        bmp[o + 2] = (byte)(Mathf.Clamp01(c.r) * 255f);
                         float l = 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
                         sum += l;
                         if (l > 0.08f) lit++;
                         if (l > max) max = l;
                     }
-                small.Apply(false);
                 string saved = "";
                 try
                 {
-                    dir ??= Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival", "screens");
+                    void Put(int at, int v) { bmp[at] = (byte)v; bmp[at + 1] = (byte)(v >> 8); bmp[at + 2] = (byte)(v >> 16); bmp[at + 3] = (byte)(v >> 24); }
+                    bmp[0] = (byte)'B'; bmp[1] = (byte)'M';
+                    Put(2, bmp.Length); Put(10, 54); Put(14, 40); Put(18, SmallW); Put(22, SmallH);
+                    bmp[26] = 1; bmp[28] = 24; Put(34, rowBytes * SmallH);
+                    dir ??= System.IO.Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival", "screens");
                     Directory.CreateDirectory(dir);
-                    byte[] png = ImageConversion.EncodeToPNG(small);
-                    if (png != null && png.Length > 0)
-                    {
-                        File.WriteAllBytes(Path.Combine(dir, $"screen-{n:00}.png"), png);
-                        saved = $", saved screen-{n:00}.png";
-                    }
+                    File.WriteAllBytes(System.IO.Path.Combine(dir, $"screen-{n:00}.bmp"), bmp);
+                    saved = $", saved screen-{n:00}.bmp";
                 }
                 catch (Exception e) { saved = ", not saved (" + e.Message + ")"; }
                 double avg = sum / (SmallW * SmallH);
@@ -166,7 +171,6 @@ namespace WarpforgeRevival
             finally
             {
                 try { if ((object)full != null) UnityEngine.Object.Destroy(full); } catch { }
-                try { if ((object)small != null) UnityEngine.Object.Destroy(small); } catch { }
             }
         }
 
