@@ -86,19 +86,17 @@ namespace WarpforgeRevival
         // say why it went. So when two checks in a row find the picture black while the game has focus, the
         // drawing setup is written to the log, and the likely causes are tried one at a time, each checked after
         // 1.5 s and undone if the picture stays black:
-        //   1. render scale nudged (99%): the render pipeline makes new in-between pictures at the same screen size;
-        //   2. anti-aliasing (MSAA) off;
-        //   3. HDR colour off;
-        //   4. the drawing area made 2 lines smaller and put back (what locking the phone does).
+        //   1. Unity's drawing state cache thrown away (GpuState): invisible, one frame;
+        //   2. the drawing area made 2 lines smaller and put back (what locking the phone does);
+        //   3. HDR colour off.
+        // Render scale and anti-aliasing changes were steps 1-2 until 0.12.57 and never helped (9 tries).
         // The first step that brings the picture back is logged as FOUND and kept. Once per start-up.
         private static int blackInRow, step = -1;
         private static bool stepsDone, menuStateLogged;
         private static float restoreAt = -1f, recheckAt = -1f;
         private static int fixW, fixH;
-        private static float savedScale = -1f;
-        private static int savedMsaa = -1;
         private static int savedHdr = -1;
-        private static readonly string[] StepNames = { "render scale nudged to 99%", "anti-aliasing (MSAA) off", "HDR colour off", "drawing area 2 lines smaller for a moment" };
+        private static readonly string[] StepNames = { "drawing state cache cleared", "drawing area 2 lines smaller for a moment", "HDR colour off" };
 
         /// <summary>Called every frame from the mod's update loop.</summary>
         internal static void Tick()
@@ -180,26 +178,19 @@ namespace WarpforgeRevival
                     switch (step)
                     {
                         case 0:
-                            if ((object)urp == null) continue;
-                            savedScale = urp.renderScale;
-                            urp.renderScale = savedScale > 0.995f ? 0.99f : savedScale + 0.01f;
+                            if (!GpuState.Refresh("the picture is black")) continue;
                             break;
                         case 1:
-                            if ((object)urp == null || urp.msaaSampleCount <= 1) { RevivalMod.Log.Msg("[screen] step 2 skipped: anti-aliasing is already off"); continue; }
-                            savedMsaa = urp.msaaSampleCount;
-                            urp.msaaSampleCount = 1;
-                            break;
-                        case 2:
-                            if ((object)urp == null || !urp.supportsHDR) { RevivalMod.Log.Msg("[screen] step 3 skipped: HDR is already off"); continue; }
-                            savedHdr = 1;
-                            urp.supportsHDR = false;
-                            break;
-                        case 3:
                             fixW = Screen.width; fixH = Screen.height;
                             Screen.SetResolution(fixW, fixH - 2, true);      // the bool form: Screen.fullScreenMode is not available on phones
                             restoreAt = Time.realtimeSinceStartup + 0.5f;
                             RevivalMod.Log.Msg($"[screen] trying step {step + 1}: {StepNames[step]} ({fixW}x{fixH} -> {fixW}x{fixH - 2})");
                             return;
+                        case 2:
+                            if ((object)urp == null || !urp.supportsHDR) { RevivalMod.Log.Msg("[screen] step 3 skipped: HDR is already off"); continue; }
+                            savedHdr = 1;
+                            urp.supportsHDR = false;
+                            break;
                     }
                     RevivalMod.Log.Msg($"[screen] trying step {step + 1}: {StepNames[step]}");
                     recheckAt = Time.realtimeSinceStartup + 1.5f;
@@ -218,8 +209,6 @@ namespace WarpforgeRevival
                 var urp = Urp();
                 switch (which)
                 {
-                    case 0: if ((object)urp != null && savedScale > 0) urp.renderScale = savedScale; break;
-                    case 1: if ((object)urp != null && savedMsaa > 0) urp.msaaSampleCount = savedMsaa; break;
                     case 2: if ((object)urp != null && savedHdr == 1) urp.supportsHDR = true; break;
                 }
             }

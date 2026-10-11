@@ -74,14 +74,33 @@ namespace WarpforgeRevival
             return webmExists ? webmPath : null;
         }
 
+        // After the loading scene is gone (its video player destroyed with it), Unity's drawing state cache
+        // is refreshed a few times over the next seconds (see GpuState), covering the scene unload, the
+        // transition and the menu's first draws. Cheap, invisible, and so far the only thing short of a
+        // surface rebuild that could stop the black menu.
+        private static string lastScene;
+        private static int refreshesLeft;
+        private static float refreshAt;
+
         internal static void Tick()
         {
             float now = UnityEngine.Time.realtimeSinceStartup;
+            if (refreshesLeft > 0 && now >= refreshAt)
+            {
+                refreshesLeft--;
+                refreshAt = now + 0.75f;
+                if (!GpuState.Refresh($"{3 - refreshesLeft} of 3 after the loading scene closed")) refreshesLeft = 0;
+            }
             if (now < nextLook) return;
             nextLook = now + 0.25f;
             try
             {
                 string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+                if (scene != lastScene)
+                {
+                    if (lastScene == "Intro") { refreshesLeft = 3; refreshAt = now + 0.25f; }
+                    lastScene = scene;
+                }
                 if (scene != "Intro") { swapped = false; return; }
                 if (swapped) return;
                 string webm = WebmPath();
