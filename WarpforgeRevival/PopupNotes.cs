@@ -18,6 +18,7 @@ namespace WarpforgeRevival
             {
                 try
                 {
+                    text = ChallengeRules.Decorate(text);        // a custom-rules challenge: its rules on the game's popup
                     string shown = text;
                     if (localizeTexts && !string.IsNullOrEmpty(text))
                     {

@@ -269,13 +269,11 @@ namespace WarpforgeRevival
                 var ev = FindEvent(rules.EventId);
                 string mode = (object)ev == null ? rules.EventId : TestersPage.Label(ev.TryCast<LiveOpsEvent>(), EventLabelReferenceType.Title, rules.EventId);
                 RevivalMod.Log.Msg($"[challenge] {from} challenges with custom rules: {rr.GetRawText()}");
-                var wm = WindowsManager.Instance;
-                if ((object)wm != null)
-                {
-                    wm.ShowPopUp($"{FriendName(from, who)} challenges you with custom rules\n\n{rules.Describe(mode)}\n\nAccept it in your friend list to play by these rules.",
-                                 false, true, "OK", (Il2CppSystem.Action)null);
-                    biggerPopup = Time.realtimeSinceStartup;
-                }
+                // shown inside the game's own "... has challenged you" popup, which comes right after (see Decorate);
+                // a popup of our own here would take that one's place and its Accept button with it
+                lastRules = rules;
+                lastRulesMode = mode;
+                lastRulesAt = Time.realtimeSinceStartup;
             }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] " + e.Message); }
         }
@@ -298,6 +296,32 @@ namespace WarpforgeRevival
         }
 
         private static float biggerPopup = -1f;
+        private static RuleSet lastRules;
+        private static string lastRulesMode;
+        private static float lastRulesAt = -100f;
+
+        /// <summary>
+        /// Called for every popup the game is about to show: its "... has challenged you in Classic mode!
+        /// Play friendly match?" popup gets the rules of the challenge that just arrived, between the two
+        /// lines, so the player sees them on the popup they accept with.
+        /// </summary>
+        internal static string Decorate(string text)
+        {
+            try
+            {
+                if (lastRules == null || string.IsNullOrEmpty(text) || Time.realtimeSinceStartup - lastRulesAt > 20f) return text;
+                if (text.IndexOf("challenged you", StringComparison.OrdinalIgnoreCase) < 0) return text;
+                string head = text, tail = "";
+                int q = text.LastIndexOf('\n');
+                if (q > 0) { head = text.Substring(0, q).TrimEnd(); tail = text.Substring(q + 1).Trim(); }
+                string rules = string.Join("\n", lastRules.Describe(lastRulesMode).Split('\n').Skip(1));    // the mode is already in the game's line
+                lastRules = null;
+                biggerPopup = Time.realtimeSinceStartup;
+                RevivalMod.Log.Msg("[challenge] rules added to the game's challenge popup");
+                return $"{head}\nCustom rules:\n{rules}" + (tail.Length > 0 ? "\n\n" + tail : "");
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[challenge] popup: " + e.Message); return text; }
+        }
 
         private static string FriendName(string id, string fallback)
         {
@@ -326,11 +350,11 @@ namespace WarpforgeRevival
                 if ((object)popup == null || !popup.isActiveAndEnabled) return;
                 foreach (var t in popup.GetComponentsInChildren<Il2CppTMPro.TMP_Text>(true))
                 {
-                    if (t.text == null || !t.text.Contains("custom rules")) continue;
+                    if (t.text == null || t.text.IndexOf("custom rules", StringComparison.OrdinalIgnoreCase) < 0) continue;
                     t.enableAutoSizing = true;
-                    t.fontSizeMax = Math.Max(t.fontSizeMax, 40f);
-                    t.fontSizeMin = Math.Max(t.fontSizeMin, 24f);
-                    t.fontSize = 36f;
+                    t.fontSizeMax = Math.Max(t.fontSizeMax, 38f);
+                    t.fontSizeMin = Math.Max(t.fontSizeMin, 22f);
+                    t.fontSize = 34f;
                     biggerPopup = -1f;
                     RevivalMod.Log.Msg("[challenge] rules popup text enlarged");
                 }
