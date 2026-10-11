@@ -240,7 +240,10 @@ namespace WarpforgeRevival
             {
                 try { parts.Add(name + " " + (read() ?? "null")); } catch (Exception e) { parts.Add(name + " ?(" + e.GetType().Name + ")"); }
             }
-            Add("quality", () => QualitySettings.GetQualityLevel() + "/" + QualitySettings.names[QualitySettings.GetQualityLevel()]);
+            // Only engine calls that are real game methods are read here. QualitySettings (level, names, vsync) are
+            // stripped from the game and recreated by the loader as engine calls; touching that class made the
+            // loader's .NET abort ("mono_class_from_mono_type_internal: implement me", 0.12.52 on a Pixel 6 Pro).
+            // The quality level is in the game's own log ("Graphics quality loaded ...").
             var urp = Urp();
             Add("pipeline", () => (object)urp == null ? "not URP" : urp.name);
             if ((object)urp != null)
@@ -257,7 +260,6 @@ namespace WarpforgeRevival
             Add("display system", () => Display.main.systemWidth + "x" + Display.main.systemHeight);
             Add("activeRT", () => (object)RenderTexture.active == null ? "screen" : RenderTexture.active.name);
             Add("fps target", () => Application.targetFrameRate);
-            Add("vsync", () => QualitySettings.vSyncCount);
             try
             {
                 foreach (var c in Camera.allCameras)

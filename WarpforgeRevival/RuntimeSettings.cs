@@ -8,6 +8,9 @@ namespace WarpforgeRevival
     /// UserData/runtime-gc.txt before the runtime starts (so a change here takes effect at the next
     /// start, with no new patch of the game).
     ///
+    /// Now: only the 64 MB first area. Tried in 0.12.51-0.12.52 and dropped: major=marksweep with
+    /// clear-at-gc (the crashes went on: 2 of about 3 starts, at new places).
+    ///
     /// Why: on a Pixel 6 Pro the runtime crashes now and then while handing out memory during start-up
     /// (2026-10-10): it zeroes a fresh block whose end lies past its own memory, a SIGSEGV inside memset
     /// called from mono_gc_alloc_obj, while the mod applies its hooks. Pausing the game's collector did
@@ -21,8 +24,7 @@ namespace WarpforgeRevival
     {
         private const string Wanted =
             "# Written by Warpforge Revival; read by the patched loader before .NET starts.\n" +
-            "MONO_GC_PARAMS=nursery-size=64m,major=marksweep\n" +
-            "MONO_GC_DEBUG=clear-at-gc\n";
+            "MONO_GC_PARAMS=nursery-size=64m\n";
 
         internal static void Apply()
         {
