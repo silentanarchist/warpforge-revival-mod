@@ -387,6 +387,23 @@ namespace WarpforgeRevival
         internal static int? StartingHand => active?.Get("startingHand");
         internal static int? SecondExtra => active?.Get("secondPlayerExtraCards");
         internal static int? TurnSeconds => active?.Get("turnSeconds");
+        /// <summary>The chosen mode of a custom-rules challenge being played (not set for a replay).</summary>
+        internal static string ActiveEvent => active != null && !activeIsReplay && battleSeen ? active.EventId : null;
+
+        // a replay's saved rules (Replays): the next battle, if it is that replay, is played under them
+        private static bool activeIsReplay;
+
+        internal static void ForReplay(RuleSet rules)
+        {
+            Apply(rules, null);
+            activeIsReplay = true;
+        }
+
+        /// <summary>A replay without saved rules: nothing noted for a challenge may reach it.</summary>
+        internal static void NoReplayRules()
+        {
+            if (active != null && activeIsReplay) Restore();
+        }
 
         // Both sides start a challenge match through here: the challenger once the friend accepts, the
         // friend when accepting. With custom rules for this opponent, the match is played in the rules'
@@ -440,32 +457,47 @@ namespace WarpforgeRevival
         {
             private static void Prefix(BattleManager __instance)
             {
-                try { if (active == null) FromIncoming(__instance); } catch (Exception e) { RevivalMod.Log.Warning("[challenge] " + e.Message); }
+                bool replay = Replays.IsReplay(__instance);
+                if (active != null && activeIsReplay != replay)
+                {
+                    // a replay's rules only for that replay; a challenge's rules never for a replay
+                    RevivalMod.Log.Msg(replay ? "[challenge] a replay is starting; the challenge's rules are not used for it"
+                                              : "[replay] this match is not the replay; its saved rules are not used");
+                    Restore();
+                }
+                try { if (active == null && !replay) FromIncoming(__instance); } catch (Exception e) { RevivalMod.Log.Warning("[challenge] " + e.Message); }
                 if (active == null) return;
                 try
                 {
                     var md = __instance.matchData;
+                    if (replay && (object)md != null) { SetAll(md.GameplayData, "[replay] saved rules applied to this replay"); return; }
                     if ((object)md == null || md.playMode != PlayModes.Duel)
                     {
                         RevivalMod.Log.Msg($"[challenge] this match is not a friend match ({((object)md == null ? "no match data" : md.playMode.ToString())}); custom rules not used");
                         Restore();
                         return;
                     }
-                    var gv = md.GameplayData;
-                    if ((object)gv == null) { RevivalMod.Log.Warning("[challenge] the match has no rules object; custom rules not applied"); return; }
-                    if ((object)activeVars != null) foreach (var kv in saved) Write(activeVars, kv.Key, kv.Value);
-                    activeVars = gv;
-                    saved.Clear();
-                    Set(gv, "warlordLifeChange", active); Set(gv, "startingMana", active); Set(gv, "startingManaSecond", active);
-                    Set(gv, "manaPerTurn", active); Set(gv, "drawCardsPerTurn", active); Set(gv, "handLimit", active); Set(gv, "overtimeTurn", active);
-                    battleSeen = true;
+                    if (!SetAll(md.GameplayData, "[challenge] custom rules applied to this match")) return;
                     outgoing = null;
                     incoming.Clear();
-                    RevivalMod.Log.Msg($"[challenge] custom rules applied to this match: mana {gv.startingMana}/{gv.startingManaSecond} +{gv.manaPerTurn}, " +
-                                       $"draw {gv.drawCardsPerTurn}, hand limit {gv.handLimit}, overtime {gv.overtimeTurn}, health change {gv.warlordLifeChange}");
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[challenge] applying rules: " + e.Message); }
             }
+        }
+
+        /// <summary>The active rules onto the match's own rules object (the mode's values are noted to put back).</summary>
+        private static bool SetAll(GameplayVariablesData gv, string done)
+        {
+            if ((object)gv == null) { RevivalMod.Log.Warning("[challenge] the match has no rules object; the rules were not applied"); return false; }
+            if ((object)activeVars != null) foreach (var kv in saved) Write(activeVars, kv.Key, kv.Value);
+            activeVars = gv;
+            saved.Clear();
+            Set(gv, "warlordLifeChange", active); Set(gv, "startingMana", active); Set(gv, "startingManaSecond", active);
+            Set(gv, "manaPerTurn", active); Set(gv, "drawCardsPerTurn", active); Set(gv, "handLimit", active); Set(gv, "overtimeTurn", active);
+            battleSeen = true;
+            RevivalMod.Log.Msg($"{done}: mana {gv.startingMana}/{gv.startingManaSecond} +{gv.manaPerTurn}, " +
+                               $"draw {gv.drawCardsPerTurn}, hand limit {gv.handLimit}, overtime {gv.overtimeTurn}, health change {gv.warlordLifeChange}");
+            return true;
         }
 
         /// <summary>
@@ -535,6 +567,7 @@ namespace WarpforgeRevival
             }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] restore: " + e.Message); }
             active = null;
+            activeIsReplay = false;
             activeVars = null;
             saved.Clear();
         }

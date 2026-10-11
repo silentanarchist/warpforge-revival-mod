@@ -459,7 +459,7 @@ namespace WarpforgeRevival
         // so set them for a Long Game match and put the game's values back for any other.
         private static int gameHand = -1, gameSecondExtra = -1;
 
-        private static bool InLongMatch()
+        internal static bool InLongMatch()
         {
             try
             {
@@ -476,7 +476,7 @@ namespace WarpforgeRevival
         }
 
         /// <summary>Event id of the game mode being played (null when not known).</summary>
-        private static string PlayingEventId()
+        internal static string PlayingEventId()
         {
             try
             {

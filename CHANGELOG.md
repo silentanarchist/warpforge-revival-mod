@@ -8,6 +8,8 @@ Changes made on the server take effect for everyone at once; the ones listed her
 ### New
 - **Social > Challenge:** a new tab on Social's ribbon, right below Friends, to challenge a friend with rules of your choosing. Pick a friend, pick a mode as the starting point (Classic or Skirmish), then change the match rules: warlord health multiplier (x1.0 to x3.0) and health change, starting hand (never more than the hand limit), extra cards for the second player, cards drawn per turn, hand limit, starting mana, mana per turn, overtime turn and turn timer. The menu lists the mode's deck rules for every rarity. Each player uses their deck for that mode. Your friend sees the rules on the challenge popup they accept with, and both games play by them.
 
+- **Replays keep their rules:** each new replay saves the rules its match was played under (the mode's values, starting hands, warlord health, turn timer, and a challenge's custom rules) and plays back under them, so changing a mode's rules no longer breaks replays, and custom-challenge matches replay as they were played (not yet confirmed). A replay recorded with a different card set or mod rules version is refused, and the "Error loading match replay" popup says why. Replays saved before this play as before.
+
 ### Changed
 - **Custom Test warlord health:** the multiplier now applies to the warlord's own health first, and any health change is added after it.
 

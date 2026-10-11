@@ -63,7 +63,7 @@ namespace WarpforgeRevival
                     url = RewriteUrl(container.FullUrl);
                     payload = container.Payload != null ? (byte[])container.Payload : Array.Empty<byte>();
                     if ((container.ApiEndpoint ?? "").Contains("/Client/ExecuteCloudScript"))
-                        payload = WithoutDraftWarlords(payload);
+                        payload = Replays.WithRules(WithoutDraftWarlords(payload));
                     if (container.RequestHeaders != null)
                         foreach (var kv in container.RequestHeaders)
                             headers.Add(new KeyValuePair<string, string>(kv.Key, kv.Value));

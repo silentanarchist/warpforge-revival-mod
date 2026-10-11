@@ -33,6 +33,14 @@ namespace WarpforgeRevival
                         localizeTexts = false;
                         shown = text;
                     }
+                    // the game's "Error loading match replay" for a replay the mod refused: say why
+                    string replayWhy = Replays.Refusal;
+                    if (replayWhy != null && (shown ?? text ?? "").IndexOf("loading match replay", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        text = replayWhy;
+                        localizeTexts = false;
+                        shown = text;
+                    }
                     int buttons = (object)gameWindowButton != null ? gameWindowButton.Length : 0;
                     RevivalMod.Log.Msg($"[popup] text {(text == null ? "null" : "'" + text + "'")}, {(localizeTexts ? "a text key" : "literal text")}, {buttons} button(s)" +
                                        (localizeTexts ? $"; wording found: {(string.IsNullOrEmpty(shown) ? "NONE (popup will be blank)" : "'" + shown + "'")}" : ""));

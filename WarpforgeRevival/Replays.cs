@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using HarmonyLib;
 using Il2Cpp;
 using Il2CppEverguild.Utils;
@@ -16,6 +19,15 @@ namespace WarpforgeRevival
     /// mod reads the server's answer here and hands the game the recording. When the answer has
     /// no recording the game's own handling runs (and shows "Error loading match replay").
     /// The replay's mulligan screen is moved on by itself (see Tick).
+    ///
+    /// Rules saved with each replay (0.12.43): as a match is dealt, the rules it is played under are
+    /// noted (the mode, its gameplay values as set on this match, both starting hands, the warlord health
+    /// multiplier, the turn timer) together with the mod's rules number and the card pack version, and
+    /// sent with the recording ("revivalRules" next to the game's own fields). Watching it, the server
+    /// hands them back with the recording and the replay is played under them (through ChallengeRules,
+    /// which already sets one match's rules), so later changes to a mode do not break old replays,
+    /// and custom-challenge matches play back as they were. A replay from another mod rules number or
+    /// card pack is refused: the rules cannot cover what the cards themselves do.
     /// </summary>
     internal static class Replays
     {
@@ -49,6 +61,140 @@ namespace WarpforgeRevival
             catch (Exception e) { RevivalMod.Log.Warning("[replay] could not continue past the mulligan: " + e.Message); }
         }
 
+        // ---------------------------------------------------------------- rules saved with each replay
+
+        /// <summary>Accepted ranges of the saved rules (wide enough for every mode's own values; the server checks the same).</summary>
+        private static readonly Dictionary<string, (int min, int max)> Ranges = new Dictionary<string, (int, int)>
+        {
+            ["warlordHealthMultiplier"] = (10, 30), ["warlordLifeChange"] = (-100, 100), ["startingHand"] = (0, 20),
+            ["secondPlayerExtraCards"] = (0, 10), ["drawCardsPerTurn"] = (0, 10), ["handLimit"] = (1, 30),
+            ["startingMana"] = (0, 20), ["startingManaSecond"] = (0, 20), ["manaPerTurn"] = (0, 10),
+            ["overtimeTurn"] = (0, 200), ["turnSeconds"] = (0, 600),
+        };
+        private static readonly Regex EventPattern = new Regex(@"^[A-Za-z0-9_.-]{1,64}$");
+        private static readonly Regex CardsPattern = new Regex(@"^[A-Za-z0-9._-]{1,80}$");
+
+        private static string noted;          // this match's rules, waiting for the recording to be sent
+        private static float notedAt = -1f;
+
+        /// <summary>As the hands are dealt (everything is set by then): the rules of this match, unless it is a replay.</summary>
+        [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.SetupMulliganPhase))]
+        private static class Dealt
+        {
+            private static void Postfix(BattleManager __instance)
+            {
+                try
+                {
+                    if (IsReplay(__instance)) return;
+                    noted = null;
+                    var md = __instance.matchData;
+                    var gv = (object)md == null ? null : md.GameplayData;
+                    var sv = __instance.scenarioVariables;
+                    if ((object)gv == null || (object)sv == null) { RevivalMod.Log.Msg("[replay] this match's rules could not be read; its replay will use the current rules"); return; }
+                    double factor = ChallengeRules.HealthMultiplier is double m ? m : LongGame.InLongMatch() && ServerSettings.LongGameHealth > 0 ? ServerSettings.LongGameHealth : 1.0;
+                    int tenths = (int)Math.Round(factor * 10);
+                    var v = new Dictionary<string, int>
+                    {
+                        ["warlordHealthMultiplier"] = tenths, ["warlordLifeChange"] = gv.warlordLifeChange,
+                        ["startingHand"] = sv.startingHand, ["secondPlayerExtraCards"] = sv.secondExtraCards,
+                        ["drawCardsPerTurn"] = gv.drawCardsPerTurn, ["handLimit"] = gv.handLimit,
+                        ["startingMana"] = gv.startingMana, ["startingManaSecond"] = gv.startingManaSecond, ["manaPerTurn"] = gv.manaPerTurn,
+                        ["overtimeTurn"] = gv.overtimeTurn,
+                        ["turnSeconds"] = ChallengeRules.TurnSeconds ?? ServerSettings.TurnSeconds ?? RevivalMod.Config.TurnSeconds,
+                    };
+                    string ev = ChallengeRules.ActiveEvent ?? EventOf(md) ?? LongGame.PlayingEventId() ?? "";
+                    string cards = RevivalMod.Cards?.PackVersion ?? "";
+                    string bad = Math.Abs(factor * 10 - tenths) > 0.001 ? "warlordHealthMultiplier" : null;
+                    foreach (var kv in v) if (bad == null && (kv.Value < Ranges[kv.Key].min || kv.Value > Ranges[kv.Key].max)) bad = kv.Key;
+                    if (bad == null && !EventPattern.IsMatch(ev)) bad = "mode";
+                    if (bad == null && !CardsPattern.IsMatch(cards)) bad = "card pack";
+                    if (bad != null) { RevivalMod.Log.Msg($"[replay] this match's rules are not saved with its replay ({bad} out of range)"); return; }
+                    var rules = new JsonObject();
+                    foreach (var kv in v) rules[kv.Key] = kv.Value;
+                    noted = new JsonObject { ["v"] = 1, ["event"] = ev, ["mod"] = RevivalMod.RulesVersion, ["cards"] = cards, ["rules"] = rules }.ToJsonString();
+                    notedAt = UnityEngine.Time.realtimeSinceStartup;
+                    RevivalMod.Log.Msg("[replay] rules of this match noted for its replay: " + noted);
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[replay] noting this match's rules: " + e.Message); }
+            }
+        }
+
+        private static string EventOf(MatchData md)
+        {
+            try
+            {
+                var e = md.CurrentEvent;
+                var data = (object)e == null ? null : e.GetBaseData();
+                return (object)data == null || string.IsNullOrEmpty(data.eventId) ? null : data.eventId;
+            }
+            catch { return null; }
+        }
+
+        internal static bool IsReplay(BattleManager battle)
+        {
+            try { return battle.IsReplayMatch(); } catch { return false; }
+        }
+
+        /// <summary>
+        /// Called with every cloud script call the game sends: the recording of the match just played
+        /// gets the rules noted while it was dealt. Used once, and only within 3 hours of the deal.
+        /// </summary>
+        internal static byte[] WithRules(byte[] payload)
+        {
+            if (noted == null || payload.Length == 0 || payload.Length > 1 << 20) return payload;
+            try
+            {
+                var root = JsonNode.Parse(payload) as JsonObject;
+                if (root?["FunctionName"]?.GetValue<string>() != "saveMatchRecording") return payload;
+                string rules = noted;
+                bool fresh = UnityEngine.Time.realtimeSinceStartup - notedAt < 3 * 3600f;
+                noted = null;
+                var data = (root["FunctionParameter"] as JsonObject)?["Data"] as JsonObject;
+                if (data == null || !fresh) { RevivalMod.Log.Msg("[replay] recording sent without its rules"); return payload; }
+                data["revivalRules"] = JsonNode.Parse(rules);
+                RevivalMod.Log.Msg("[replay] rules sent with the recording");
+                return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[replay] adding the rules to the recording: " + e.Message); return payload; }
+        }
+
+        /// <summary>
+        /// The rules sent back with a recording, in exactly the shape written above:
+        /// {"v": 1, "event", "mod", "cards", "rules": {every rule, nothing else, whole numbers in range}}.
+        /// Anything else is refused as a whole (null).
+        /// </summary>
+        private static (ChallengeRules.RuleSet rules, int mod, string cards)? ReadRules(JsonElement e)
+        {
+            if (e.ValueKind != JsonValueKind.Object) return null;
+            var seen = new HashSet<string>();
+            foreach (var p in e.EnumerateObject()) if (!seen.Add(p.Name)) return null;
+            if (!seen.SetEquals(new[] { "v", "event", "mod", "cards", "rules" })) return null;
+            bool Whole(JsonElement x, out int n) { n = 0; return x.ValueKind == JsonValueKind.Number && x.GetRawText().IndexOfAny(new[] { '.', 'e', 'E' }) < 0 && x.TryGetInt32(out n); }
+            if (!Whole(e.GetProperty("v"), out int ver) || ver != 1) return null;
+            var ev = e.GetProperty("event");
+            if (ev.ValueKind != JsonValueKind.String || !EventPattern.IsMatch(ev.GetString() ?? "")) return null;
+            if (!Whole(e.GetProperty("mod"), out int mod) || mod < 0 || mod > 10000) return null;
+            var cards = e.GetProperty("cards");
+            if (cards.ValueKind != JsonValueKind.String || !CardsPattern.IsMatch(cards.GetString() ?? "")) return null;
+            var vals = e.GetProperty("rules");
+            if (vals.ValueKind != JsonValueKind.Object) return null;
+            var r = new ChallengeRules.RuleSet { EventId = ev.GetString() };
+            foreach (var p in vals.EnumerateObject())
+            {
+                if (!Ranges.TryGetValue(p.Name, out var range) || r.Values.ContainsKey(p.Name)) return null;
+                if (!Whole(p.Value, out int n) || n < range.min || n > range.max) return null;
+                r.Values[p.Name] = n;
+            }
+            if (r.Values.Count != Ranges.Count) return null;
+            return (r, mod, cards.GetString());
+        }
+
+        private static string refusal;
+        private static float refusalAt = -100f;
+
+        /// <summary>Why the last replay was refused, for the game's "Error loading match replay" popup (for 20 seconds).</summary>
+        internal static string Refusal => UnityEngine.Time.realtimeSinceStartup - refusalAt < 20f ? refusal : null;
+
         [HarmonyPatch(typeof(PlayerDataManager), nameof(PlayerDataManager.ProcessMatchRecording))]
         private static class Load
         {
@@ -63,8 +209,35 @@ namespace WarpforgeRevival
                     if (doc.RootElement.ValueKind != JsonValueKind.Object ||
                         !doc.RootElement.TryGetProperty("recordingData", out var rec) || rec.ValueKind != JsonValueKind.Object)
                         return true;
+                    ChallengeRules.RuleSet rules = null;
+                    if (doc.RootElement.TryGetProperty("revivalRules", out var rr))
+                    {
+                        var got = ReadRules(rr);
+                        string why = got == null ? "its saved rules could not be read"
+                                   : got.Value.mod != RevivalMod.RulesVersion ? "it was recorded with a different version of the mod's rules"
+                                   : got.Value.cards != (RevivalMod.Cards?.PackVersion ?? "") ? "it was recorded with a different set of cards"
+                                   : null;
+                        if (why != null)
+                        {
+                            refusal = "This replay cannot be played: " + why + ", so it would not play out as the real match did.";
+                            refusalAt = UnityEngine.Time.realtimeSinceStartup;
+                            RevivalMod.Log.Warning("[replay] replay refused: " + why);
+                            return true;           // the game's own handling: "Error loading match replay" (with the reason, see PopupNotes)
+                        }
+                        rules = got.Value.rules;
+                    }
                     var record = JsonWrapper.DeserializeObject<BattleRecordData>(rec.GetRawText());
                     if (record == null) return true;
+                    if (rules != null)
+                    {
+                        ChallengeRules.ForReplay(rules);
+                        RevivalMod.Log.Msg($"[replay] played under its saved rules ({rules.EventId}): {rules.ToJson()["v"]?.ToJsonString()}");
+                    }
+                    else
+                    {
+                        ChallengeRules.NoReplayRules();
+                        RevivalMod.Log.Msg("[replay] no rules saved with it; played under the current rules");
+                    }
                     __result = record;
                     RevivalMod.Log.Msg("[replay] recording loaded");
                     return false;
