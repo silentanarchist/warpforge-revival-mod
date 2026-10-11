@@ -165,6 +165,7 @@ namespace WarpforgeRevival
 
         internal static void CloseApp()
         {
+            BugReport.End();                 // closing the app ourselves (Quit, updates) is not a crash
             // Asked again: the process outlived an earlier close and the app was opened again in it.
             // That happened on an emulator: Android froze the closed app's process before the
             // background thread below could end it, the next start woke the same process, which still

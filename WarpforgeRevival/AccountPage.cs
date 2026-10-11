@@ -97,6 +97,8 @@ namespace WarpforgeRevival
         internal static string LinkedAccount => linkedName ?? "";
         /// <summary>True when the linked site account is an in-game tester.</summary>
         internal static bool IsTester => tester;
+        /// <summary>True once the server has answered whether this player is linked (and so whether it is a tester).</summary>
+        internal static bool StatusKnown => linkedName != null;
 
         /// <summary>Called when the game has signed in: ask the server whether this player is linked.</summary>
         internal static void SignedIn() => StatusWithRetry(1);

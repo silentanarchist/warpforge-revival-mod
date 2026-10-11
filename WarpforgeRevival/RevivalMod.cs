@@ -21,9 +21,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.13.2-a";
+        public const string Version = "0.13.3-a";
 #else
-        public const string Version = "0.13.2-w";
+        public const string Version = "0.13.3-w";
 #endif
 
         /// <summary>
@@ -138,6 +138,7 @@ namespace WarpforgeRevival
             catch (Exception e) { Log.Warning("[cache] " + e.Message); }
 #endif
 
+            BugReport.Start();               // crash/freeze tracking: as early as possible after the settings
             Cards = new CardPackClient(Config.ServerUrl, dataDir);
             Cards.StartSync();
 #if !ANDROID_PORT   // Windows only
@@ -169,6 +170,7 @@ namespace WarpforgeRevival
         /// <summary>Closes the game for real (on a phone the game's own exit only puts it in the background).</summary>
         internal static void QuitGame()
         {
+            BugReport.End();                 // the mod closing the game is not a crash
 #if ANDROID_PORT
             AndroidUpdater.CloseApp();
 #else
@@ -205,7 +207,10 @@ namespace WarpforgeRevival
             ScreenCheck.OnGUI();
             if (ScreenCheck.RuntimeBroken) return;
             GameSignIn.Draw();
+            BugReport.OnGUI();
         }
+
+        public override void OnApplicationQuit() => BugReport.End();
 
 #if ANDROID_PORT
         private static bool graphicsNoted;
@@ -234,6 +239,7 @@ namespace WarpforgeRevival
             AndroidUpdater.Tick();
 #endif
             FrameWatch.Tick();
+            BugReport.Tick();
             ScreenCheck.Tick();
 #if ANDROID_PORT
             IntroVideo.Tick();

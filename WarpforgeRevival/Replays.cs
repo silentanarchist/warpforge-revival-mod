@@ -75,6 +75,8 @@ namespace WarpforgeRevival
         private static readonly Regex CardsPattern = new Regex(@"^[A-Za-z0-9._-]{1,80}$");
 
         private static string noted;          // this match's rules, waiting for the recording to be sent
+        /// <summary>The current (or last) match's rules as sent with its recording, or null (for bug reports).</summary>
+        internal static string MatchRules => noted;
         private static float notedAt = -1f;
 
         /// <summary>As the hands are dealt (everything is set by then): the rules of this match, unless it is a replay.</summary>
