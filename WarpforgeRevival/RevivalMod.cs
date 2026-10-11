@@ -4,6 +4,10 @@ using MelonLoader;
 
 [assembly: MelonInfo(typeof(WarpforgeRevival.RevivalMod), "Warpforge Revival", WarpforgeRevival.RevivalMod.Version, "Warpforge Revival community")]
 [assembly: MelonGame("Everguild", "Warpforge")]
+#if ANDROID_PORT
+// the phone build applies its hooks itself, with the game's garbage collector paused (see PatchQuietly)
+[assembly: MelonLoader.HarmonyDontPatchAll]
+#endif
 
 namespace WarpforgeRevival
 {
@@ -17,9 +21,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.12.46-a";
+        public const string Version = "0.12.47-a";
 #else
-        public const string Version = "0.12.46-w";
+        public const string Version = "0.12.47-w";
 #endif
 
         /// <summary>
@@ -75,10 +79,41 @@ namespace WarpforgeRevival
             return string.Join(", ", names);
         }
 
+#if ANDROID_PORT
+        /// <summary>
+        /// Applies the mod's hooks with the game's own garbage collector paused. The game's collector and the
+        /// loader's .NET each stop every thread with signals to clean up memory; on a Pixel 6 Pro the loader's
+        /// .NET crashed while allocating memory in the middle of applying the hooks (a SIGSEGV in
+        /// mono_gc_alloc_obj during PatchAll, 2026-10-10), which froze the game on its loading screen. Applying
+        /// the ~215 hooks is a few seconds of heavy allocation while the game is loading, so the game's collector
+        /// is kept from running during it. It is switched back on straight after, whatever happens.
+        /// </summary>
+        private void PatchQuietly()
+        {
+            bool paused = false;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                if (!Il2CppInterop.Runtime.IL2CPP.il2cpp_gc_is_disabled()) { Il2CppInterop.Runtime.IL2CPP.il2cpp_gc_disable(); paused = true; }
+            }
+            catch (Exception e) { LoggerInstance.Warning("[startup] could not pause the game's memory clean-up: " + e.Message); }
+            try { HarmonyInstance.PatchAll(MelonAssembly.Assembly); }
+            catch (Exception e) { LoggerInstance.Error("[startup] applying the hooks failed: " + e); }
+            finally
+            {
+                if (paused) try { Il2CppInterop.Runtime.IL2CPP.il2cpp_gc_enable(); } catch { }
+            }
+            LoggerInstance.Msg($"[startup] hooks applied in {clock.ElapsedMilliseconds} ms{(paused ? " with the game's memory clean-up paused" : "")}");
+        }
+#endif
+
         public override void OnInitializeMelon()
         {
             Log = LoggerInstance;
             ScreenCheck.CheckRuntime();      // first: the loader sometimes fails to load parts of .NET (seen on a Pixel 6 Pro)
+#if ANDROID_PORT
+            if (!ScreenCheck.RuntimeBroken) PatchQuietly();
+#endif
             Config = RevivalConfig.Load();
             try
             {
