@@ -21,9 +21,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.13.1-a";
+        public const string Version = "0.13.2-a";
 #else
-        public const string Version = "0.13.1-w";
+        public const string Version = "0.13.2-w";
 #endif
 
         /// <summary>
@@ -187,6 +187,16 @@ namespace WarpforgeRevival
             return AndroidUpdater.UpdateNow();
 #else
             return Updater.UpdateNow();
+#endif
+        }
+
+        /// <summary>Settings > Mod > Check for updates: what to show, or null when an update has started.</summary>
+        internal static System.Threading.Tasks.Task<string> CheckForUpdates()
+        {
+#if ANDROID_PORT
+            return AndroidUpdater.CheckNow();
+#else
+            return Updater.CheckNow();
 #endif
         }
 

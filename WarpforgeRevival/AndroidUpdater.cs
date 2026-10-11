@@ -60,10 +60,26 @@ namespace WarpforgeRevival
         /// <summary>The server refused to sign in because this mod is out of date: update now.</summary>
         internal static Task<bool> UpdateNow() => Run("This server needs a newer Warpforge Revival mod. Downloading it...");
 
-        /// <summary>One update at a time; a failed one may be tried again.</summary>
-        private static Task<bool> Run(string message)
+        /// <summary>
+        /// The "Check for updates" button (Settings > Mod): asks the server now, even with AutoUpdate Off.
+        /// Answers what to tell the player, or null when an update has started (the sign-in window
+        /// then shows the download and closes the game, as at start-up).
+        /// </summary>
+        internal static async Task<string> CheckNow()
         {
-            if (UpdatesOff || server == null) return Task.FromResult(false);
+            if (server == null) return "Not connected to a server.";
+            var m = await Manifest();
+            if (m == null) return "The server has no mod to offer.";
+            if (!m.Value.newer) return $"You have the latest mod ({RevivalMod.Version}).";
+            RevivalMod.Log.Msg($"[update] check button: server has mod {m.Value.label} (installed {RevivalMod.Version})");
+            _ = Run($"Updating the mod to {m.Value.label}...", true);
+            return null;
+        }
+
+        /// <summary>One update at a time; a failed one may be tried again.</summary>
+        private static Task<bool> Run(string message, bool asked = false)
+        {
+            if ((UpdatesOff && !asked) || server == null) return Task.FromResult(false);
             lock (Gate)
             {
                 if (running == null || (running.IsCompleted && !running.Result))

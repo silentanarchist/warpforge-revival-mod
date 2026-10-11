@@ -8,14 +8,15 @@ using UnityEngine;
 namespace WarpforgeRevival
 {
     /// <summary>
-    /// Settings > Support pointed at the publisher's closed help pages. It becomes "Website": one
-    /// button that opens the revival server's site (the card creator) in the browser. The contact
-    /// button, the support e-mail text and the privacy policy link are hidden.
+    /// Settings > Support pointed at the publisher's closed help pages. It becomes "Mod": the mod's
+    /// version, a button that opens the revival server's site (the card creator) in the browser, and
+    /// a "Check for updates" button (a copy of the first one) that asks the server for a newer mod
+    /// now. The contact button, the support e-mail text and the privacy policy link are hidden.
     /// </summary>
     internal static class SupportPage
     {
-        private const string TabName = "Website", ButtonText = "Card Creator",
-            Intro = "Design your own cards for Warpforge Revival, manage your account and share decks.";
+        private const string TabName = "Mod", ButtonText = "Card Creator", CheckText = "Check for updates", CheckName = "WFR Check for updates";
+        private static string Intro => $"Warpforge Revival mod {RevivalMod.Version}. The website: design your own cards, manage your account and share decks.";
 
         private static bool reported;
 
@@ -95,6 +96,7 @@ namespace WarpforgeRevival
             foreach (var label in root.GetComponentsInChildren<TMP_Text>(true))
             {
                 if ((object)label == null) continue;
+                if ((object)check != null && check.Pointer != IntPtr.Zero && Under(label.transform, check)) continue;
                 bool inFaq = Under(label.transform, faqT);
                 bool isIntro = (object)intro != null && label.Pointer == intro.Pointer;
                 seen.Add($"{label.name}='{label.text}'" + (inFaq ? " [button]" : isIntro ? " [intro]" : "")
@@ -132,11 +134,14 @@ namespace WarpforgeRevival
             }
             if (rows > 0 && !reported) RevivalMod.Log.Msg($"[support] hid {rows} leftover row(s) around the publisher's links");
 
+            AddCheckButton(faq, faqT);
+
             // The phone layout of this page keeps the button and its introduction switched off and
             // shows its own wording instead (which was just hidden with the rest of the publisher's
             // text). Make sure the two things this page is for can be seen.
             int shown = Show(faqT, root);
             if ((object)intro != null) shown += Show(intro.transform, root);
+            if ((object)check != null) shown += Show(check, root);
             if (shown > 0 && !reported) RevivalMod.Log.Msg($"[support] switched on {shown} hidden part(s) of the page so the button and its text show");
 
             // The tab's button down the side of the window carries the same word as the heading.
@@ -175,6 +180,69 @@ namespace WarpforgeRevival
             RevivalMod.Log.Msg($"[support] page now opens {ServerSettings.CreatorUrl}; heading was '{oldTitle}', side tab labels renamed: {renamed}; texts found: {string.Join(" | ", seen)}");
         }
 
+        // ---- Check for updates
+        private static Transform check;
+        private static TMP_Text checkLabel;
+        private static bool checking;
+
+        /// <summary>A copy of the website button under it, which checks the server for a newer mod.</summary>
+        private static void AddCheckButton(UrlButton faq, Transform faqT)
+        {
+            var parent = faqT.parent;
+            if ((object)parent == null) return;
+            var old = parent.Find(CheckName);
+            if ((object)old != null) { check = old; return; }        // set up already (the page was set up again)
+            var go = UnityEngine.Object.Instantiate(faq.gameObject, parent, false);
+            go.name = CheckName;
+            check = go.transform;
+            check.SetSiblingIndex(faqT.GetSiblingIndex() + 1);
+            // the copy must not open the website: its UrlButton goes (its click handler was added in
+            // code by the game, so the copy never had it), and the button gets the check instead
+            var url = go.GetComponent<UrlButton>();
+            if ((object)url != null) UnityEngine.Object.DestroyImmediate(url);
+            // no layout group to stack them: put the copy below by hand
+            if ((object)parent.GetComponent<UnityEngine.UI.LayoutGroup>() == null)
+            {
+                var rt = check.Cast<RectTransform>();
+                var src = faqT.Cast<RectTransform>();
+                rt.anchoredPosition = src.anchoredPosition - new Vector2(0f, src.rect.height + 24f);
+            }
+            checkLabel = go.GetComponentInChildren<TMP_Text>(true);
+            SetText(checkLabel, CheckText);
+            var button = go.GetComponent<UnityEngine.UI.Button>() ?? go.GetComponentInChildren<UnityEngine.UI.Button>(true);
+            if ((object)button == null) { RevivalMod.Log.Warning("[support] the update button has no button to click"); return; }
+            button.onClick.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(OnCheck)));
+            RevivalMod.Log.Msg("[support] Check for updates button added" + ((object)parent.GetComponent<UnityEngine.UI.LayoutGroup>() == null ? " (placed by hand)" : ""));
+        }
+
+        private static void Label(string text)
+        {
+            try { if ((object)checkLabel != null && checkLabel.Pointer != IntPtr.Zero) SetText(checkLabel, text); } catch { }
+        }
+
+        private static void OnCheck()
+        {
+            if (checking) return;
+            checking = true;
+            Label("Checking...");
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                string answer;
+                try { answer = await RevivalMod.CheckForUpdates(); }
+                catch (Exception e) { RevivalMod.Log.Warning("[update] check button: " + e.Message); answer = "Could not reach the server."; }
+                PlayFabTransport.OnMainThread(() =>
+                {
+                    Label(answer ?? "Updating...");
+                    if (answer != null) RevivalMod.Log.Msg("[update] check button: " + answer);
+                    var at = Time.realtimeSinceStartup;
+                    resetAt = answer != null ? at + 4f : 0f;
+                    checking = answer == null;      // while updating, the button stays busy
+                });
+            });
+        }
+
+        private static float resetAt;
+
         private static SupportTab page;
         private static Transform pageRoot, pageButton, pageIntro;
         private static int settledFrames;
@@ -188,6 +256,7 @@ namespace WarpforgeRevival
         /// </summary>
         internal static void Tick()
         {
+            if (resetAt > 0f && Time.realtimeSinceStartup >= resetAt) { resetAt = 0f; checking = false; Label(CheckText); }
             if ((object)page == null) return;
             try
             {
@@ -198,6 +267,7 @@ namespace WarpforgeRevival
                 settledFrames = -1;
                 int shown = Show(pageButton, pageRoot);
                 if ((object)pageIntro != null) shown += Show(pageIntro, pageRoot);
+                if ((object)check != null && check.Pointer != IntPtr.Zero) shown += Show(check, pageRoot);
                 if (!tickReported)
                 {
                     tickReported = true;
