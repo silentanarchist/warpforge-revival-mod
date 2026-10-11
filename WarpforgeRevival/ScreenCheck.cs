@@ -79,14 +79,31 @@ namespace WarpforgeRevival
             try { return UnityEngine.SceneManagement.SceneManager.GetActiveScene().name; } catch { return "?"; }
         }
 
+        // ---------------------------------------------------------------- black picture: wake the drawing up
+        // On the Pixel 6 Pro the game sometimes draws nothing but black once the menu loads (0.12.45 screenshots:
+        // brightness 0.000, no layer on top), until the phone is locked and unlocked; that briefly changes the
+        // drawing area's size (1440 -> 1441 -> 1440 lines) and the picture comes back. So when two checks in a
+        // row find the picture black while the game has focus, the mod does the same: the drawing area is made
+        // two lines smaller for half a second and then put back. If that cannot be done, the cameras are
+        // switched off and on instead. At most 4 tries a start-up; every step is logged.
+        private const int MaxFixes = 4;
+        private static int blackInRow, fixes, fixW, fixH;
+        private static float restoreAt = -1f, recheckAt = -1f;
+        private static bool fixByCameras;
+        private static readonly List<Camera> switchedOff = new List<Camera>();
+
         /// <summary>Called every frame from the mod's update loop.</summary>
         internal static void Tick()
         {
 #if ANDROID_PORT
-            if (broken || shots >= MaxShots || due) return;
+            if (broken) return;
             try
             {
                 float now = Time.realtimeSinceStartup;
+                if (restoreAt > 0 && now >= restoreAt) { restoreAt = -1f; Restore(); recheckAt = now + 2f; }
+                if (due) return;
+                if (recheckAt > 0 && now >= recheckAt) { recheckAt = -1f; due = true; reason = "check after waking the drawing up"; return; }
+                if (shots >= MaxShots) return;
                 string scene = Scene();
                 if (scene != lastScene)
                 {
@@ -110,11 +127,68 @@ namespace WarpforgeRevival
             due = false;
             shots++;
             string scene = Scene();
-            string picture = Picture(shots);
+            string picture = Picture(Math.Min(shots, 30));
             string layers = DarkLayers();
-            RevivalMod.Log.Msg($"[screen] {reason} (scene {scene}, {Screen.width}x{Screen.height}, focused {Application.isFocused}): {picture}; {Cameras()}; {layers}");
+            bool focused = Application.isFocused;
+            RevivalMod.Log.Msg($"[screen] {reason} (scene {scene}, {Screen.width}x{Screen.height}, focused {focused}): {picture}; {Cameras()}; {layers}");
+            bool black = picture.StartsWith("picture BLACK");
+            if (!black || !focused) { if (blackInRow > 0 && !black) RevivalMod.Log.Msg("[screen] the picture is back"); blackInRow = 0; return; }
+            blackInRow++;
+            if (blackInRow < 2) { recheckAt = Time.realtimeSinceStartup + 2f; return; }      // look again before acting
+            if (fixes >= MaxFixes) { if (fixes == MaxFixes) { fixes++; RevivalMod.Log.Warning("[screen] still black after 4 tries; lock and unlock the phone"); } return; }
+            Wake();
 #endif
         }
+
+#if ANDROID_PORT
+        private static void Wake()
+        {
+            fixes++;
+            float now = Time.realtimeSinceStartup;
+            fixW = Screen.width; fixH = Screen.height;
+            if (!fixByCameras)
+            {
+                try
+                {
+                    Screen.SetResolution(fixW, fixH - 2, Screen.fullScreenMode);
+                    RevivalMod.Log.Msg($"[screen] the picture is black: drawing area {fixW}x{fixH} -> {fixW}x{fixH - 2} for a moment (try {fixes})");
+                    restoreAt = now + 0.5f;
+                    return;
+                }
+                catch (Exception e)
+                {
+                    fixByCameras = true;
+                    RevivalMod.Log.Warning("[screen] the drawing area cannot be resized here (" + e.Message + "); switching the cameras off and on instead");
+                }
+            }
+            try
+            {
+                switchedOff.Clear();
+                foreach (var c in Camera.allCameras)
+                    if ((object)c != null && c.enabled) { c.enabled = false; switchedOff.Add(c); }
+                RevivalMod.Log.Msg($"[screen] the picture is black: {switchedOff.Count} camera(s) off for a moment (try {fixes})");
+                restoreAt = now + 0.5f;
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[screen] could not switch the cameras: " + e.Message); }
+        }
+
+        private static void Restore()
+        {
+            if (switchedOff.Count > 0)
+            {
+                foreach (var c in switchedOff) try { if ((object)c != null) c.enabled = true; } catch { }
+                RevivalMod.Log.Msg($"[screen] {switchedOff.Count} camera(s) on again");
+                switchedOff.Clear();
+                return;
+            }
+            try
+            {
+                Screen.SetResolution(fixW, fixH, Screen.fullScreenMode);
+                RevivalMod.Log.Msg($"[screen] drawing area back to {fixW}x{fixH}");
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[screen] could not put the drawing area back: " + e.Message); }
+        }
+#endif
 
 #if ANDROID_PORT
         private static string Picture(int n)
