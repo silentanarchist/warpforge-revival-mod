@@ -13,6 +13,9 @@ Changes made on the server take effect for everyone at once; the ones listed her
 ### Changed
 - **Custom Test warlord health:** the multiplier now applies to the warlord's own health first, and any health change is added after it.
 
+### Fixes
+- **Phones: start-up that could not load the mod properly** (seen on a Pixel 6 Pro, about one start in several): instead of a black loading screen that never ends, the game now says to close it fully and open it again.
+
 ## 0.12.34-w - 2026-10-10
 
 ### New

@@ -17,9 +17,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.12.43-a";
+        public const string Version = "0.12.44-a";
 #else
-        public const string Version = "0.12.43-w";
+        public const string Version = "0.12.44-w";
 #endif
 
         /// <summary>
@@ -78,6 +78,7 @@ namespace WarpforgeRevival
         public override void OnInitializeMelon()
         {
             Log = LoggerInstance;
+            ScreenCheck.CheckRuntime();      // first: the loader sometimes fails to load parts of .NET (seen on a Pixel 6 Pro)
             Config = RevivalConfig.Load();
             try
             {
@@ -155,6 +156,8 @@ namespace WarpforgeRevival
 
         public override void OnGUI()
         {
+            ScreenCheck.OnGUI();
+            if (ScreenCheck.RuntimeBroken) return;
             GameSignIn.Draw();
         }
 
@@ -163,6 +166,7 @@ namespace WarpforgeRevival
 #endif
         public override void OnUpdate()
         {
+            if (ScreenCheck.RuntimeBroken) return;     // nothing of the mod can run; the screen says to restart
             // The game freezes when its window loses focus, and a frozen game drops out of the match
             // service within seconds: the room you were waiting in closes and nobody can find you.
 #if !ANDROID_PORT   // a phone has no "window in the background", and its game build lacks this setting
@@ -184,6 +188,7 @@ namespace WarpforgeRevival
             AndroidUpdater.Tick();
 #endif
             FrameWatch.Tick();
+            ScreenCheck.Tick();
             TestersTab.Tick();
             TestersCollection.Tick();
             ChallengeMenu.Tick();
