@@ -44,6 +44,34 @@ namespace WarpforgeRevival
             catch (Exception e) { RevivalMod.Log.Warning("[video] could not stop the videos: " + e.Message); }
         }
 
+        // ---------------------------------------------------------------- test: no loading-screen video
+        // The 0.12.54 runs showed the black picture can start while the loading video is still playing (21:16:39,
+        // with the video stopped only at 21:16:46), and the decoder's teardown failed even after a proper Stop. So
+        // the stop above does not prevent it. Test (0.12.55): on phones the loading screen's video is not played at
+        // all, to see whether the black screens stop. If they do, the video path is the cause and this stays.
+        private static float nextLook;
+        private static int intoScene;
+
+        internal static void Tick()
+        {
+            float now = UnityEngine.Time.realtimeSinceStartup;
+            if (now < nextLook) return;
+            nextLook = now + 0.25f;
+            try
+            {
+                string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+                if (scene != "Intro") return;
+                foreach (var vp in UnityEngine.Object.FindObjectsOfType<UnityEngine.Video.VideoPlayer>())
+                {
+                    if ((object)vp == null || !vp.isPlaying) continue;
+                    vp.Stop();
+                    intoScene++;
+                    RevivalMod.Log.Msg($"[video] loading-screen video '{vp.name}' not played (test: does the black screen stop without it?) [{intoScene}]");
+                }
+            }
+            catch (Exception e) { nextLook = now + 5f; RevivalMod.Log.Warning("[video] " + e.Message); }
+        }
+
         [HarmonyPatch(typeof(EverguildSceneManager), nameof(EverguildSceneManager.LoadScene), new[] { typeof(string), typeof(string) })]
         private static class LoadFromTo
         {
