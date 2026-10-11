@@ -161,6 +161,9 @@ namespace WarpforgeRevival
 
             if (Config.DiagnosticLogging)
                 Diagnostics.Install(HarmonyInstance);
+#if !ANDROID_PORT   // temporary: tracing the Point-Blank Shot freeze (PC test builds; phones keep their hook count down)
+            try { DeathTrace.Install(HarmonyInstance); } catch (Exception e) { Log.Warning("[deathtrace] " + e.Message); }
+#endif
             // PlayFabTransport patches are applied automatically by MelonLoader ([HarmonyPatch]).
         }
 
