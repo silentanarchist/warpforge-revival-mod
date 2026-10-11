@@ -17,6 +17,7 @@ namespace WarpforgeRevival
         private MelonPreferences_Entry<int> turnSeconds;
         private MelonPreferences_Entry<bool> runInBackground;
         private MelonPreferences_Entry<string> secureServer;
+        private MelonPreferences_Entry<string> loadingVideo;
         private MelonPreferences_Category category;
         private string resolved;
 
@@ -127,6 +128,7 @@ namespace WarpforgeRevival
         public bool HideShopAndRewards => hideShopAndRewards.Value;
         public string AutoUpdate => autoUpdate.Value;
         public int TurnSeconds => turnSeconds.Value;
+        public string LoadingVideo => loadingVideo.Value;
 
         public static RevivalConfig Load()
         {
@@ -154,6 +156,8 @@ namespace WarpforgeRevival
                     description: "Filled in by the mod: the server that has answered over an encrypted (https) connection. While it matches ServerUrl the mod refuses to fall back to an unencrypted one. Clear it only if that server has really stopped offering https"),
                 turnSeconds = cat.CreateEntry("TurnSeconds", 120,
                     description: "Only used when the server does not set a turn length (content/files/revival-settings.json on the server). Length of a turn in seconds; the game's own value is 60"),
+                loadingVideo = cat.CreateEntry("LoadingVideo", "Off",
+                    description: "Phones only; part of chasing the black menu on a Pixel 6 Pro. Normal: the game's own loading-screen video. Texture: the same video drawn through a texture and a plain image instead of the camera (candidate fix). Off: the video is stopped as soon as it starts, the loading screen stays dark (the test: does the black menu still happen without the video?)"),
             };
             cat.SaveToFile(false);
             return c;

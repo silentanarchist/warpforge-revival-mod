@@ -6,20 +6,18 @@ using Il2Cpp;
 namespace WarpforgeRevival
 {
     /// <summary>
-    /// Phones only. Stops the game's videos cleanly before it leaves a scene.
+    /// Phones only. The loading screen's video, and stopping videos cleanly before a scene change.
     ///
-    /// The black menu on a Pixel 6 Pro (2026-10-10): the loading screen plays a video through the phone's
-    /// hardware decoder (Exynos H.264 there). When the game switches to the menu it unloads the loading
-    /// scene with the video still playing, so the decoder is torn down mid-frame ("allocateed 1 buffer after
-    /// stop", "Tried to deallocate non dequeued buffer", "deallocate() ... was not successful"). In every run
-    /// with that failed teardown the picture went black from that moment (5 of 5), and in runs where the
-    /// decoder shut down cleanly it did not (4 of 5). Changing the render settings did not bring it back;
-    /// only rebuilding the screen surface did (a resize, or locking the phone). Other phones use other
-    /// decoders, which is why only that one showed it.
-    ///
-    /// So as soon as the game starts a scene change, every playing video is stopped first: the decoder then
-    /// shuts down in order while its scene and picture still exist, and the scene is unloaded afterwards.
-    /// The loading screen is behind the game's own fade at that point, so nothing visible changes.
+    /// The black menu on a Pixel 6 Pro (2026-10-10, 4 starts in about 20): the picture stays black after
+    /// the loading screen while the game reports drawing normally; only rebuilding the screen surface
+    /// (a resize, or locking the phone) brings it back. Stopping the video before the scene change
+    /// (0.12.54), a WebM copy of the clip (0.12.57) and refreshing Unity's drawing state (0.12.58) did
+    /// not stop it. The decoder's teardown error turned out to appear in good starts too. What is left
+    /// to test is whether the video is involved at all, so the LoadingVideo setting has three modes:
+    ///   Normal  - the game's own player, drawing straight onto the camera's far plane;
+    ///   Texture - the player draws into a texture, shown through a plain UI image on the loading
+    ///             screen's canvas, so the camera's far-plane video path is never used (candidate fix);
+    ///   Off     - the video is stopped as soon as it starts (the test: the loading screen stays dark).
     /// </summary>
     internal static class IntroVideo
     {
@@ -43,6 +41,70 @@ namespace WarpforgeRevival
                 if (stopped > 0) RevivalMod.Log.Msg($"[video] stopped {stopped} playing video(s) before {why}: {string.Join(", ", names)}");
             }
             catch (Exception e) { RevivalMod.Log.Warning("[video] could not stop the videos: " + e.Message); }
+            DropTexture();
+        }
+
+        // ---------------------------------------------------------------- Texture mode
+        private static UnityEngine.RenderTexture texture;
+        private static UnityEngine.GameObject textureImage;
+
+        private static string Mode()
+        {
+            try { return (RevivalMod.Config.LoadingVideo ?? "").Trim(); } catch { return ""; }
+        }
+
+        private static void DropTexture()
+        {
+            try
+            {
+                if ((object)textureImage != null) { UnityEngine.Object.Destroy(textureImage); textureImage = null; }
+                if ((object)texture != null) { texture.Release(); UnityEngine.Object.Destroy(texture); texture = null; }
+            }
+            catch { textureImage = null; texture = null; }
+        }
+
+        /// <summary>Points the player at a texture and shows that texture through a UI image behind the loading screen's text.</summary>
+        private static bool ThroughTexture(UnityEngine.Video.VideoPlayer vp)
+        {
+            UnityEngine.Canvas canvas = null;
+            foreach (var c in UnityEngine.Object.FindObjectsOfType<UnityEngine.Canvas>())
+            {
+                if ((object)c == null || !c.isActiveAndEnabled) continue;
+                try { if (c.gameObject.scene.name != "Intro") continue; } catch { continue; }
+                if ((object)c.rootCanvas != null && c.rootCanvas.GetInstanceID() != c.GetInstanceID()) continue;
+                canvas = c; break;
+            }
+            if ((object)canvas == null) { RevivalMod.Log.Warning("[video] Texture mode: no canvas in the loading scene; the game's own player is left as it is"); return false; }
+
+            int w = 1440, h = 810;
+            try { var clip = vp.clip; if ((object)clip != null && clip.width > 0 && clip.height > 0) { w = (int)clip.width; h = (int)clip.height; } } catch { }
+            DropTexture();
+            texture = new UnityEngine.RenderTexture(w, h, 0);
+            texture.name = "WarpforgeRevival intro video";
+            texture.Create();
+
+            var go = new UnityEngine.GameObject("WarpforgeRevival intro video");
+            go.layer = canvas.gameObject.layer;
+            go.transform.SetParent(canvas.transform, false);
+            go.transform.SetAsFirstSibling();                       // drawn first: behind the loading text
+            var img = go.AddComponent<UnityEngine.UI.RawImage>();
+            img.texture = texture;
+            img.raycastTarget = false;
+            // Fit inside the screen keeping the clip's shape, centred (what the game's player does: FitInside).
+            var rt = img.rectTransform;
+            rt.anchorMin = rt.anchorMax = new UnityEngine.Vector2(0.5f, 0.5f);
+            rt.pivot = new UnityEngine.Vector2(0.5f, 0.5f);
+            var size = ((UnityEngine.RectTransform)canvas.transform).rect.size;
+            float scale = Math.Min(size.x / w, size.y / h);
+            rt.sizeDelta = new UnityEngine.Vector2(w * scale, h * scale);
+            rt.anchoredPosition = UnityEngine.Vector2.zero;
+            textureImage = go;
+
+            vp.Stop();
+            vp.renderMode = UnityEngine.Video.VideoRenderMode.RenderTexture;
+            vp.targetTexture = texture;
+            vp.targetCamera = null;
+            return true;
         }
 
         // ---------------------------------------------------------------- the loading-screen video
@@ -103,19 +165,36 @@ namespace WarpforgeRevival
                 }
                 if (scene != "Intro") { swapped = false; return; }
                 if (swapped) return;
+                string mode = Mode();
                 string webm = WebmPath();
-                if (webm == null) { swapped = true; return; }
+                if (webm == null && !mode.Equals("Texture", StringComparison.OrdinalIgnoreCase) && !mode.Equals("Off", StringComparison.OrdinalIgnoreCase)) { swapped = true; return; }
                 foreach (var vp in UnityEngine.Object.FindObjectsOfType<UnityEngine.Video.VideoPlayer>())
                 {
                     if ((object)vp == null) continue;
                     if (vp.source == UnityEngine.Video.VideoSource.Url) { swapped = true; continue; }
                     bool wasPlaying = vp.isPlaying;
-                    vp.Stop();
-                    vp.source = UnityEngine.Video.VideoSource.Url;
-                    vp.url = webm;
+                    if (mode.Equals("Off", StringComparison.OrdinalIgnoreCase))
+                    {
+                        vp.Stop();
+                        try { vp.targetCamera = null; } catch { }
+                        swapped = true;
+                        if (!swapLogged) { swapLogged = true; RevivalMod.Log.Msg($"[video] '{vp.name}' stopped: LoadingVideo = Off (test mode, the loading screen stays dark)"); }
+                        continue;
+                    }
+                    bool viaTexture = mode.Equals("Texture", StringComparison.OrdinalIgnoreCase) && ThroughTexture(vp);
+                    if (webm != null)
+                    {
+                        vp.Stop();
+                        vp.source = UnityEngine.Video.VideoSource.Url;
+                        vp.url = webm;
+                    }
                     vp.Play();
                     swapped = true;
-                    if (!swapLogged) { swapLogged = true; RevivalMod.Log.Msg($"[video] '{vp.name}' now plays the WebM copy{(wasPlaying ? " (the clip had started)" : "")}"); }
+                    if (!swapLogged)
+                    {
+                        swapLogged = true;
+                        RevivalMod.Log.Msg($"[video] '{vp.name}' plays {(webm != null ? "the WebM copy" : "the game's clip")}{(viaTexture ? " through a texture (LoadingVideo = Texture)" : "")}{(wasPlaying ? " (the clip had started)" : "")}");
+                    }
                 }
             }
             catch (Exception e) { nextLook = now + 5f; swapped = true; RevivalMod.Log.Warning("[video] could not switch the loading-screen video: " + e.Message); }
