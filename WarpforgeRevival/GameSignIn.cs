@@ -83,8 +83,13 @@ namespace WarpforgeRevival
         // ------------------------------------------------------------------ the window
         private static volatile bool open;
         private static TaskCompletionSource<string> waiting;
-        private static string userName = "", password = "", message = "", serverNote = "";
+        private static string userName = "", password = "", password2 = "", message = "", serverNote = "";
         private static bool busy, problem, drawn;
+        // Creating an account: the password twice and a tick box agreeing to the server's Terms and
+        // Privacy notice (its /terms page, open to everyone). The same tick box appears when signing
+        // in to an account that has not agreed to the current version yet (the server answers
+        // "TermsNotAgreed"); "termsBox" tells the server this mod can show it.
+        private static bool creating, agreed, termsAsked;
         private static float askedAt;
 
         /// <summary>
@@ -102,6 +107,10 @@ namespace WarpforgeRevival
                 problem = false;
                 busy = false;
                 password = "";
+                password2 = "";
+                creating = false;
+                agreed = false;
+                termsAsked = false;
                 drawn = false;
                 askedAt = Time.realtimeSinceStartup;
                 serverNote = ServerName() + (RevivalMod.Config.Secure ? "" : "  -  this connection is NOT encrypted");
@@ -110,6 +119,33 @@ namespace WarpforgeRevival
             });
             return tcs.Task;
         }
+
+        /// <summary>The server's Terms and Privacy notice: /terms on the website (the "creatorUrl" setting's site when known).</summary>
+        internal static string TermsUrl()
+        {
+            try
+            {
+                string site = ServerSettings.CreatorUrl;
+                if (!string.IsNullOrEmpty(site)) return new Uri(site).GetLeftPart(UriPartial.Authority) + "/terms";
+            }
+            catch { }
+            return RevivalMod.Config.ServerUrl.TrimEnd('/') + "/terms";
+        }
+
+        private static void OpenTerms()
+        {
+            string url = TermsUrl();
+            try { OpenUrl(url); RevivalMod.Log.Msg("[signin] opened " + url); }
+            catch (Exception e)
+            {
+                RevivalMod.Log.Warning("[signin] could not open the terms page: " + e.Message);
+                Say("Open " + url + " in a browser to read them.", false);
+            }
+        }
+
+        // Kept apart so that a game build missing Application.OpenURL fails inside OpenTerms' try, not in Draw.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static void OpenUrl(string url) => Application.OpenURL(url);
 
         private static string ServerName()
         {
@@ -239,6 +275,7 @@ namespace WarpforgeRevival
         {
             open = false;
             password = "";
+            password2 = "";
             var tcs = waiting;
             waiting = null;
             tcs?.TrySetResult(token);
@@ -305,34 +342,64 @@ namespace WarpforgeRevival
                 float w = Screen.width / scale, h = Screen.height / scale;
                 GUI.DrawTexture(R(0, 0, w, h), shade);
 
-                float pw = 640, ph = 440, x = (w - pw) / 2, y = Mathf.Max(10, (h - ph) / 2 - 60);
+                bool showTerms = creating || termsAsked;
+                float pw = 640, ph = (creating ? 560 : 440) + (termsAsked && !creating ? 64 : 0);
+                float x = (w - pw) / 2, y = Mathf.Max(10, (h - ph) / 2 - 60);
                 GUI.Box(R(x, y, pw, ph), "", box);
                 float cx = x + 40, cw = pw - 80, cy = y + 24;
-                GUI.Label(R(cx, cy, cw, 34), "Sign in to " + ServerName(), label); cy += 40;
-                GUI.Label(R(cx, cy, cw, 48), "Use the account you made on the server's website, or create one here.", small); cy += 50;
+                GUI.Label(R(cx, cy, cw, 34), (creating ? "Create an account on " : "Sign in to ") + ServerName(), label); cy += 40;
+                GUI.Label(R(cx, cy, cw, 48), creating ? "Pick a name (5 to 30 letters, digits, . ' - or _) and a password (at least 6 characters, no spaces)."
+                                                      : "Use the account you made on the server's website, or create one here.", small); cy += 50;
 
                 GUI.Label(R(cx, cy, 140, 40), "Name", label);
                 GUI.SetNextControlName("wfrName");
                 userName = GUI.TextField(R(cx + 150, cy, cw - 150, 42), userName ?? "", 30, field); cy += 54;
                 GUI.Label(R(cx, cy, 140, 40), "Password", label);
-                password = GUI.PasswordField(R(cx + 150, cy, cw - 150, 42), password ?? "", '*', 200, field); cy += 58;
+                password = GUI.PasswordField(R(cx + 150, cy, cw - 150, 42), password ?? "", '*', 200, field); cy += 54;
+                if (creating)
+                {
+                    GUI.Label(R(cx, cy, 150, 40), "Again", label);
+                    password2 = GUI.PasswordField(R(cx + 150, cy, cw - 150, 42), password2 ?? "", '*', 200, field); cy += 54;
+                }
+                if (showTerms)
+                {
+                    // a button drawn as a tick box: plain buttons work on every build of the game
+                    if (GUI.Button(R(cx, cy, 44, 44), agreed ? "X" : "", button)) agreed = !agreed;
+                    if (GUI.Button(R(cx + 52, cy, cw - 52 - 130, 44), "I am 16 or older and agree to the Terms and Privacy notice", small)) agreed = !agreed;
+                    if (GUI.Button(R(cx + cw - 120, cy, 120, 44), "Read", button)) OpenTerms();
+                    cy += 54;
+                }
+                cy += 4;
 
                 var keepColor = GUI.color;
                 if (problem) GUI.color = new Color(1f, 0.55f, 0.5f);
-                GUI.Label(R(cx, cy, cw, 52), busy ? "Signing in..." : message, small);
+                GUI.Label(R(cx, cy, cw, 52), busy ? (creating ? "Creating the account..." : "Signing in...") : message, small);
                 GUI.color = keepColor;
                 cy += 58;
 
                 GUI.enabled = !busy;
-                if (GUI.Button(R(cx, cy, 170, 50), "Sign in", button)) Submit(false);
-                if (GUI.Button(R(cx + 185, cy, 230, 50), "Create account", button)) Submit(true);
+                if (creating)
+                {
+                    bool match = (password ?? "").Length > 0 && password == password2;
+                    GUI.enabled = !busy && agreed && match;
+                    if (GUI.Button(R(cx, cy, 230, 50), "Create account", button)) Submit(true);
+                    GUI.enabled = !busy;
+                    if (GUI.Button(R(cx + 245, cy, 140, 50), "Back", button)) { creating = false; password2 = ""; agreed = false; Say("", false); }
+                    if (!busy && message.Length == 0 && (password2 ?? "").Length > 0 && !match) Say("The two passwords do not match.", true);
+                }
+                else
+                {
+                    if (GUI.Button(R(cx, cy, 170, 50), "Sign in", button)) Submit(false);
+                    if (GUI.Button(R(cx + 185, cy, 230, 50), "Create account", button)) { creating = true; agreed = false; password2 = ""; Say("", false); }
+                }
                 if (GUI.Button(R(cx + cw - 140, cy, 140, 50), "Quit", button)) RevivalMod.QuitGame();
                 GUI.enabled = true;
                 cy += 62;
                 GUI.Label(R(cx, cy, cw, 30), serverNote, small);
+                if (problem && message == "The two passwords do not match." && password == password2) Say("", false);
 
                 var e = Event.current;
-                if (!busy && e != null && e.type == EventType.KeyDown && (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)) Submit(false);
+                if (!busy && !creating && e != null && e.type == EventType.KeyDown && (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)) Submit(false);
             }
             catch (Exception e)
             {
@@ -345,11 +412,14 @@ namespace WarpforgeRevival
         {
             string name = (userName ?? "").Trim(), pass = password ?? "";
             if (name.Length == 0 || pass.Length == 0) { Say("Enter a name and a password.", true); return; }
+            if (create && pass != password2) { Say("The two passwords do not match.", true); return; }
+            if ((create || termsAsked) && !agreed) { Say("Tick the box to agree to the Terms and Privacy notice.", true); return; }
+            bool agree = (create || termsAsked) && agreed;
             busy = true;
             string url = RevivalMod.Config.ServerUrl + "/playfab/Revival/GameAccountSignIn";
             Task.Run(async () =>
             {
-                string token = null, why;
+                string token = null, why, error = null;
                 try
                 {
                     using var ms = new MemoryStream();
@@ -359,6 +429,8 @@ namespace WarpforgeRevival
                         w.WriteString("name", name);
                         w.WriteString("passphrase", pass);
                         w.WriteBoolean("create", create);
+                        w.WriteBoolean("termsBox", true);
+                        if (agree) w.WriteBoolean("agreeTerms", true);
                         w.WriteEndObject();
                     }
                     using var msg = new HttpRequestMessage(HttpMethod.Post, url)
@@ -376,6 +448,7 @@ namespace WarpforgeRevival
                     }
                     else
                     {
+                        error = root.TryGetProperty("error", out var ec) ? ec.GetString() : null;
                         why = root.TryGetProperty("errorMessage", out var e) ? e.GetString() : null;
                         why = string.IsNullOrEmpty(why) ? "The server did not accept that (" + (int)reply.StatusCode + ")." : char.ToUpperInvariant(why[0]) + why.Substring(1) + ".";
                     }
@@ -391,8 +464,16 @@ namespace WarpforgeRevival
                     if (token != null)
                     {
                         Save(token);
+                        creating = false;
+                        termsAsked = false;
                         RevivalMod.Log.Msg("[signin] signed in as " + name + (create ? " (new account)" : ""));
                         Close(token);
+                    }
+                    else if (error == "TermsNotAgreed" && !create)
+                    {
+                        termsAsked = true;
+                        agreed = false;
+                        Say("The Terms and Privacy notice have changed. Read them, tick the box and sign in again.", true);
                     }
                     else Say(why, true);
                 });
