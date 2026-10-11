@@ -17,7 +17,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Testers button sometimes missing** (seen on a phone): when the server could not be reached while the game was loading, the mod never learned the player is a tester. It now asks again a few times (not yet confirmed).
 - **Phones: smoother loading screen**: the mod no longer searches the whole screen for the Testers window four times a second while there is none (not yet confirmed).
 - **Phones: fewer crashes and freezes while loading** (seen on a Pixel 6 Pro): the mod now sets itself up with the game's memory clean-up paused for those few seconds (not yet confirmed).
-- **Phones: black screen once the menu loads** (seen on a Pixel 6 Pro; music plays, picture stays black until the phone is locked and unlocked): the mod now notices a black picture, works out which part of the game's drawing setup is behind it, and brings the picture back by itself (not yet confirmed).
+- **Phones: black screen once the menu loads** (seen on a Pixel 6 Pro; music plays, picture stays black until the phone is locked and unlocked): the cause is the loading screen's video being cut off mid-frame when the game switches to the menu; the mod now stops the video properly first, and still brings the picture back by itself if it ever goes black (not yet confirmed).
 - **Phones: start-up that could not load the mod properly** (seen on a Pixel 6 Pro, about one start in several): instead of a black loading screen that never ends, the game now says to close it fully and open it again.
 
 ## 0.12.34-w - 2026-10-10
