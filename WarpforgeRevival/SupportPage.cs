@@ -9,16 +9,23 @@ namespace WarpforgeRevival
 {
     /// <summary>
     /// Settings > Support pointed at the publisher's closed help pages. It becomes "Mod": the mod's
-    /// version, a button that opens the revival server's site (the card creator) in the browser, and
+    /// version, a button ("Open") that opens the revival server's website (its home page) in the browser, and
     /// a "Check for updates" button (a copy of the first one) that asks the server for a newer mod
     /// now. The contact button, the support e-mail text and the privacy policy link are hidden.
     /// </summary>
     internal static class SupportPage
     {
-        private const string TabName = "Mod", ButtonText = "Card Creator", CheckText = "Check for updates", CheckName = "WFR Check for updates";
+        private const string TabName = "Mod", ButtonText = "Open", CheckText = "Check for updates", CheckName = "WFR Check for updates";
         private static string Intro => $"Warpforge Revival mod {RevivalMod.Version}. The website: design your own cards, manage your account and share decks.";
 
         private static bool reported;
+
+        /// <summary>The website's home page: the site's address without the /creator part.</summary>
+        private static string SiteHome()
+        {
+            string site = ServerSettings.CreatorUrl;
+            try { return new Uri(site).GetLeftPart(UriPartial.Authority) + "/"; } catch { return site; }
+        }
 
         private static bool Under(Transform t, Transform ancestor)
         {
@@ -74,7 +81,7 @@ namespace WarpforgeRevival
 
             // The game's own set-up has already given the button its click handler (which opens Url);
             // only the address changes. Initialize would add a second handler: two browser tabs per click.
-            faq.Url = ServerSettings.CreatorUrl;
+            faq.Url = SiteHome();
 
             // The line introducing the button: its nearest earlier neighbour that holds text and no button.
             TMP_Text intro = null;
@@ -179,7 +186,7 @@ namespace WarpforgeRevival
 
             if (reported) return;
             reported = true;
-            RevivalMod.Log.Msg($"[support] page now opens {ServerSettings.CreatorUrl}; heading was '{oldTitle}', side tab labels renamed: {renamed}; texts found: {string.Join(" | ", seen)}");
+            RevivalMod.Log.Msg($"[support] page now opens {SiteHome()}; heading was '{oldTitle}', side tab labels renamed: {renamed}; texts found: {string.Join(" | ", seen)}");
         }
 
         // ---- Check for updates
