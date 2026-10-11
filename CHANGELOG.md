@@ -5,6 +5,8 @@ Changes made on the server take effect for everyone at once; the ones listed her
 
 ## Unreleased
 
+## 0.13.2-w - 2026-10-11
+
 ### New
 - **Sign-in window, creating an account:** **Create account** now opens its own page in the window instead of making the account straight away. It asks for:
   - the name;
