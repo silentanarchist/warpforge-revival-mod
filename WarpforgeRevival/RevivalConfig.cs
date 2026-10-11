@@ -157,7 +157,7 @@ namespace WarpforgeRevival
                 turnSeconds = cat.CreateEntry("TurnSeconds", 120,
                     description: "Only used when the server does not set a turn length (content/files/revival-settings.json on the server). Length of a turn in seconds; the game's own value is 60"),
                 loadingVideo = cat.CreateEntry("LoadingVideo", "Normal",
-                    description: "Phones only; part of chasing the black menu on a Pixel 6 Pro. Normal: the game's own loading-screen video. Texture: the same video drawn through a texture and a plain image instead of the camera (candidate fix). Off: the video is stopped as soon as it starts, the loading screen stays dark (the test: does the black menu still happen without the video?)"),
+                    description: "Phones only. Normal: the game's own loading-screen video. Still: no video is decoded (on a Pixel 6 Pro the hardware video decoder leaves the menu black about 1 start in 5); the clip's last frame is shown as a picture instead, once \"7 - fix loading video.bat\" has put it on the phone. Off: no video, dark loading screen. Texture: the video drawn through a texture (did not help)"),
             };
             cat.SaveToFile(false);
             return c;

@@ -17,7 +17,10 @@ namespace WarpforgeRevival
     ///   Normal  - the game's own player, drawing straight onto the camera's far plane;
     ///   Texture - the player draws into a texture, shown through a plain UI image on the loading
     ///             screen's canvas, so the camera's far-plane video path is never used (candidate fix);
-    ///   Off     - the video is stopped as soon as it starts (the test: the loading screen stays dark).
+    ///   Off     - the video is stopped as soon as it starts (the test: the loading screen stays dark);
+    ///   Still   - as Off, but the clip's last frame (from "7 - fix loading video.bat") is shown as a picture.
+    /// Test results 2026-10-11 on the Pixel 6 Pro: Normal and Texture both black about 1 start in 5 (Texture
+    /// included), Off 10 of 10 clean - so decoding the video at all is what does it on that phone.
     /// </summary>
     internal static class IntroVideo
     {
@@ -59,38 +62,34 @@ namespace WarpforgeRevival
             {
                 if ((object)textureImage != null) { UnityEngine.Object.Destroy(textureImage); textureImage = null; }
                 if ((object)texture != null) { texture.Release(); UnityEngine.Object.Destroy(texture); texture = null; }
+                if ((object)still != null) { UnityEngine.Object.Destroy(still); still = null; }
             }
-            catch { textureImage = null; texture = null; }
+            catch { textureImage = null; texture = null; still = null; }
         }
 
         /// <summary>Points the player at a texture and shows that texture through a UI image behind the loading screen's text.</summary>
-        private static bool ThroughTexture(UnityEngine.Video.VideoPlayer vp)
+        private static UnityEngine.Canvas LoadingCanvas()
         {
-            UnityEngine.Canvas canvas = null;
             foreach (var c in UnityEngine.Object.FindObjectsOfType<UnityEngine.Canvas>())
             {
                 if ((object)c == null || !c.isActiveAndEnabled) continue;
                 try { if (c.gameObject.scene.name != "Intro") continue; } catch { continue; }
                 if ((object)c.rootCanvas != null && c.rootCanvas.GetInstanceID() != c.GetInstanceID()) continue;
-                canvas = c; break;
+                return c;
             }
-            if ((object)canvas == null) { RevivalMod.Log.Warning("[video] Texture mode: no canvas in the loading scene; the game's own player is left as it is"); return false; }
+            return null;
+        }
 
-            int w = 1440, h = 810;
-            try { var clip = vp.clip; if ((object)clip != null && clip.width > 0 && clip.height > 0) { w = (int)clip.width; h = (int)clip.height; } } catch { }
-            DropTexture();
-            texture = new UnityEngine.RenderTexture(w, h, 0);
-            texture.name = "WarpforgeRevival intro video";
-            texture.Create();
-
-            var go = new UnityEngine.GameObject("WarpforgeRevival intro video");
+        /// <summary>A plain image behind the loading screen's text, fitted inside the screen keeping the picture's shape (what the game's player does: FitInside).</summary>
+        private static UnityEngine.UI.RawImage ImageOnCanvas(UnityEngine.Canvas canvas, UnityEngine.Texture tex, int w, int h, string name)
+        {
+            var go = new UnityEngine.GameObject(name);
             go.layer = canvas.gameObject.layer;
             go.transform.SetParent(canvas.transform, false);
             go.transform.SetAsFirstSibling();                       // drawn first: behind the loading text
             var img = go.AddComponent<UnityEngine.UI.RawImage>();
-            img.texture = texture;
+            img.texture = tex;
             img.raycastTarget = false;
-            // Fit inside the screen keeping the clip's shape, centred (what the game's player does: FitInside).
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new UnityEngine.Vector2(0.5f, 0.5f);
             rt.pivot = new UnityEngine.Vector2(0.5f, 0.5f);
@@ -100,11 +99,56 @@ namespace WarpforgeRevival
             rt.sizeDelta = new UnityEngine.Vector2(w * scale, h * scale);
             rt.anchoredPosition = UnityEngine.Vector2.zero;
             textureImage = go;
+            return img;
+        }
+
+        /// <summary>Points the player at a texture and shows that texture through a UI image behind the loading screen's text.</summary>
+        private static bool ThroughTexture(UnityEngine.Video.VideoPlayer vp)
+        {
+            var canvas = LoadingCanvas();
+            if ((object)canvas == null) { RevivalMod.Log.Warning("[video] Texture mode: no canvas in the loading scene; the game's own player is left as it is"); return false; }
+
+            int w = 1440, h = 810;
+            try { var clip = vp.clip; if ((object)clip != null && clip.width > 0 && clip.height > 0) { w = (int)clip.width; h = (int)clip.height; } } catch { }
+            DropTexture();
+            texture = new UnityEngine.RenderTexture(w, h, 0);
+            texture.name = "WarpforgeRevival intro video";
+            texture.Create();
+            ImageOnCanvas(canvas, texture, w, h, "WarpforgeRevival intro video");
 
             vp.Stop();
             vp.renderMode = UnityEngine.Video.VideoRenderMode.RenderTexture;
             vp.targetTexture = texture;
             vp.targetCamera = null;
+            return true;
+        }
+
+        // ---------------------------------------------------------------- Still mode
+        // The clip's last frame as a picture, so the loading screen looks like the end of the video for the
+        // whole load while no video is decoded at all. "7 - fix loading video.bat" writes it to the phone as
+        // content/intro-last.rgba: raw 32-bit RGBA, 1440x810, bottom row first (what Unity's textures expect).
+        private const int StillW = 1440, StillH = 810;
+        private static UnityEngine.Texture2D still;
+
+        private static bool ShowStill()
+        {
+            string path = Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival", "content", "intro-last.rgba");
+            if (!File.Exists(path) || new FileInfo(path).Length != (long)StillW * StillH * 4)
+            {
+                RevivalMod.Log.Msg("[video] Still mode: no content/intro-last.rgba on this phone (run \"7 - fix loading video.bat\"); the loading screen stays dark");
+                return false;
+            }
+            var canvas = LoadingCanvas();
+            if ((object)canvas == null) { RevivalMod.Log.Warning("[video] Still mode: no canvas in the loading scene"); return false; }
+            byte[] bytes = File.ReadAllBytes(path);
+            DropTexture();
+            still = new UnityEngine.Texture2D(StillW, StillH, UnityEngine.TextureFormat.RGBA32, false);
+            still.name = "WarpforgeRevival intro still";
+            var handle = System.Runtime.InteropServices.GCHandle.Alloc(bytes, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try { still.LoadRawTextureData(handle.AddrOfPinnedObject(), bytes.Length); }
+            finally { handle.Free(); }
+            still.Apply(false, true);
+            ImageOnCanvas(canvas, still, StillW, StillH, "WarpforgeRevival intro still");
             return true;
         }
 
@@ -173,18 +217,26 @@ namespace WarpforgeRevival
                 if (swapped) return;
                 string mode = Mode();
                 string webm = WebmPath();
-                if (webm == null && !mode.Equals("Texture", StringComparison.OrdinalIgnoreCase) && !mode.Equals("Off", StringComparison.OrdinalIgnoreCase)) { swapped = true; return; }
+                bool off = mode.Equals("Off", StringComparison.OrdinalIgnoreCase), stillMode = mode.Equals("Still", StringComparison.OrdinalIgnoreCase);
+                if (webm == null && !mode.Equals("Texture", StringComparison.OrdinalIgnoreCase) && !off && !stillMode) { swapped = true; return; }
                 foreach (var vp in UnityEngine.Object.FindObjectsOfType<UnityEngine.Video.VideoPlayer>())
                 {
                     if ((object)vp == null) continue;
                     if (vp.source == UnityEngine.Video.VideoSource.Url) { swapped = true; continue; }
                     bool wasPlaying = vp.isPlaying;
-                    if (mode.Equals("Off", StringComparison.OrdinalIgnoreCase))
+                    if (off || stillMode)
                     {
                         vp.Stop();
                         try { vp.targetCamera = null; } catch { }
                         swapped = true;
-                        if (!swapLogged) { swapLogged = true; RevivalMod.Log.Msg($"[video] '{vp.name}' stopped: LoadingVideo = Off (test mode, the loading screen stays dark)"); }
+                        bool shown = false;
+                        if (stillMode) { try { shown = ShowStill(); } catch (Exception e) { RevivalMod.Log.Warning("[video] Still mode: " + e.Message); } }
+                        if (!swapLogged)
+                        {
+                            swapLogged = true;
+                            RevivalMod.Log.Msg(stillMode ? $"[video] '{vp.name}' stopped: LoadingVideo = Still ({(shown ? "the clip's last frame is shown instead" : "no picture; the loading screen stays dark")})"
+                                                         : $"[video] '{vp.name}' stopped: LoadingVideo = Off (test mode, the loading screen stays dark)");
+                        }
                         continue;
                     }
                     bool viaTexture = mode.Equals("Texture", StringComparison.OrdinalIgnoreCase) && ThroughTexture(vp);
