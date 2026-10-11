@@ -243,6 +243,9 @@ namespace WarpforgeRevival
 #endif
             FrameWatch.Tick();
             BugReport.Tick();
+#if !ANDROID_PORT
+            DeathTrace.Tick();               // temporary (Point-Blank Shot freeze)
+#endif
             ScreenCheck.Tick();
 #if ANDROID_PORT
             IntroVideo.Tick();
