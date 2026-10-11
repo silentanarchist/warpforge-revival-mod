@@ -99,7 +99,20 @@ namespace WarpforgeRevival
         internal static bool IsTester => tester;
 
         /// <summary>Called when the game has signed in: ask the server whether this player is linked.</summary>
-        internal static void SignedIn() => Send("status", null, null, null);
+        internal static void SignedIn() => StatusWithRetry(1);
+
+        // The answer decides whether this player sees tester-only things (the Testers button). Asked while the
+        // game is busiest loading, the request sometimes failed to get through, and the button then stayed
+        // away for the whole session (seen on a Pixel 6 Pro, 2026-10-10), so an unreachable server is asked again.
+        private static void StatusWithRetry(int attempt) => Send("status", null, null, (ok, message) =>
+        {
+            if (ok || message != Unreachable || attempt >= 5) return;
+            int wait = 2 * attempt;
+            RevivalMod.Log.Msg($"[account] asking the server again in {wait} s (try {attempt + 1} of 5)");
+            System.Threading.Tasks.Task.Delay(wait * 1000).ContinueWith(_ => PlayFabTransport.OnMainThread(() => StatusWithRetry(attempt + 1)));
+        });
+
+        private const string Unreachable = "Could not reach the server.";
 
         private static void Send(string op, string name, string passphrase, Action<bool, string> done)
         {
@@ -157,7 +170,7 @@ namespace WarpforgeRevival
                 }
                 catch (Exception e)
                 {
-                    message = "Could not reach the server.";
+                    message = Unreachable;
                     RevivalMod.Log.Warning("[account] " + op + ": " + e.Message);
                 }
                 if (done != null) PlayFabTransport.OnMainThread(() => done(ok, message));
