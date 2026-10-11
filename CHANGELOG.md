@@ -6,7 +6,13 @@ Changes made on the server take effect for everyone at once; the ones listed her
 ## Unreleased
 
 ### New
-- **Terms and Privacy notice:** creating an account in the game's sign-in window now asks for the password twice and a tick box agreeing to the server's Terms and Privacy notice, with a **Read** button that opens them. When the notice changes, the next sign-in with a password shows the same tick box.
+- **Sign-in window, creating an account:** **Create account** now opens its own page in the window instead of making the account straight away. It asks for:
+  - the name;
+  - the password, and the password again to confirm it;
+  - a tick box: "I am 16 or older and agree to the Terms and Privacy notice", with a **Read** button that opens them.
+
+  **Create account** only works once the box is ticked and both passwords match. **Back** returns to signing in.
+- **Sign-in window, Terms and Privacy notice:** when the server's notice changes, the next sign-in with a password shows the same tick box before letting you in.
 - **Settings > Mod:** the Website tab is now called Mod. It shows the mod's version and has a **Check for updates** button under the Card Creator link: if the server has a newer mod, it downloads it and restarts the game (on Android, closes it; open it again).
 
 ## 0.13.0-w - 2026-10-11
