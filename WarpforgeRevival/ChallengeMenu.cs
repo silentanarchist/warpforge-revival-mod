@@ -274,8 +274,9 @@ namespace WarpforgeRevival
         [HarmonyPatch(typeof(AlliancesTab), nameof(AlliancesTab.Start))]
         private static class NoAllianceStart { private static bool Prefix() => false; }
 
-        [HarmonyPatch(typeof(AlliancesTab), nameof(AlliancesTab.ToFocus))]
-        private static class NoAllianceFocus { private static bool Prefix() => false; }
+        // ToFocus is not patched: in this build it is a single jump into Refresh (which is patched), and
+        // a hook on a 4-byte function is the one thing that made the loader place code at an address of
+        // its own choosing (see the loader's Dobby.cs), suspected of landing on live memory now and then.
 
         [HarmonyPatch(typeof(AlliancesTab), nameof(AlliancesTab.Refresh))]
         private static class NoAllianceRefresh { private static bool Prefix() => false; }
