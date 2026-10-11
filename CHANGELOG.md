@@ -6,7 +6,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 ## Unreleased
 
 ### New
-- **Bug reports (testers):** press **F8** (PC), **Settings > Mod > Report a bug**, or in a match the **Report bug** tab on the left edge of the screen. The game takes a screenshot, asks for a title, the type of problem, how bad it is and what happened, and sends it with the game's recent log and details of your device and what you were doing. You get a number (B-0042) and the report on the website's new **Bugs** page.
+- **Bug reports (testers):** press **F8** (PC), **Settings > Mod > Report a bug**, or in a match **Report bug** in the gear menu (next to Resign). The game takes a screenshot, asks for a title, the type of problem, how bad it is and what happened, and sends it with the game's recent log and details of your device and what you were doing. You get a number (B-0042) and the report on the website's new **Bugs** page.
 - **Crash and freeze reports (testers):** if the game crashes, freezes, or is closed while frozen, the next start offers to send a report with what was saved at the time. On PC a frozen game also shows a short message after 30 seconds. Reports that can't be sent are kept and sent at the next start. Not yet confirmed in play.
 
 ## 0.13.2-w - 2026-10-11

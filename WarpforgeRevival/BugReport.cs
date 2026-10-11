@@ -388,6 +388,7 @@ namespace WarpforgeRevival
 #if !ANDROID_PORT
                 if (tester && !Form.Open && e.type == EventType.KeyDown && e.keyCode == KeyCode.F8) { captureNext = true; e.Use(); }
 #endif
+                if (captureAt > 0f && Time.realtimeSinceStartup >= captureAt) { captureAt = 0f; captureNext = true; }
                 if (captureNext && e.type == EventType.Repaint)
                 {
                     captureNext = false;
@@ -395,8 +396,8 @@ namespace WarpforgeRevival
                     Form.Show(new Draft { Kind = "manual", Screenshot = shot, Log = RecentLog(), ContextJson = ContextJson(Context()), Category = "other", Severity = "annoying" });
                 }
                 if (Form.Open) { Form.Draw(); return; }
-                // the tab only in matches; in the menus testers use Settings > Mod > Report a bug (or F8)
-                if (tester && scene.StartsWith("Battle", StringComparison.OrdinalIgnoreCase) && !GameSignIn.Busy) Form.DrawTab(() => captureNext = true);
+                // no tab on the screen any more: in a match the gear menu has a Report bug button
+                // (BattleMenuButton below), in the menus Settings > Mod > Report a bug, and F8 on PC
             }
             catch (Exception ex) { RevivalMod.Log.Warning("[bugs] form: " + ex.Message); Form.Hide(); }
         }
@@ -407,6 +408,13 @@ namespace WarpforgeRevival
         {
             if (AccountPage.IsTester && !Form.Open) captureNext = true;
         }
+
+        /// <summary>Starts a manual report after a short wait (a window closing first, so it is not in the screenshot).</summary>
+        internal static void RequestAfter(float seconds)
+        {
+            if (AccountPage.IsTester && !Form.Open) captureAt = Time.realtimeSinceStartup + seconds;
+        }
+        private static float captureAt;
 
         /// <summary>The picture on screen now, at most 1280 pixels wide, as a plain BMP (never Unity's PNG/JPG encoders: they crashed the loader's .NET on a Pixel 6 Pro).</summary>
         private static byte[] Screenshot()
