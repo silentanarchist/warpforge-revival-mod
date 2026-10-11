@@ -94,7 +94,8 @@ namespace WarpforgeRevival
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new UnityEngine.Vector2(0.5f, 0.5f);
             rt.pivot = new UnityEngine.Vector2(0.5f, 0.5f);
-            var size = ((UnityEngine.RectTransform)canvas.transform).rect.size;
+            var canvasRect = canvas.transform.TryCast<UnityEngine.RectTransform>();      // a plain C# cast is not valid on interop objects
+            var size = (object)canvasRect != null ? canvasRect.rect.size : new UnityEngine.Vector2(UnityEngine.Screen.width, UnityEngine.Screen.height);
             float scale = Math.Min(size.x / w, size.y / h);
             rt.sizeDelta = new UnityEngine.Vector2(w * scale, h * scale);
             rt.anchoredPosition = UnityEngine.Vector2.zero;

@@ -149,6 +149,11 @@ namespace WarpforgeRevival
                 return;
             }
             if (!black || !focused) { if (blackInRow > 0 && !black) RevivalMod.Log.Msg("[screen] the picture is back by itself"); blackInRow = 0; return; }
+            // 0.12.63: nothing is tried while the loading scene is up. Its screen is dark by design when the
+            // video is off (and briefly at the video's start), and the 00:46 test runs show the steps firing
+            // there, resizing the screen before the menu had even loaded, which spoils the test. The real
+            // fault shows from the transition onwards; the steps act from there.
+            if (scene == "Intro") { blackInRow = 0; return; }
             blackInRow++;
             if (blackInRow < 2) { recheckAt = Time.realtimeSinceStartup + 2f; return; }      // look again before acting
             if (stepsDone || step >= 0) return;
