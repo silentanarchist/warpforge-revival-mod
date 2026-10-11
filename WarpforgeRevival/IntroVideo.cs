@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using HarmonyLib;
 using Il2Cpp;
 
@@ -44,13 +45,34 @@ namespace WarpforgeRevival
             catch (Exception e) { RevivalMod.Log.Warning("[video] could not stop the videos: " + e.Message); }
         }
 
-        // ---------------------------------------------------------------- test: no loading-screen video
-        // The 0.12.54 runs showed the black picture can start while the loading video is still playing (21:16:39,
-        // with the video stopped only at 21:16:46), and the decoder's teardown failed even after a proper Stop. So
-        // the stop above does not prevent it. Test (0.12.55): on phones the loading screen's video is not played at
-        // all, to see whether the black screens stop. If they do, the video path is the cause and this stays.
+        // ---------------------------------------------------------------- the loading-screen video
+        // Playing the loading screen's H.264 clip goes through the phone's hardware decoder and the screen
+        // surface, and on a Pixel 6 Pro that path leaves the picture black (0.12.52-0.12.55 logs). A VP8
+        // WebM copy of the same clip is decoded by Unity itself, in software, and never touches that path.
+        // "7 - fix loading video.bat" makes that copy from the game's own files and puts it on the phone
+        // as UserData/WarpforgeRevival/content/intro.webm. When that file exists, the loading screen's
+        // player is pointed at it instead of the built-in clip; otherwise the clip plays as it always did.
+        // Deleting the file puts the original back.
         private static float nextLook;
-        private static int intoScene;
+        private static string webmPath;
+        private static bool webmChecked, webmExists, swapped, swapLogged;
+
+        private static string WebmPath()
+        {
+            if (!webmChecked)
+            {
+                webmChecked = true;
+                try
+                {
+                    webmPath = Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival", "content", "intro.webm");
+                    webmExists = File.Exists(webmPath) && new FileInfo(webmPath).Length > 100_000;
+                    RevivalMod.Log.Msg(webmExists ? "[video] loading-screen video: the WebM copy on this phone will be used (content/intro.webm)"
+                                                  : "[video] loading-screen video: the game's own clip (no content/intro.webm on this phone)");
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[video] " + e.Message); }
+            }
+            return webmExists ? webmPath : null;
+        }
 
         internal static void Tick()
         {
@@ -60,16 +82,24 @@ namespace WarpforgeRevival
             try
             {
                 string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
-                if (scene != "Intro") return;
+                if (scene != "Intro") { swapped = false; return; }
+                if (swapped) return;
+                string webm = WebmPath();
+                if (webm == null) { swapped = true; return; }
                 foreach (var vp in UnityEngine.Object.FindObjectsOfType<UnityEngine.Video.VideoPlayer>())
                 {
-                    if ((object)vp == null || !vp.isPlaying) continue;
+                    if ((object)vp == null) continue;
+                    if (vp.source == UnityEngine.Video.VideoSource.Url) { swapped = true; continue; }
+                    bool wasPlaying = vp.isPlaying;
                     vp.Stop();
-                    intoScene++;
-                    RevivalMod.Log.Msg($"[video] loading-screen video '{vp.name}' not played (test: does the black screen stop without it?) [{intoScene}]");
+                    vp.source = UnityEngine.Video.VideoSource.Url;
+                    vp.url = webm;
+                    vp.Play();
+                    swapped = true;
+                    if (!swapLogged) { swapLogged = true; RevivalMod.Log.Msg($"[video] '{vp.name}' now plays the WebM copy{(wasPlaying ? " (the clip had started)" : "")}"); }
                 }
             }
-            catch (Exception e) { nextLook = now + 5f; RevivalMod.Log.Warning("[video] " + e.Message); }
+            catch (Exception e) { nextLook = now + 5f; swapped = true; RevivalMod.Log.Warning("[video] could not switch the loading-screen video: " + e.Message); }
         }
 
         [HarmonyPatch(typeof(EverguildSceneManager), nameof(EverguildSceneManager.LoadScene), new[] { typeof(string), typeof(string) })]
