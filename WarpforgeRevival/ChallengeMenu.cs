@@ -32,14 +32,14 @@ namespace WarpforgeRevival
 
         private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
 
-        /// <summary>Modes offered as presets: those with decks of their own (Custom Test for testers).</summary>
+        /// <summary>Modes offered as presets: Classic and Skirmish (the two the game's own challenge can carry).</summary>
         private static List<string> Presets()
         {
             var ids = new List<string>();
             foreach (var id in new[] { "RevivalClassic", "RevivalSkirmish" })
                 if ((object)ChallengeRules.FindEvent(id) != null) ids.Add(id);
-            if (AccountPage.IsTester && !string.IsNullOrEmpty(ServerSettings.LongGameEvent) && (object)ChallengeRules.FindEvent(ServerSettings.LongGameEvent) != null)
-                ids.Add(ServerSettings.LongGameEvent);
+            // Custom Test is left out for now: the friend's game picks its deck from the game's own Classic /
+            // Skirmish choice, so a Custom Test challenge would pit a Custom Test deck against a Classic one.
             return ids;
         }
 

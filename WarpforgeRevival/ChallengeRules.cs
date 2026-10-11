@@ -217,6 +217,7 @@ namespace WarpforgeRevival
             outgoing = rules;
             outgoingTo = to;
             outgoingAt = Time.realtimeSinceStartup;
+            Apply(rules, null);           // the challenger's own match uses them too
         }
 
         /// <summary>
@@ -227,6 +228,13 @@ namespace WarpforgeRevival
         {
             try
             {
+                if (kind == "RemovePractice" && outgoing != null && string.Equals(target, outgoingTo, StringComparison.OrdinalIgnoreCase))
+                {
+                    outgoing = null;                                   // the challenger called it off
+                    if (!battleSeen) Restore();
+                    RevivalMod.Log.Msg($"[challenge] challenge to {target} called off");
+                    return json;
+                }
                 if (kind != "Practice" || outgoing == null || !string.Equals(target, outgoingTo, StringComparison.OrdinalIgnoreCase)) return json;
                 if (Time.realtimeSinceStartup - outgoingAt > 300f) { outgoing = null; return json; }
                 var root = JsonNode.Parse(json) as JsonObject;
@@ -246,9 +254,10 @@ namespace WarpforgeRevival
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
                 if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("messageType", out var t)) return;
-                bool practice = (t.ValueKind == JsonValueKind.Number && t.TryGetInt32(out int n) && n == 1) ||
-                                (t.ValueKind == JsonValueKind.String && t.GetString() == "Practice");
-                if (!practice) return;
+                int type = t.ValueKind == JsonValueKind.Number && t.TryGetInt32(out int n) ? n
+                         : t.ValueKind == JsonValueKind.String ? (t.GetString() == "Practice" ? 1 : t.GetString() == "RemovePractice" ? 2 : -1) : -1;
+                if (type == 2) { incoming.Remove(from); return; }       // the challenger called it off
+                if (type != 1) return;
                 refused.Remove(from);
                 if (!root.TryGetProperty("revivalRules", out var rr)) { incoming.Remove(from); return; }
                 if (json.Length > 4096) { Refuse(from, "too large"); return; }
@@ -350,7 +359,10 @@ namespace WarpforgeRevival
         [HarmonyPatch(typeof(ChallengeManager), nameof(ChallengeManager.TryChallengeMatchStart))]
         private static class MatchStart
         {
-            private static bool Prefix(ChallengeManager __instance, ref IPlayEvent playEvent, ref bool __result)
+            // The game's own challenge is left exactly as it is (0.12.35-0.12.37 switched the challenge to the
+            // chosen mode here, which stopped the friend's accept from starting the match). Only the rules
+            // are noted for the coming match; they go onto the match itself when the battle starts.
+            private static bool Prefix(ChallengeManager __instance, ref bool __result)
             {
                 try
                 {
@@ -365,18 +377,9 @@ namespace WarpforgeRevival
                     if (outgoing != null && string.Equals(opponent, outgoingTo, StringComparison.OrdinalIgnoreCase)) rules = outgoing;
                     else if (incoming.TryGetValue(opponent, out var got)) rules = got.rules;
                     else if (incoming.Count == 1 && string.IsNullOrEmpty(opponent)) rules = incoming.Values.First().rules;
+                    RevivalMod.Log.Msg($"[challenge] challenge match starting with '{opponent}': {(rules == null ? "ordinary rules" : "custom rules")}");
                     if (rules == null) { Restore(); return true; }
-                    var ev = FindEvent(rules.EventId);
-                    if ((object)ev == null)
-                    {
-                        RevivalMod.Log.Warning($"[challenge] mode {rules.EventId} is not on this server; the match is not started");
-                        __result = false;
-                        return false;
-                    }
-                    playEvent = ev;
-                    Apply(rules, ev);
-                    // kept until the battle starts: the game sends its challenge message again when the
-                    // player re-sends, and every copy must carry the rules
+                    Apply(rules, null);
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[challenge] match start: " + e.Message); }
                 return true;
@@ -403,7 +406,14 @@ namespace WarpforgeRevival
                 if (active == null) return;
                 try
                 {
-                    var gv = __instance.matchData?.GameplayData;
+                    var md = __instance.matchData;
+                    if ((object)md == null || md.playMode != PlayModes.Duel)
+                    {
+                        RevivalMod.Log.Msg($"[challenge] this match is not a friend match ({((object)md == null ? "no match data" : md.playMode.ToString())}); custom rules not used");
+                        Restore();
+                        return;
+                    }
+                    var gv = md.GameplayData;
                     if ((object)gv == null) { RevivalMod.Log.Warning("[challenge] the match has no rules object; custom rules not applied"); return; }
                     if ((object)activeVars != null) foreach (var kv in saved) Write(activeVars, kv.Key, kv.Value);
                     activeVars = gv;
