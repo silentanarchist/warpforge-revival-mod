@@ -608,6 +608,7 @@ namespace WarpforgeRevival
             private static Draft d;
             private static string heading = "", status = "", sentUrl = "";
             private static bool busy, problem, sent;
+            private static int openDrop;              // 0 none, 1 the Type list, 2 the severity list
 
             private static readonly string[] CatIds = { "crash", "picture", "card", "rules", "ui", "connection", "replay", "text", "other" };
             private static readonly string[] CatNames = { "Crash / freeze", "Black or wrong picture", "Card does the wrong thing", "Rules / mode", "Menus & UI", "Connection / sign-in", "Replay", "Text / translation", "Other" };
@@ -618,7 +619,7 @@ namespace WarpforgeRevival
             {
                 d = draft;
                 heading = intro ?? "Report a bug";
-                status = ""; sentUrl = ""; busy = false; problem = false; sent = false;
+                status = ""; sentUrl = ""; busy = false; problem = false; sent = false; openDrop = 0;
                 Open = true;
                 BlockGame(true);
                 RevivalMod.Log.Msg("[bugs] report window opened (" + draft.Kind + ")");
@@ -711,13 +712,20 @@ namespace WarpforgeRevival
                     return;
                 }
 
+                // while a dropdown list is open, everything under it is switched off, so the list gets the click
+                GUI.enabled = openDrop == 0;
                 GUI.Label(R(cx, cy, 160, 34), "Title", label);
                 d.Title = GUI.TextField(R(cx + 160, cy, cw - 160, 38), d.Title ?? "", 120, field); cy += 46;
                 GUI.Label(R(cx, cy, 160, 34), "Type", label);
                 int ci = Math.Max(0, Array.IndexOf(CatIds, d.Category));
-                if (GUI.Button(R(cx + 160, cy, 300, 38), CatNames[ci] + "  >", button)) d.Category = CatIds[(ci + 1) % CatIds.Length];
                 int si = Math.Max(0, Array.IndexOf(SevIds, d.Severity));
-                if (GUI.Button(R(cx + 470, cy, cw - 470, 38), SevNames[si] + "  >", button)) d.Severity = SevIds[(si + 1) % SevIds.Length];
+                float dropY = cy + 40;
+                Rect catBox = new Rect(cx + 160, cy, 300, 38), sevBox = new Rect(cx + 470, cy, cw - 470, 38);
+                GUI.enabled = openDrop == 0 || openDrop == 1;
+                if (GUI.Button(R(catBox.x, catBox.y, catBox.width, catBox.height), CatNames[ci] + (openDrop == 1 ? "  ^" : "  v"), button)) openDrop = openDrop == 1 ? 0 : 1;
+                GUI.enabled = openDrop == 0 || openDrop == 2;
+                if (GUI.Button(R(sevBox.x, sevBox.y, sevBox.width, sevBox.height), SevNames[si] + (openDrop == 2 ? "  ^" : "  v"), button)) openDrop = openDrop == 2 ? 0 : 2;
+                GUI.enabled = openDrop == 0;
                 cy += 46;
                 GUI.Label(R(cx, cy, 160, 34), "What happened", label);
                 d.Description = GUI.TextField(R(cx + 160, cy, cw - 160, 38), d.Description ?? "", 1000, field); cy += 50;
@@ -733,10 +741,30 @@ namespace WarpforgeRevival
                 GUI.Label(R(cx, cy, cw, 48), busy ? "Sending..." : status, small);
                 GUI.color = keep;
                 cy = y + ph - 66;
-                GUI.enabled = !busy;
+                GUI.enabled = !busy && openDrop == 0;
                 if (GUI.Button(R(cx, cy, 200, 48), "Send", button)) Send();
                 if (GUI.Button(R(cx + cw - 180, cy, 180, 48), d.Kind == "manual" ? "Cancel" : "Not now", button)) Hide();
                 GUI.enabled = true;
+
+                // the open list, drawn last so it sits on top
+                if (openDrop != 0)
+                {
+                    bool cat = openDrop == 1;
+                    string[] names = cat ? CatNames : SevNames, ids = cat ? CatIds : SevIds;
+                    Rect head = cat ? catBox : sevBox;
+                    float rowH = 36, listH = names.Length * rowH + 8;
+                    GUI.Box(R(head.x, dropY, head.width, listH), "", box);
+                    GUI.Box(R(head.x, dropY, head.width, listH), "", box);      // twice: the panel colour is slightly see-through
+                    for (int i = 0; i < names.Length; i++)
+                        if (GUI.Button(R(head.x + 4, dropY + 4 + i * rowH, head.width - 8, rowH - 2), names[i], button))
+                        {
+                            if (cat) d.Category = ids[i]; else d.Severity = ids[i];
+                            openDrop = 0;
+                        }
+                    // a click anywhere else closes the list
+                    var ev = Event.current;
+                    if (openDrop != 0 && ev != null && ev.type == EventType.MouseDown) { openDrop = 0; ev.Use(); }
+                }
             }
 
             [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
