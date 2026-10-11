@@ -33,8 +33,11 @@ namespace WarpforgeRevival
         /// <summary>The match rules the menu offers, in its order.</summary>
         internal static readonly Field[] Fields =
         {
-            new Field("warlordLifeChange", "Warlord health change", -20, 40),
-            new Field("startingHand", "Starting hand", 1, 10),
+            // in tenths: 10 = x1.0 .. 30 = x3.0, in steps of 0.2 (every warlord's health is a multiple of
+            // 5, so the result is always a whole number)
+            new Field("warlordHealthMultiplier", "Warlord health multiplier", 10, 30, 2),
+            new Field("warlordLifeChange", "Warlord health change (added after the multiplier)", -20, 40),
+            new Field("startingHand", "Starting hand (at most the hand limit)", 1, 10),
             new Field("secondPlayerExtraCards", "Extra cards for the second player", 0, 3),
             new Field("startingMana", "Starting mana (first player)", 0, 10),
             new Field("startingManaSecond", "Starting mana (second player)", 0, 10),
@@ -42,8 +45,28 @@ namespace WarpforgeRevival
             new Field("drawCardsPerTurn", "Cards drawn per turn", 0, 5),
             new Field("handLimit", "Hand limit", 3, 20),
             new Field("overtimeTurn", "Overtime starts on turn", 5, 60),
-            new Field("turnSeconds", "Turn timer (seconds)", 30, 300, 15),
+            new Field("turnSeconds", "Turn timer (seconds)", 30, 300, 5),
         };
+
+        /// <summary>A rule's value as the menu shows it ("x1.4", "+5", "4").</summary>
+        internal static string Show(string key, int v) =>
+            key == "warlordHealthMultiplier" ? "x" + (v / 10.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
+            : key == "warlordLifeChange" && v > 0 ? "+" + v : v.ToString();
+
+        /// <summary>
+        /// Keeps the starting hand within the hand limit: the starting hand at most the limit, and the
+        /// second player's starting hand (starting hand + extra cards) too.
+        /// </summary>
+        internal static void CapHand(Dictionary<string, int> v)
+        {
+            if (!v.TryGetValue("handLimit", out int limit)) return;
+            if (v.TryGetValue("startingHand", out int hand) && hand > limit) v["startingHand"] = hand = Math.Max(1, limit);
+            if (v.TryGetValue("secondPlayerExtraCards", out int extra) && v.TryGetValue("startingHand", out hand) && hand + extra > limit)
+                v["secondPlayerExtraCards"] = Math.Max(0, limit - hand);
+        }
+
+        internal static bool HandFits(Dictionary<string, int> v) =>
+            v["startingHand"] <= v["handLimit"] && v["startingHand"] + v["secondPlayerExtraCards"] <= v["handLimit"];
 
         internal sealed class RuleSet
         {
@@ -83,7 +106,8 @@ namespace WarpforgeRevival
                     if (n < f.Min || n > f.Max || (n - f.Min) % f.Step != 0) return null;
                     r.Values[f.Key] = n;
                 }
-                return r.Values.Count == Fields.Length ? r : null;                             // every rule present
+                if (r.Values.Count != Fields.Length) return null;                              // every rule present
+                return HandFits(r.Values) ? r : null;                                          // starting hands within the hand limit
             }
 
             public string Describe(string modeName)
@@ -91,7 +115,7 @@ namespace WarpforgeRevival
                 var lines = new List<string> { "Mode: " + modeName };
                 foreach (var f in Fields)
                     if (Values.TryGetValue(f.Key, out int v))
-                        lines.Add($"{f.Label}: {(f.Key == "warlordLifeChange" && v > 0 ? "+" : "")}{v}");
+                        lines.Add($"{f.Label}: {Show(f.Key, v)}");
                 return string.Join("\n", lines);
             }
         }
@@ -116,6 +140,8 @@ namespace WarpforgeRevival
             var (hand, extra) = ServerSettings.ModeHand(eventId);
             r.Values["startingHand"] = hand > 0 ? hand : 4;
             r.Values["secondPlayerExtraCards"] = extra >= 0 ? extra : 1;
+            double factor = eventId == ServerSettings.LongGameEvent && ServerSettings.LongGameHealth > 0 ? ServerSettings.LongGameHealth : 1.0;
+            r.Values["warlordHealthMultiplier"] = (int)Math.Round(factor * 10);
             int secs = ServerSettings.TurnSeconds ?? RevivalMod.Config.TurnSeconds;
             r.Values["turnSeconds"] = secs >= 30 && secs <= 300 ? secs : 60;
             foreach (var f in Fields)
@@ -125,6 +151,7 @@ namespace WarpforgeRevival
                 v = f.Min + (int)Math.Round((v - f.Min) / (double)f.Step) * f.Step;   // on the field's step, as the friend's game checks
                 r.Values[f.Key] = Math.Min(v, f.Max);
             }
+            CapHand(r.Values);
             return r;
         }
 
@@ -139,12 +166,21 @@ namespace WarpforgeRevival
             catch { return null; }
         }
 
-        /// <summary>Deck rules of a mode, for the menu ("40 cards, 3 copies, 1 of each legendary").</summary>
-        internal static string DeckRules(IPlayEvent ev)
+        /// <summary>Deck rules of a mode, every rarity spelled out ("60 cards · 4 copies of a Common, 3 of a Rare, ...").</summary>
+        internal static string DeckRules(IPlayEvent ev, string eventId)
         {
             var gv = Variables(ev);
             if ((object)gv == null) return "";
-            return $"Decks: {gv.deckSize} cards, up to {gv.numberOfCopiesOtherRarities} copies of a card, {gv.numberOfCopiesLegendary} of a legendary";
+            bool isLong = eventId == ServerSettings.LongGameEvent;
+            string[] names = { "", "Common", "Rare", "Epic", "Legendary" };
+            var parts = new List<string>();
+            for (int rarity = 1; rarity <= 4; rarity++)
+            {
+                int n = isLong && ServerSettings.LongGameCopies(rarity) > 0 ? ServerSettings.LongGameCopies(rarity)
+                      : rarity == 4 ? gv.numberOfCopiesLegendary : gv.numberOfCopiesOtherRarities;
+                parts.Add(rarity == 1 ? $"{n} {(n == 1 ? "copy" : "copies")} of a {names[rarity]}" : $"{n} of {(rarity == 3 ? "an" : "a")} {names[rarity]}");
+            }
+            return $"Decks: {gv.deckSize} cards · " + string.Join(", ", parts);
         }
 
         /// <summary>The modes a challenge may use (the menu's presets): Classic, Skirmish, and the long-game mode.</summary>
@@ -255,6 +291,8 @@ namespace WarpforgeRevival
         private static bool battleSeen;
         private static float nextCheck;
 
+        internal static double? HealthMultiplier => active?.Get("warlordHealthMultiplier") is int m ? m / 10.0 : (double?)null;
+        internal static int? HealthChange => active?.Get("warlordLifeChange");
         internal static int? StartingHand => active?.Get("startingHand");
         internal static int? SecondExtra => active?.Get("secondPlayerExtraCards");
         internal static int? TurnSeconds => active?.Get("turnSeconds");

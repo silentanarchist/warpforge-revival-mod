@@ -97,6 +97,15 @@ namespace WarpforgeRevival
                 if ((object)b.tab.TryCast<AlliancesTab>() == null) continue;
                 var go = b.toggle.gameObject;
                 if (!go.activeSelf) go.SetActive(true);
+                // directly below Friends
+                for (int j = 0; j < buttons.Count; j++)
+                {
+                    var fb = buttons[j];
+                    if (fb == null || (object)fb.tab == null || (object)fb.toggle == null || (object)fb.tab.TryCast<FriendsTab>() == null) continue;
+                    int want = fb.toggle.transform.GetSiblingIndex() + 1;
+                    if (go.transform.parent == fb.toggle.transform.parent && go.transform.GetSiblingIndex() != want)
+                        go.transform.SetSiblingIndex(want > go.transform.GetSiblingIndex() ? want - 1 : want);
+                }
                 foreach (var loc in go.GetComponentsInChildren<Il2CppI2.Loc.Localize>(true)) if (loc.enabled) loc.enabled = false;
                 foreach (var label in go.GetComponentsInChildren<TMP_Text>(true)) if (label.text != "CHALLENGE") label.text = "CHALLENGE";
                 var icon = go.transform.Find("Icon");
@@ -157,26 +166,26 @@ namespace WarpforgeRevival
             var next = TestersPage.Button(area, "ModeNext", ">", 0.85f, 0.92f, 0.9f, 0.99f, TestersPage.Tile);
             TestersPage.OnClick(prev, () => { presetIndex = (presetIndex + presets.Count - 1) % presets.Count; values = null; dirty = true; });
             TestersPage.OnClick(next, () => { presetIndex = (presetIndex + 1) % presets.Count; values = null; dirty = true; });
-            TestersPage.Text(area, "DeckRules", ChallengeRules.DeckRules(ev) + ". You play your deck for this mode.", 20, TextAlignmentOptions.Left, TestersPage.Dim, x0, 0.86f, x1, 0.92f);
+            TestersPage.Text(area, "DeckRules", ChallengeRules.DeckRules(ev, mode) + ". You play your deck for this mode.", 20, TextAlignmentOptions.Left, TestersPage.Dim, x0, 0.86f, x1, 0.92f);
 
             var preset = ChallengeRules.Preset(ev, mode);
             int r = 0;
             foreach (var f in ChallengeRules.Fields)
             {
-                float top = 0.84f - r * 0.066f;
+                float top = 0.84f - r * 0.06f;
                 int v = values.Get(f.Key) ?? f.Min;
                 bool changed = preset.Get(f.Key) != v;
-                TestersPage.Text(area, "L_" + f.Key, f.Label, 24, TextAlignmentOptions.Left, changed ? new Color(1f, 0.85f, 0.45f, 1f) : Color.white, x0, top - 0.06f, 0.74f, top);
-                var minus = TestersPage.Button(area, "M_" + f.Key, "-", 0.75f, top - 0.058f, 0.8f, top - 0.004f, TestersPage.Tile);
-                TestersPage.Text(area, "V_" + f.Key, (f.Key == "warlordLifeChange" && v > 0 ? "+" : "") + v, 26, TextAlignmentOptions.Center, Color.white, 0.8f, top - 0.06f, 0.9f, top);
-                var plus = TestersPage.Button(area, "P_" + f.Key, "+", 0.9f, top - 0.058f, 0.95f, top - 0.004f, TestersPage.Tile);
+                TestersPage.Text(area, "L_" + f.Key, f.Label, 22, TextAlignmentOptions.Left, changed ? new Color(1f, 0.85f, 0.45f, 1f) : Color.white, x0, top - 0.06f, 0.74f, top);
+                var minus = TestersPage.Button(area, "M_" + f.Key, "-", 0.75f, top - 0.054f, 0.8f, top - 0.004f, TestersPage.Tile);
+                TestersPage.Text(area, "V_" + f.Key, ChallengeRules.Show(f.Key, v), 24, TextAlignmentOptions.Center, Color.white, 0.8f, top - 0.06f, 0.9f, top);
+                var plus = TestersPage.Button(area, "P_" + f.Key, "+", 0.9f, top - 0.054f, 0.95f, top - 0.004f, TestersPage.Tile);
                 var field = f;
                 TestersPage.OnClick(minus, () => Step(field, -1));
                 TestersPage.OnClick(plus, () => Step(field, +1));
                 r++;
             }
 
-            float by = 0.84f - r * 0.066f - 0.02f;
+            float by = 0.84f - r * 0.06f - 0.015f;
             var reset = TestersPage.Button(area, "Reset", "Mode's own rules", x0, by - 0.075f, 0.62f, by, TestersPage.Tile);
             TestersPage.OnClick(reset, () => { values = null; status = ""; dirty = true; });
             var send = TestersPage.Button(area, "Send", friendId == null ? "Pick a friend" : "Challenge " + friendName, 0.64f, by - 0.075f, x1, by,
@@ -191,7 +200,12 @@ namespace WarpforgeRevival
         {
             if (values == null) return;
             int v = values.Get(f.Key) ?? f.Min;
-            values.Values[f.Key] = Math.Clamp(v + dir * f.Step, f.Min, f.Max);
+            int next = Math.Clamp(v + dir * f.Step, f.Min, f.Max);
+            // the starting hand cannot go past the hand limit (nor the second player's hand with its extra cards)
+            if (f.Key == "startingHand" && next > (values.Get("handLimit") ?? 99)) return;
+            if (f.Key == "secondPlayerExtraCards" && (values.Get("startingHand") ?? 0) + next > (values.Get("handLimit") ?? 99)) return;
+            values.Values[f.Key] = next;
+            ChallengeRules.CapHand(values.Values);       // a lower hand limit pulls the starting hand down with it
             dirty = true;
         }
 

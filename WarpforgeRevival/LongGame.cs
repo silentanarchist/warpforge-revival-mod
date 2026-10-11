@@ -469,6 +469,12 @@ namespace WarpforgeRevival
             catch { return false; }
         }
 
+        private static IPlayEvent CurrentPlayEvent()
+        {
+            try { var modes = LiveOpsManager.GetHandler<GameModes>(); return (object)modes == null ? null : modes.CurrentPlayingEvent; }
+            catch { return null; }
+        }
+
         /// <summary>Event id of the game mode being played (null when not known).</summary>
         private static string PlayingEventId()
         {
@@ -576,7 +582,8 @@ namespace WarpforgeRevival
                 double factor = ServerSettings.LongGameHealth;
                 if (factor <= 0 || Math.Abs(factor - 1.0) < 0.001) return -1;
                 int before = item.maxHealth + change;
-                int after = (int)Math.Round(before * factor, MidpointRounding.AwayFromZero);
+                // the multiplier applies to the card's own health first, then the mode's change is added
+                int after = (int)Math.Round(item.maxHealth * factor, MidpointRounding.AwayFromZero) + change;
                 if (builderNotes < 3) { builderNotes++; RevivalMod.Log.Msg($"[long] deck builder shows Long Game warlord health ('{item.cardName}' {before} -> {after}, {(grid ? "card grid" : "enlarged card")})"); }
                 return after;
             }
@@ -673,13 +680,24 @@ namespace WarpforgeRevival
                 try { ApplyHand(__instance); } catch (Exception e) { RevivalMod.Log.Warning("[long] starting hand: " + e.Message); }
                 try
                 {
-                    double factor = ServerSettings.LongGameHealth;
+                    // A friend challenge's multiplier and change come first; otherwise Long Game's multiplier.
+                    // The multiplier applies to the warlord's own health, then the change is added (the game
+                    // has already added the change, so it is taken off, multiplied around, and added back).
+                    double factor;
+                    int change;
+                    if (ChallengeRules.HealthMultiplier is double m) { factor = m; change = ChallengeRules.HealthChange ?? 0; }
+                    else if (InLongMatch())
+                    {
+                        factor = ServerSettings.LongGameHealth;
+                        var gv = ChallengeRules.Variables(CurrentPlayEvent());
+                        change = (object)gv == null ? 0 : gv.warlordLifeChange;
+                    }
+                    else return;
                     if (factor <= 0 || Math.Abs(factor - 1.0) < 0.001) return;
-                    if (!InLongMatch()) return;
                     var hero = __instance.GetHero(isPlayer);
                     if ((object)hero == null) return;
                     int before = hero.currentMaxHealth;
-                    int after = (int)Math.Round(before * factor, MidpointRounding.AwayFromZero);
+                    int after = (int)Math.Round((before - change) * factor, MidpointRounding.AwayFromZero) + change;
                     hero.currentMaxHealth = after;
                     hero.currentHealth = after;
                     ShowHealth(hero);
