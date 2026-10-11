@@ -150,7 +150,7 @@ namespace WarpforgeRevival
             {
                 try
                 {
-                    Screen.SetResolution(fixW, fixH - 2, Screen.fullScreenMode);
+                    Screen.SetResolution(fixW, fixH - 2, true);      // the bool form: Screen.fullScreenMode is not available on phones
                     RevivalMod.Log.Msg($"[screen] the picture is black: drawing area {fixW}x{fixH} -> {fixW}x{fixH - 2} for a moment (try {fixes})");
                     restoreAt = now + 0.5f;
                     return;
@@ -183,7 +183,7 @@ namespace WarpforgeRevival
             }
             try
             {
-                Screen.SetResolution(fixW, fixH, Screen.fullScreenMode);
+                Screen.SetResolution(fixW, fixH, true);
                 RevivalMod.Log.Msg($"[screen] drawing area back to {fixW}x{fixH}");
             }
             catch (Exception e) { RevivalMod.Log.Warning("[screen] could not put the drawing area back: " + e.Message); }
