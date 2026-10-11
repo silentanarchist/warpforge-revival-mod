@@ -653,7 +653,7 @@ namespace WarpforgeRevival
             {
                 if (box == null)
                 {
-                    shade = Solid(new Color(0f, 0f, 0f, 0.6f));
+                    shade = Solid(new Color(0.02f, 0.04f, 0.035f, 1f));       // opaque: the window is a screen of its own, like the sign-in window
                     panel = Solid(new Color(0.05f, 0.11f, 0.09f, 0.97f));
                     tabBack = Solid(new Color(0.05f, 0.11f, 0.09f, 0.8f));
                     box = new GUIStyle(GUI.skin.box); box.normal.background = panel;
@@ -689,7 +689,7 @@ namespace WarpforgeRevival
                 Styles();
                 float w = Screen.width / sc, h = Screen.height / sc;
                 GUI.DrawTexture(R(0, 0, w, h), shade);
-                float pw = 760, ph = 560, x = (w - pw) / 2, y = Mathf.Max(6, (h - ph) / 2 - 40);
+                float pw = Mathf.Min(760, w - 20), ph = Mathf.Min(560, h - 20), x = (w - pw) / 2, y = Mathf.Max(10, (h - ph) / 2);
                 GUI.Box(R(x, y, pw, ph), "", box);
                 float cx = x + 30, cw = pw - 60, cy = y + 18;
                 GUI.Label(R(cx, cy, cw, 56), heading, label); cy += 58;
