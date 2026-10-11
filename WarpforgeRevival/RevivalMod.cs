@@ -21,9 +21,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.12.50-a";
+        public const string Version = "0.12.51-a";
 #else
-        public const string Version = "0.12.50-w";
+        public const string Version = "0.12.51-w";
 #endif
 
         /// <summary>
@@ -112,6 +112,7 @@ namespace WarpforgeRevival
             Log = LoggerInstance;
             ScreenCheck.CheckRuntime();      // first: the loader sometimes fails to load parts of .NET (seen on a Pixel 6 Pro)
 #if ANDROID_PORT
+            RuntimeSettings.Apply();         // before the hooks: they are where the runtime has crashed
             if (!ScreenCheck.RuntimeBroken) PatchQuietly();
 #endif
             Config = RevivalConfig.Load();
