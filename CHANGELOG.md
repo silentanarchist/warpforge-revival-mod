@@ -5,6 +5,9 @@ Changes made on the server take effect for everyone at once; the ones listed her
 
 ## Unreleased
 
+### New
+- **Social > Challenge:** a new tab on Social's ribbon to challenge a friend with rules of your choosing. Pick a friend, pick a mode as the starting point (Classic, Skirmish; Custom Test for testers), then change the match rules: warlord health, starting hand, extra cards for the second player, starting mana, mana per turn, cards drawn per turn, hand limit, overtime turn and turn timer. Each player uses their deck for that mode. Your friend sees the rules when the challenge arrives, and both games play by them (not yet confirmed).
+
 ## 0.12.34-w - 2026-10-10
 
 ### New

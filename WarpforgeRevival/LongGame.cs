@@ -498,6 +498,9 @@ namespace WarpforgeRevival
             var (modeHand, modeExtra) = ServerSettings.ModeHand(mode);
             if (modeHand > 0) first = modeHand;
             if (modeExtra >= 0) extra = modeExtra;
+            // a friend challenge with custom rules comes before everything
+            if (ChallengeRules.StartingHand is int ch && ch > 0) first = ch;
+            if (ChallengeRules.SecondExtra is int ce && ce >= 0) extra = ce;
             if (vars.startingHand != first || vars.secondExtraCards != extra)
             {
                 vars.startingHand = first;

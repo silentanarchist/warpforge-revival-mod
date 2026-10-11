@@ -227,6 +227,13 @@ namespace WarpforgeRevival
         private static volatile Dictionary<string, string> friendStatus;
         private static Dictionary<string, string> friendShown;
 
+        /// <summary>"online", "playing" or null (offline, or has not added this player back).</summary>
+        internal static string FriendStatus(string id)
+        {
+            var now = friendStatus;
+            return now != null && id != null && now.TryGetValue(id, out var s) ? s : null;
+        }
+
         private static void ShowFriendStatus(ChatGlobalManager m)
         {
             var now = friendStatus;
@@ -279,6 +286,7 @@ namespace WarpforgeRevival
                     if (!string.IsNullOrEmpty(me) && string.Equals(me, target, StringComparison.OrdinalIgnoreCase))
                         return false;                         // the game's notes to itself (duplicate sign-in check)
                     string kind = Kind(json);
+                    json = ChallengeRules.AddTo(target, json, kind);     // custom challenge rules ride along
                     RevivalMod.Log.Msg($"[chat] {kind} to {target}");
                     Task.Run(async () =>
                     {
@@ -336,6 +344,7 @@ namespace WarpforgeRevival
             try
             {
                 RevivalMod.Log.Msg($"[chat] {Kind(data)} from {from}");
+                ChallengeRules.Read(from, data);
                 m.OnPrivateMessage(from, new Il2CppSystem.Object(IL2CPP.ManagedStringToIl2Cpp(data)), "");
             }
             catch (Exception e) { RevivalMod.Log.Warning("[chat] could not deliver a private message: " + e.Message); }

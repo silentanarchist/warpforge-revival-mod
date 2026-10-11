@@ -7,8 +7,8 @@ using UnityEngine;
 namespace WarpforgeRevival
 {
     /// <summary>
-    /// Social on a revival server is the friend list only: the Alliances tab is hidden (nothing is
-    /// behind it yet) and the Friends tab is worded for adding people by friend code or name.
+    /// Social on a revival server: the friend list (worded for adding people by friend code or name)
+    /// and the Challenge tab, which takes the place of the unused Alliances tab (see ChallengeMenu).
     /// </summary>
     internal static class SocialPage
     {
@@ -35,14 +35,9 @@ namespace WarpforgeRevival
                     {
                         var b = buttons[i];
                         if (b == null || (object)b.tab == null || (object)b.toggle == null) continue;
-                        if ((object)b.tab.TryCast<AlliancesTab>() != null) b.toggle.gameObject.SetActive(false);
+                        // the Alliances tab is the Challenge tab now (ChallengeMenu); it is shown, not hidden
+                        if ((object)b.tab.TryCast<AlliancesTab>() != null && !b.toggle.gameObject.activeSelf) b.toggle.gameObject.SetActive(true);
                     }
-                var current = w.CurrentTab;
-                if ((object)current != null && (object)current.TryCast<AlliancesTab>() != null)
-                {
-                    var friends = Find<FriendsTab>(w);
-                    if ((object)friends != null) w.ChangeTab(friends);
-                }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[social] " + e.Message); }
         }

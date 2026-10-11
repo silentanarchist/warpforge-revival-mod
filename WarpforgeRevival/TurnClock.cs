@@ -32,7 +32,7 @@ namespace WarpforgeRevival
             try
             {
                 ServerSettings.Refresh();
-                int seconds = ServerSettings.TurnSeconds ?? RevivalMod.Config.TurnSeconds;
+                int seconds = ChallengeRules.TurnSeconds ?? ServerSettings.TurnSeconds ?? RevivalMod.Config.TurnSeconds;
                 if (seconds < 20 || seconds > 3600) return;
                 PropertyInfo p = AccessTools.Property(typeof(ClockManager), "manager");
                 if (p == null) return;
