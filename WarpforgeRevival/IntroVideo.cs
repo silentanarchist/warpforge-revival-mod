@@ -18,7 +18,7 @@ namespace WarpforgeRevival
     ///   Texture - the player draws into a texture, shown through a plain UI image on the loading
     ///             screen's canvas, so the camera's far-plane video path is never used (candidate fix);
     ///   Off     - the video is stopped as soon as it starts (the test: the loading screen stays dark);
-    ///   Still   - as Off, but the clip's last frame (from "7 - fix loading video.bat") is shown as a picture.
+    ///   Still   - as Off, but the clip's last frame (from "6 - fix loading video.bat") is shown as a picture.
     /// Test results 2026-10-11 on the Pixel 6 Pro: Normal and Texture both black about 1 start in 5 (Texture
     /// included), Off 10 of 10 clean - so decoding the video at all is what does it on that phone.
     /// </summary>
@@ -125,7 +125,7 @@ namespace WarpforgeRevival
 
         // ---------------------------------------------------------------- Still mode
         // The clip's last frame as a picture, so the loading screen looks like the end of the video for the
-        // whole load while no video is decoded at all. "7 - fix loading video.bat" writes it to the phone as
+        // whole load while no video is decoded at all. "6 - fix loading video.bat" writes it to the phone as
         // content/intro-last.rgba: raw 32-bit RGBA, 1440x810, bottom row first (what Unity's textures expect).
         private const int StillW = 1440, StillH = 810;
         private static UnityEngine.Texture2D still;
@@ -135,7 +135,7 @@ namespace WarpforgeRevival
             string path = Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival", "content", "intro-last.rgba");
             if (!File.Exists(path) || new FileInfo(path).Length != (long)StillW * StillH * 4)
             {
-                RevivalMod.Log.Msg("[video] Still mode: no content/intro-last.rgba on this phone (run \"7 - fix loading video.bat\"); the loading screen stays dark");
+                RevivalMod.Log.Msg("[video] Still mode: no content/intro-last.rgba on this phone (run \"6 - fix loading video.bat\"); the loading screen stays dark");
                 return false;
             }
             var canvas = LoadingCanvas();
@@ -156,7 +156,7 @@ namespace WarpforgeRevival
         // Playing the loading screen's H.264 clip goes through the phone's hardware decoder and the screen
         // surface, and on a Pixel 6 Pro that path leaves the picture black (0.12.52-0.12.55 logs). A VP8
         // WebM copy of the same clip is decoded by Unity itself, in software, and never touches that path.
-        // "7 - fix loading video.bat" makes that copy from the game's own files and puts it on the phone
+        // "6 - fix loading video.bat" makes that copy from the game's own files and puts it on the phone
         // as UserData/WarpforgeRevival/content/intro.webm. When that file exists, the loading screen's
         // player is pointed at it instead of the built-in clip; otherwise the clip plays as it always did.
         // Deleting the file puts the original back.

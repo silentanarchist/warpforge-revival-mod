@@ -5,23 +5,17 @@ Changes made on the server take effect for everyone at once; the ones listed her
 
 ## Unreleased
 
-### New
-- **Social > Challenge:** a new tab on Social's ribbon, right below Friends, to challenge a friend with rules of your choosing. Pick a friend, pick a mode as the starting point (Classic or Skirmish), then change the match rules: warlord health multiplier (x1.0 to x3.0) and health change, starting hand (never more than the hand limit), extra cards for the second player, cards drawn per turn, hand limit, starting mana, mana per turn, overtime turn and turn timer. The menu lists the mode's deck rules for every rarity. Each player uses their deck for that mode. Your friend sees the rules on the challenge popup they accept with, and both games play by them.
+## 0.13.0-w - 2026-10-11
 
-- **Replays keep their rules:** each new replay saves the rules its match was played under (the mode's values, starting hands, warlord health, turn timer, and a challenge's custom rules) and plays back under them, so changing a mode's rules no longer breaks replays, and custom-challenge matches replay as they were played (not yet confirmed). A replay recorded with a different card set or mod rules version is refused, and the "Error loading match replay" popup says why. Replays saved before this play as before.
+### New
+- **Social > Challenge:** challenge a friend with your own rules. Pick a mode (Classic or Skirmish) as the starting point, then set warlord health (x1.0 to x3.0) and health change, starting hand, extra cards for the second player, cards drawn per turn, hand limit, starting mana, mana per turn, overtime turn and turn timer. The menu also lists the mode's deck rules. Your friend sees the rules on the challenge popup, and both games play by them.
+- **Replays keep their rules:** each new replay saves the rules it was played under, including a challenge's custom rules, and plays back under them. Changing a mode's rules no longer breaks old replays. A replay from a different card set or mod rules version is refused, with the reason shown. Replays saved before this play as before (not yet confirmed in play).
 
 ### Changed
-- **Custom Test warlord health:** the multiplier now applies to the warlord's own health first, and any health change is added after it.
+- **Custom Test warlord health:** the multiplier applies to the warlord's own health first, then any health change is added.
 
 ### Fixes
-- **Testers button sometimes missing** (seen on a phone): when the server could not be reached while the game was loading, the mod never learned the player is a tester. It now asks again a few times (not yet confirmed).
-- **Phones: smoother loading screen**: the mod no longer searches the whole screen for the Testers window four times a second while there is none (not yet confirmed).
-- **Phones: fewer crashes and freezes while loading** (seen on a Pixel 6 Pro): the mod now sets itself up with the game's memory clean-up paused for those few seconds (not yet confirmed).
-- **Phones: black screen once the menu loads** (Pixel 6 Pro, about 1 start in 5; once on a Pixel 8 Pro): cause found on the Pixel 6 Pro - decoding the loading screen's video with the phone's hardware decoder, whichever decoder (H.264 or VP8) and however the picture is drawn (10 of 10 starts clean with no video; black with the video played normally or through a texture). Fix: the new **Still** value of the LoadingVideo setting (set with "8 - loading video setting.bat"): no video is decoded, and the clip's last frame is shown as a picture for the whole load, once "7 - fix loading video.bat" has put that picture on the phone. Other phones keep the video (Normal). If the menu still comes up black, the mod repairs it within a second or two as before (not yet confirmed).
-- **Alliances tab:** its ToFocus method is no longer patched (it only jumps into Refresh, which is), so no game function needs the 4-byte kind of hook any more.
-- **Phones: the loader no longer places hook relays at addresses it picks itself** (needs the game patched again with "1 - patch.bat" and "2 - install on phone.bat"): one hook per start was given the 4-byte kind by mistake, and the hooking library maps that kind's relay at a spot it believes is free, replacing whatever was really there. Depending on where that landed, that could explain both the rare crash while loading (the runtime's memory) and the black menu (the graphics driver's memory) on the Pixel 6 Pro. The loader also now logs the exact address of any native crash and hands it to Android's crash report (not yet confirmed).
-- **Phones: blocky, discoloured or stuttering opening video** (seen on a Pixel 6 Pro: its H.264 decoder plays the clip badly): the optional **"7 - fix loading video.bat"** in the Android patcher copies the clip out of your own game file, converts it to WebM (needs ffmpeg) and puts it on the phone, where the mod plays that copy instead. Looks only; option 2 of the script removes it.
-- **Phones: start-up that could not load the mod properly** (seen on a Pixel 6 Pro, about one start in several): instead of a black loading screen that never ends, the game now says to close it fully and open it again.
+- **Testers button:** shows up even when the server could not be reached while the game was loading; the mod asks again a few times.
 
 ## 0.12.34-w - 2026-10-10
 
