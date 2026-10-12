@@ -86,6 +86,9 @@ namespace WarpforgeRevival
                 try { procStart = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks; } catch { }
                 File.WriteAllText(Marker("running", ".txt"), pid + " " + procStart);
                 beat = Stopwatch.GetTimestamp();
+                // a normal end of the process counts as a clean exit even when the game's own quit
+                // callback did not reach the mod (seen on PC: closing the window gave a crash report)
+                try { AppDomain.CurrentDomain.ProcessExit += (_, __) => End(); } catch { }
                 watchdog = new Thread(Watch) { IsBackground = true, Name = "WarpforgeRevival watchdog" };
                 watchdog.Start();
             }
@@ -182,18 +185,18 @@ namespace WarpforgeRevival
                     nextContext = now + 5f;
                     contextJson = ContextJson(Context());
                 }
-#if ANDROID_PORT
+                // both platforms: a run that ends while the game is not in front was closed by the
+                // player (swiped away on a phone; closed from the taskbar, or by an install script
+                // waiting for it, on PC), not a crash - the next start does not offer a report for it
                 bool focused = UnityEngine.Application.isFocused;
                 if (focused == background) SetBackground(!focused);
-#endif
                 if (menuReached && !string.IsNullOrEmpty(PlayFabTransport.SessionTicket)) AtMenu();
             }
             catch (Exception e) { if (!tickWarned) { tickWarned = true; RevivalMod.Log.Warning("[bugs] " + e.Message); } }
         }
         private static bool tickWarned;
 
-#if ANDROID_PORT
-        /// <summary>Android: the game went to the background (or came back). A run that ends while in the background was swiped away, not a crash.</summary>
+        /// <summary>The game went to the background / lost focus (or came back). A run that ends then was closed by the player, not a crash.</summary>
         private static void SetBackground(bool value)
         {
             background = value;
@@ -204,7 +207,6 @@ namespace WarpforgeRevival
             }
             catch { }
         }
-#endif
 
         /// <summary>A clean exit (and every way the mod closes the game itself): nothing to report next time.</summary>
         internal static void End()
