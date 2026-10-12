@@ -350,10 +350,10 @@ namespace WarpforgeRevival
                 GUI.Box(R(x, y, pw, ph), "", box);
                 float cx = x + 40, cw = pw - 80, cy = y + 24;
                 GUI.Label(R(cx, cy, cw, 34), (creating ? "Create an account on " : "Sign in to ") + ServerName(), label); cy += 40;
-                GUI.Label(R(cx, cy, cw, 48), creating ? "Pick a name (5 to 30 letters, digits, . ' - or _) and a password (at least 6 characters, no spaces)."
+                GUI.Label(R(cx, cy, cw, 48), creating ? "Pick a username (5 to 30 letters, digits, . ' - or _) and a password (at least 6 characters, no spaces)."
                                                       : "Use the account you made on the server's website, or create one here.", small); cy += 50;
 
-                GUI.Label(R(cx, cy, 140, 40), "Name", label);
+                GUI.Label(R(cx, cy, 140, 40), "Username", label);
                 GUI.SetNextControlName("wfrName");
                 userName = GUI.TextField(R(cx + 150, cy, cw - 150, 42), userName ?? "", 30, field); cy += 54;
                 GUI.Label(R(cx, cy, 140, 40), "Password", label);
@@ -413,7 +413,7 @@ namespace WarpforgeRevival
         private static void Submit(bool create)
         {
             string name = (userName ?? "").Trim(), pass = password ?? "";
-            if (name.Length == 0 || pass.Length == 0) { Say("Enter a name and a password.", true); return; }
+            if (name.Length == 0 || pass.Length == 0) { Say("Enter your username and password.", true); return; }
             if (create && pass != password2) { Say("The two passwords do not match.", true); return; }
             if ((create || termsAsked) && !agreed) { Say("Tick the box to agree to the Terms and Privacy notice.", true); return; }
             bool agree = (create || termsAsked) && agreed;
