@@ -15,7 +15,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 
 ### Fixes
 - **Crash and freeze reports (testers):** closing the game while it is not in front (from the taskbar, or to install an update by hand) is no longer taken for a crash, so no report is offered at the next start. The same on Android (swiping the game away) as before.
-- **Chat > Report message** now reaches the server admins (the report went only to the game's old analytics service).
+- **Chat > Report message** now reaches the server admins (the report went only to the game's old analytics service). Not yet confirmed in play.
 
 
 ## 0.13.2-w - 2026-10-11
