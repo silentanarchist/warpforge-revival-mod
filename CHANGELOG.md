@@ -10,7 +10,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Crash and freeze reports (testers):** if the game crashes, freezes, or is closed while frozen, the next start offers to send a report with what was saved at the time. On PC a frozen game also shows a short message after 30 seconds. Reports that can't be sent are kept and sent at the next start. Not yet confirmed in play.
 
 ### Changed
-- **Android: Settings > General > Quit** now closes the game completely (it also leaves the recent apps), the same way the game closes after an update. Before, it could leave the game half-open. Not yet confirmed in play.
+- **Android: Settings > General > Quit** now closes the game completely (it also leaves the recent apps), the same way the game closes after an update. Before, it could leave the game half-open.
 - **Settings > Mod:** the website button is now called **Open** and opens the website's home page (it opened the Card Creator).
 
 ## 0.13.2-w - 2026-10-11
