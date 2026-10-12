@@ -523,7 +523,12 @@ namespace WarpforgeRevival
                 w.WritePropertyName("context");
                 using (var ctx = JsonDocument.Parse(string.IsNullOrEmpty(d.ContextJson) ? "{}" : d.ContextJson)) ctx.RootElement.WriteTo(w);
                 if (d.SendLog && !string.IsNullOrEmpty(d.Log)) w.WriteString("log", Scrub(d.Log));
-                if (d.SendShot && d.Screenshot != null && d.Screenshot.Length <= 3 * 1024 * 1024) w.WriteString("screenshot", Convert.ToBase64String(d.Screenshot));
+                // The server takes at most 8 MB per request and attachments grow by a third as base64: a
+                // screenshot and a crash dump together could pass that (security review #25), so the
+                // screenshot is left out when both would not fit; the crash dump says more.
+                bool shotFits = d.Screenshot != null && d.Screenshot.Length <= 3 * 1024 * 1024 &&
+                                (!(d.SendDump && d.Dump != null) || d.Screenshot.Length + d.Dump.Length <= 5 * 1024 * 1024);
+                if (d.SendShot && shotFits) w.WriteString("screenshot", Convert.ToBase64String(d.Screenshot));
                 if (d.SendDump && d.Dump != null) w.WriteString("dump", Convert.ToBase64String(d.Dump));
                 w.WriteEndObject();
             }
