@@ -13,6 +13,10 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Android: Settings > General > Quit** now closes the game completely (it also leaves the recent apps), the same way the game closes after an update. Before, it could leave the game half-open.
 - **Settings > Mod:** the website button is now called **Open** and opens the website's home page (it opened the Card Creator).
 
+### Fixes
+- **Chat > Report message** now reaches the server admins (the report went only to the game's old analytics service). Not yet confirmed in play.
+
+
 ## 0.13.2-w - 2026-10-11
 
 ### New

@@ -100,6 +100,38 @@ namespace WarpforgeRevival
             }
         }
 
+        // ChatGlobalManager.ReportMessage is a few instructions that jump straight into
+        // GameAnalytics.SendReportMessage, and the hook above never ran in play (owner's test,
+        // 2026-10-12: the game logged "SendReportMessage to analytics", the server got nothing).
+        // So the report is taken where it ends up. The message's time is not passed this far; the
+        // server matches the text against its own chat copy instead.
+        [HarmonyPatch(typeof(GameAnalytics), nameof(GameAnalytics.SendReportMessage))]
+        private static class ReportToAnalytics
+        {
+            private static bool Prefix(string playfabIdReported, string messageReported)
+            {
+                try
+                {
+                    if (server == null) return true;
+                    string player = playfabIdReported ?? "", text = messageReported ?? "";
+                    var body = Body(w => { w.WriteString("player", player); w.WriteString("msg", text); });
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            using var reply = await Post("/playfab/Revival/ChatReport", body);
+                            RevivalMod.Log.Msg(reply.IsSuccessStatusCode
+                                ? "[chat] message reported to the server admins"
+                                : "[chat] the server did not take the report (" + (int)reply.StatusCode + ")");
+                        }
+                        catch (Exception e) { RevivalMod.Log.Warning("[chat] could not send the report: " + e.Message); }
+                    });
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[chat] report: " + e.Message); }
+                return false;                         // nothing for the analytics service
+            }
+        }
+
         // ---------------------------------------------------------------- sending
         // On the phone PublishMessage is three instructions that jump into publishMessage - too short
         // to hook safely (see NoShortHooks) - so the one it jumps into is hooked there.
