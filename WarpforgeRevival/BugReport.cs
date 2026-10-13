@@ -124,6 +124,16 @@ namespace WarpforgeRevival
                     })));
             }
             catch (Exception e) { RevivalMod.Log.Warning("[bugs] could not follow Unity's errors: " + e.Message); }
+            // The moment the game leaves the front (phone screen off, home button, another app, the
+            // patcher; alt-tab on PC). Watching Application.isFocused every frame misses it on Android:
+            // the game is paused at once and runs no further frame, so a run swiped away or ended by
+            // Android afterwards looked like a crash. Unity's own focus event arrives before the pause.
+            try
+            {
+                UnityEngine.Application.add_focusChanged(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<bool>>(
+                    new Action<bool>(focused => { if (focused == background) SetBackground(!focused); })));
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[bugs] could not follow the game's focus: " + e.Message); }
         }
 
         // ------------------------------------------------------------------ context (main thread)
@@ -310,13 +320,16 @@ namespace WarpforgeRevival
                     if (kind == "freeze") try { frozenFor = File.ReadAllText(Of("frozen", ".txt")).Split(' ')[0]; } catch { }
                     DateTime closedAt = File.Exists(Of("last-session", ".log")) ? File.GetLastWriteTimeUtc(Of("last-session", ".log")) : File.GetLastWriteTimeUtc(running);
                     if (kind == "freeze") closedAt = File.GetLastWriteTimeUtc(Of("frozen", ".txt"));
+                    // the mod (or, on Android, the game itself) was replaced since then: that run was
+                    // ended by installing the update, not by a crash
+                    if (kind == "crash" && UpdatedSince(closedAt)) kind = "update";
                     string target = Path.Combine(oldRoot, closedAt.ToString("yyyyMMdd-HHmmss") + "-" + other);
                     Directory.CreateDirectory(target);
                     foreach (var (what, ext) in new[] { ("last-session", ".log"), ("context", ".json"), ("frozen", ".txt"), ("background", ".txt") })
                         if (File.Exists(Of(what, ext))) File.Move(Of(what, ext), Path.Combine(target, what + ext), true);
                     File.WriteAllText(Path.Combine(target, "meta.txt"), $"{kind}\n{frozenFor}\n{closedAt:yyyy-MM-ddTHH:mm:ssZ}\nnot offered\n");
                     File.Delete(running);
-                    RevivalMod.Log.Msg($"[bugs] the run before (process {other}) ended unexpectedly: {(kind == "background" ? "closed while in the background (not a crash)" : kind)}" +
+                    RevivalMod.Log.Msg($"[bugs] the run before (process {other}) ended unexpectedly: {(kind == "background" ? "closed while in the background (not a crash)" : kind == "update" ? "closed for an update (not a crash)" : kind)}" +
                                        (frozenFor.Length > 0 ? $" after being stuck for {frozenFor} s" : ""));
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[bugs] could not read an earlier run's files: " + e.Message); }
@@ -330,6 +343,25 @@ namespace WarpforgeRevival
                 string[] meta = ReadMeta(olds[i]);
                 if (meta != null && (meta[0] == "crash" || meta[0] == "freeze") && meta[3] == "not offered") { pendingOld = olds[i]; break; }
             }
+        }
+
+        /// <summary>True when the mod's file (or the installed game, on Android) is newer than the given moment.</summary>
+        private static bool UpdatedSince(DateTime when)
+        {
+            var files = new List<string>();
+            try { files.Add(typeof(BugReport).Assembly.Location); } catch { }
+            try
+            {
+                string mods = MelonLoader.Utils.MelonEnvironment.ModsDirectory;
+                files.Add(Path.Combine(mods, "WarpforgeRevival.Android.dll"));
+                files.Add(Path.Combine(mods, "WarpforgeRevival", "WarpforgeRevival.dll"));
+                files.Add(Path.Combine(mods, "WarpforgeRevival.dll"));
+            }
+            catch { }
+            try { files.Add(UnityEngine.Application.dataPath); } catch { }       // Android: the installed game's APK
+            foreach (var f in files)
+                try { if (!string.IsNullOrEmpty(f) && File.Exists(f) && File.GetLastWriteTimeUtc(f) > when) return true; } catch { }
+            return false;
         }
 
         private static string[] ReadMeta(string folder)
