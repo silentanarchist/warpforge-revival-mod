@@ -291,10 +291,14 @@ namespace WarpforgeRevival
                             var pair = so.GetClanFrame(army, (CardTier)tier, type);
                             var sprite = pair.Item1;
                             if (!Alive(sprite) || !Alive(sprite.texture)) { RevivalMod.Log.Warning($"[art export] frame {army} {word} {tier + 1} not loaded"); continue; }
-                            var r = sprite.textureRect;
-                            float k = r.width / 1024f;
+                            // the frame sprite is only the drawn part of its 1024 x 1024 texture; the site's frames are
+                            // a fixed part of the whole texture, so the whole texture is read
+                            var tex = sprite.texture;
+                            var r = new Rect(0, 0, tex.width, tex.height);
+                            float k = tex.width / 1024f;
+                            if (frames == 0) RevivalMod.Log.Msg($"[art export] first frame: texture {tex.width} x {tex.height}, sprite part {sprite.textureRect}");
                             var crop = new RectInt((int)Math.Round(FrameX * k), (int)Math.Round(FrameTop * k), (int)Math.Round(FrameW * k), (int)Math.Round(FrameH * k));
-                            var rgba = Read(sprite.texture, r, 0, 0, crop);
+                            var rgba = Read(tex, r, 0, 0, crop);
                             Put($"card-frames/{army}_{word}_{tier + 1}.png", ImageEncoders.Png(rgba, crop.width, crop.height, 4));
                             frames++;
                             try { so.ReleaseCardFrame(army, (CardTier)tier, type); } catch { }
