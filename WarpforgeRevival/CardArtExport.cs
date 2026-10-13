@@ -35,8 +35,8 @@ namespace WarpforgeRevival
 
         private static bool running;
         private static readonly Queue<Art> todo = new Queue<Art>();
-        private static readonly List<(Art art, AsyncOperationHandle<Texture2D> load, float since)> loading = new List<(Art, AsyncOperationHandle<Texture2D>, float)>();
-        private static AsyncOperationHandle<Texture2D> anchor;   // (interop handles are objects: null = none)            // keeps the current faction's art bundle loaded
+        private static readonly List<(Art art, AsyncOperationHandle<UnityEngine.Object> load, float since)> loading = new List<(Art, AsyncOperationHandle<UnityEngine.Object>, float)>();
+        private static AsyncOperationHandle<UnityEngine.Object> anchor;   // (interop handles are objects: null = none)            // keeps the current faction's art bundle loaded
         private static int anchorArmy = int.MinValue;
         private static int total, done, written, masks, frames, sinceCleanup;
         private static AsyncOperation unloading;
@@ -118,7 +118,7 @@ namespace WarpforgeRevival
                     {
                         var a = todo.Dequeue();
                         if (a.Army != anchorArmy) NewFaction(a.Army);
-                        loading.Add((a, new AssetReference(a.Guid).LoadAssetAsync<Texture2D>(), Time.realtimeSinceStartup));
+                        loading.Add((a, new AssetReference(a.Guid).LoadAssetAsync<UnityEngine.Object>(), Time.realtimeSinceStartup));
                     }
                     if (loading.Count == 0) break;
                     int ready = loading.FindIndex(l => l.load.IsDone || Time.realtimeSinceStartup - l.since > 30f);
@@ -155,18 +155,30 @@ namespace WarpforgeRevival
             anchor = null;
         }
 
-        private static void Picture(Art art, AsyncOperationHandle<Texture2D> load)
+        private static void Picture(Art art, AsyncOperationHandle<UnityEngine.Object> load)
         {
-            Texture2D tex = null;
-            try { if (load.IsDone && load.Status == AsyncOperationStatus.Succeeded) tex = load.Result; } catch { }
+            // The game's catalog lists each card picture twice under one key, as a texture and as a sprite,
+            // and the loader hands back either one: take whichever came and find the texture in it.
+            UnityEngine.Object got = null;
+            try { if (load.IsDone && load.Status == AsyncOperationStatus.Succeeded) got = load.Result; } catch { }
+            Texture tex = null;
+            Rect rect = default;
+            if (Alive(got))
+            {
+                var t2 = got.TryCast<Texture2D>();
+                var sp = (object)t2 == null ? got.TryCast<Sprite>() : null;
+                if ((object)t2 != null) { tex = t2; rect = new Rect(0, 0, t2.width, t2.height); }
+                else if ((object)sp != null && Alive(sp.texture)) { tex = sp.texture; rect = sp.textureRect; }
+            }
             if (!Alive(tex))
             {
                 foreach (var c in art.Cards) missing.Add(c.id);
-                RevivalMod.Log.Warning($"[art export] picture {art.Guid} did not load ({art.Cards[0].id})");
+                RevivalMod.Log.Warning($"[art export] picture {art.Guid} did not load ({art.Cards[0].id}; got {(Alive(got) ? got.GetIl2CppType().Name : "nothing")})");
                 try { Addressables.Release(load); } catch { }
                 return;
             }
-            var rgba = Read(tex, new Rect(0, 0, tex.width, tex.height), ArtSize, ArtSize, null);
+            if (done == 0) RevivalMod.Log.Msg($"[art export] first picture: a {got.GetIl2CppType().Name}, {tex.width} x {tex.height}");
+            var rgba = Read(tex, rect, ArtSize, ArtSize, null);
             // the first picture of a faction keeps its bundle loaded; the rest are let go straight away
             if ((object)anchor == null) anchor = load; else try { Addressables.Release(load); } catch { }
 
