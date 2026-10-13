@@ -105,7 +105,7 @@ namespace WarpforgeRevival
                         ["turnSeconds"] = ChallengeRules.TurnSeconds ?? ServerSettings.TurnSeconds ?? RevivalMod.Config.TurnSeconds,
                     };
                     string ev = ChallengeRules.ActiveEvent ?? EventOf(md) ?? LongGame.PlayingEventId() ?? "";
-                    string cards = RevivalMod.Cards?.PackVersion ?? "";
+                    string cards = RevivalMod.Cards?.CardsVersion ?? RevivalMod.Cards?.PackVersion ?? "";
                     string bad = Math.Abs(factor * 10 - tenths) > 0.001 ? "warlordHealthMultiplier" : null;
                     foreach (var kv in v) if (bad == null && (kv.Value < Ranges[kv.Key].min || kv.Value > Ranges[kv.Key].max)) bad = kv.Key;
                     if (bad == null && !EventPattern.IsMatch(ev)) bad = "mode";
@@ -130,6 +130,15 @@ namespace WarpforgeRevival
                 return (object)data == null || string.IsNullOrEmpty(data.eventId) ? null : data.eventId;
             }
             catch { return null; }
+        }
+
+        /// <summary>A replay's cards match this game's: the server's card bundle version, or (replays from
+        /// before 0.13.20) the old card pack version still in the cached copy.</summary>
+        private static bool SameCards(string recorded)
+        {
+            var c = RevivalMod.Cards;
+            if ((object)c == null || string.IsNullOrEmpty(recorded)) return false;
+            return recorded == c.CardsVersion || recorded == c.PackVersion;
         }
 
         internal static bool IsReplay(BattleManager battle)
@@ -217,7 +226,7 @@ namespace WarpforgeRevival
                         var got = ReadRules(rr);
                         string why = got == null ? "its saved rules could not be read"
                                    : got.Value.mod != RevivalMod.RulesVersion ? "it was recorded with a different version of the mod's rules"
-                                   : got.Value.cards != (RevivalMod.Cards?.PackVersion ?? "") ? "it was recorded with a different set of cards"
+                                   : !SameCards(got.Value.cards) ? "it was recorded with a different set of cards"
                                    : null;
                         if (why != null)
                         {

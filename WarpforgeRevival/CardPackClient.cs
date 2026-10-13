@@ -10,8 +10,11 @@ using System.Threading.Tasks;
 namespace WarpforgeRevival
 {
     /// <summary>
-    /// Keeps a local copy of the server's card pack in UserData/WarpforgeRevival/cardpack.json.
-    /// The pack version is a content hash; both players need the same version to play each other.
+    /// Start-up content sync: the replacement content bundles (card file, alternate art, text) and the
+    /// server's "cardsVersion" (one value for the cards on PC and Android, from the card bundles), which
+    /// replays record so they only play with the cards they were recorded with.
+    /// The old card pack (cardpack.json) is no longer downloaded: nothing used its cards, only its
+    /// version, which is still read from the cached copy so replays recorded with it keep working.
     /// </summary>
     internal class CardPackClient
     {
@@ -19,7 +22,8 @@ namespace WarpforgeRevival
         private readonly string packPath;
         private readonly ManualResetEventSlim ready = new ManualResetEventSlim(false);
 
-        public string PackVersion { get; private set; }
+        public string PackVersion { get; private set; }      // the old card pack's version (cached copy only)
+        public string CardsVersion { get; private set; }     // the server's version of the card bundles
         public int CardCount { get; private set; }
         public string PackJson { get; private set; }
         public bool FromCache { get; private set; }
@@ -33,7 +37,7 @@ namespace WarpforgeRevival
         public void StartSync() => Task.Run(Sync);
 
         /// <summary>Block until the pack is available (or failed). Returns true when a pack is loaded.</summary>
-        public bool WaitReady(int timeoutMs) => ready.Wait(timeoutMs) && PackJson != null;
+        public bool WaitReady(int timeoutMs) => ready.Wait(timeoutMs);
 
         private async Task Sync()
         {
@@ -48,37 +52,16 @@ namespace WarpforgeRevival
                 var manifestJson = await http.GetStringAsync(server + "/api/v1/content/manifest");
 #endif
                 using var manifest = JsonDocument.Parse(manifestJson);
-                var remoteVersion = manifest.RootElement.GetProperty("packVersion").GetString();
-                var sha = manifest.RootElement.GetProperty("sha256").GetString();
+                if (manifest.RootElement.TryGetProperty("cardsVersion", out var cv) && cv.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(cv.GetString()))
+                    CardsVersion = cv.GetString();
 
                 if (manifest.RootElement.TryGetProperty("bundles", out var bundles))
                     await SyncBundles(http, bundles);
-
-                if (remoteVersion == PackVersion)
-                {
-                    RevivalMod.Log.Msg($"Card pack {PackVersion} is up to date ({CardCount} cards)");
-                    return;
-                }
-
-                RevivalMod.Log.Msg($"Downloading card pack {remoteVersion} (have {PackVersion ?? "none"})...");
-                var body = await http.GetByteArrayAsync(server + "/api/v1/content/pack");
-                var got = Convert.ToHexString(SHA256.HashData(body)).ToLowerInvariant();
-                if (got != sha)
-                    throw new InvalidDataException($"card pack checksum mismatch ({got} != {sha})");
-
-                var tmp = packPath + ".tmp";
-                File.WriteAllBytes(tmp, body);
-                File.Move(tmp, packPath, true);
-                Parse(System.Text.Encoding.UTF8.GetString(body));
-                FromCache = false;
-                RevivalMod.Log.Msg($"Card pack {PackVersion} installed ({CardCount} cards)");
+                RevivalMod.Log.Msg($"Content up to date (cards {CardsVersion ?? "version not given by the server"})");
             }
             catch (Exception e)
             {
-                if (PackJson != null)
-                    RevivalMod.Log.Warning($"Server unreachable ({e.Message}); using cached card pack {PackVersion}");
-                else
-                    RevivalMod.Log.Error($"No card pack available: {e.Message}. Check ServerUrl in UserData/WarpforgeRevival.cfg");
+                RevivalMod.Log.Warning($"Could not check the server's content ({e.Message}); using what is on disk. Check ServerUrl in UserData/WarpforgeRevival.cfg if this keeps happening");
             }
             finally
             {
