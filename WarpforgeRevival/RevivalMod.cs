@@ -21,9 +21,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.13.10-a";
+        public const string Version = "0.13.11-a";
 #else
-        public const string Version = "0.13.10-w";
+        public const string Version = "0.13.11-w";
 #endif
 
         /// <summary>
@@ -255,6 +255,7 @@ namespace WarpforgeRevival
             ChallengeMenu.Tick();
             ChallengeRules.Tick();
             SupportPage.Tick();
+            CardArtExport.Tick();
             Replays.Tick();
             AccountPage.Tick();
             GameSignIn.Tick();

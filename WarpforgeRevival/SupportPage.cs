@@ -143,6 +143,7 @@ namespace WarpforgeRevival
 
             AddCheckButton(faq, faqT);
             AddReportButton(faq, faqT);
+            AddExportButton(faq, faqT);
 
             // The phone layout of this page keeps the button and its introduction switched off and
             // shows its own wording instead (which was just hidden with the rest of the publisher's
@@ -151,6 +152,7 @@ namespace WarpforgeRevival
             if ((object)intro != null) shown += Show(intro.transform, root);
             if ((object)check != null) shown += Show(check, root);
             ReportVisible(root);
+            if ((object)export != null && export.Pointer != IntPtr.Zero) shown += Show(export, root);
             if (shown > 0 && !reported) RevivalMod.Log.Msg($"[support] switched on {shown} hidden part(s) of the page so the button and its text show");
 
             // The tab's button down the side of the window carries the same word as the heading.
@@ -282,6 +284,47 @@ namespace WarpforgeRevival
             report.gameObject.SetActive(AccountPage.IsTester);
         }
 
+        // ---- Export card art: the card pictures from this copy of the game, as a zip for the website
+        // (CardArtExport). Under Check for updates and Report a bug; the button's text shows the progress.
+        private const string ExportName = "WFR Export card art", ExportText = "Export card art";
+        private static Transform export;
+        private static TMP_Text exportLabel;
+
+        private static void AddExportButton(UrlButton faq, Transform faqT)
+        {
+            var parent = faqT.parent;
+            if ((object)parent == null || (object)check == null) return;
+            var old = parent.Find(ExportName);
+            if ((object)old != null) { export = old; exportLabel = old.GetComponentInChildren<TMP_Text>(true); return; }
+            var go = UnityEngine.Object.Instantiate(faq.gameObject, parent, false);
+            go.name = ExportName;
+            export = go.transform;
+            var after = (object)report != null && report.Pointer != IntPtr.Zero ? report : check;
+            export.SetSiblingIndex(after.GetSiblingIndex() + 1);
+            var url = go.GetComponent<UrlButton>();
+            if ((object)url != null) UnityEngine.Object.DestroyImmediate(url);
+            if ((object)parent.GetComponent<UnityEngine.UI.LayoutGroup>() == null)
+            {
+                var rt = export.Cast<RectTransform>();
+                var src = check.Cast<RectTransform>();
+                rt.anchoredPosition = src.anchoredPosition - new Vector2(0f, 2f * (src.rect.height + 24f));
+            }
+            exportLabel = go.GetComponentInChildren<TMP_Text>(true);
+            SetText(exportLabel, CardArtExport.Running ? "Exporting card art..." : ExportText);
+            var button = go.GetComponent<UnityEngine.UI.Button>() ?? go.GetComponentInChildren<UnityEngine.UI.Button>(true);
+            if ((object)button == null) { RevivalMod.Log.Warning("[support] the export button has no button to click"); return; }
+            button.onClick.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(OnExport)));
+        }
+
+        private static void OnExport()
+        {
+            if (CardArtExport.Running) return;
+            CardArtExport.Start(text =>
+            {
+                try { if ((object)exportLabel != null && exportLabel.Pointer != IntPtr.Zero) SetText(exportLabel, text); } catch { }
+            });
+        }
+
         /// <summary>The report button only for testers (switched on by the phone layout fix like the others).</summary>
         private static void ReportVisible(Transform root)
         {
@@ -320,6 +363,7 @@ namespace WarpforgeRevival
                 if ((object)pageIntro != null) shown += Show(pageIntro, pageRoot);
                 if ((object)check != null && check.Pointer != IntPtr.Zero) shown += Show(check, pageRoot);
                 ReportVisible(pageRoot);
+                if ((object)export != null && export.Pointer != IntPtr.Zero) shown += Show(export, pageRoot);
                 if (!tickReported)
                 {
                     tickReported = true;
