@@ -246,10 +246,13 @@ namespace WarpforgeRevival
                     Graphics.Blit(half, full);
                     target = full;
                 }
-                if ((object)readback == null || readback.width != width || readback.height != height)
+                // The read-back picture is the mod's own; nothing in the game points to it, so the clean-up
+                // between factions (UnloadUnusedAssets) would throw it away unless it is marked to stay.
+                if (!Alive(readback) || readback.width != width || readback.height != height)
                 {
-                    if ((object)readback != null) UnityEngine.Object.Destroy(readback);
+                    if (Alive(readback)) UnityEngine.Object.Destroy(readback);
                     readback = new Texture2D(width, height, TextureFormat.RGBA32, false, false);
+                    readback.hideFlags = HideFlags.DontUnloadUnusedAsset;
                 }
                 RenderTexture.active = target;
                 readback.ReadPixels(new Rect(rx, ry, width, height), 0, 0, false);
