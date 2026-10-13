@@ -19,6 +19,9 @@ namespace WarpforgeRevival
     ///   card-masks/&lt;card id&gt;.png    troops and warlords: the art's own see-through parts as a mask,
     ///                                 256 x 256 (white, alpha = where the figure is drawn over the frame)
     ///   card-frames/&lt;army&gt;_&lt;troop|stratagem&gt;_&lt;1-4&gt;.png   the faction frames by rarity, 684 x 960
+    ///   card-text.json                the cards' names, rules text and lore in every language the game has,
+    ///                                 as the game's own text entries: {"languages": [{name, code}],
+    ///                                 "terms": {"Card_Name/&lt;id&gt;": [one string per language], ...}}
     ///   export.json                   what was written, from which game and mod version
     /// Everything is read through the game's own loader (Addressables), drawn smaller on the graphics
     /// card and read back, a few cards per frame so the game keeps running. The files are written by the
@@ -66,7 +69,7 @@ namespace WarpforgeRevival
                 zip = new ZipArchive(new FileStream(partPath, FileMode.Create, FileAccess.ReadWrite), ZipArchiveMode.Create);
                 todo.Clear(); loading.Clear(); missing.Clear();
                 foreach (var a in cards) todo.Enqueue(a);
-                total = cards.Count; done = written = masks = frames = sinceCleanup = 0;
+                total = cards.Count; done = written = masks = frames = sinceCleanup = textTerms = textLanguages = 0;
                 anchor = null; anchorArmy = int.MinValue; unloading = null;
                 clock = Stopwatch.StartNew();
                 running = true;
@@ -315,17 +318,84 @@ namespace WarpforgeRevival
             s.Write(data, 0, data.Length);
         }
 
+        // The game's text entries the site needs to show official cards: names, rules text (with the
+        // shared templates and keyword names it refers to) and lore.
+        private static readonly string[] TextGroups = { "Card_Name/", "Card_FullName/", "Card_Description/", "Warlord_Lore/",
+                                                        "Modular_Description/", "Modular_Name/", "Card_Trait/" };
+        private static int textTerms, textLanguages;
+
+        private static void Texts()
+        {
+            var sources = Il2CppI2.Loc.LocalizationManager.Sources;
+            if ((object)sources == null || sources.Count == 0) { RevivalMod.Log.Warning("[art export] the game's text is not loaded; no card text"); return; }
+            var languages = new List<(string name, string code)>();
+            var terms = new SortedDictionary<string, string[]>(StringComparer.Ordinal);
+            foreach (var source in sources)
+            {
+                if ((object)source == null) continue;
+                var langs = source.mLanguages;
+                var columns = new List<(int column, int slot)>();
+                for (int i = 0; i < langs.Count; i++)
+                {
+                    var l = langs[i];
+                    if ((object)l == null || string.IsNullOrEmpty(l.Code)) continue;      // the sheet's helper columns have no code
+                    int slot = languages.FindIndex(x => x.code == l.Code);
+                    if (slot < 0) { languages.Add((l.Name, l.Code)); slot = languages.Count - 1; }
+                    columns.Add((i, slot));
+                }
+                foreach (var t in source.mTerms)
+                {
+                    if ((object)t == null || t.Term == null) continue;
+                    string term = t.Term;
+                    bool wanted = false;
+                    foreach (var g in TextGroups) if (term.StartsWith(g, StringComparison.Ordinal)) { wanted = true; break; }
+                    if (!wanted) continue;
+                    var values = t.Languages;
+                    if (!terms.TryGetValue(term, out var row)) terms[term] = row = new string[0];
+                    foreach (var (column, slot) in columns)
+                    {
+                        if (row.Length <= slot) { Array.Resize(ref row, slot + 1); terms[term] = row; }
+                        string v = (object)values != null && column < values.Length ? values[column] : null;
+                        if (!string.IsNullOrEmpty(v) && string.IsNullOrEmpty(row[slot])) row[slot] = v;
+                    }
+                }
+            }
+            using var mem = new MemoryStream();
+            using (var w = new System.Text.Json.Utf8JsonWriter(mem, new System.Text.Json.JsonWriterOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
+            {
+                w.WriteStartObject();
+                w.WriteStartArray("languages");
+                foreach (var (name, code) in languages) { w.WriteStartObject(); w.WriteString("name", name); w.WriteString("code", code); w.WriteEndObject(); }
+                w.WriteEndArray();
+                w.WriteStartObject("terms");
+                foreach (var kv in terms)
+                {
+                    w.WriteStartArray(kv.Key);
+                    for (int i = 0; i < languages.Count; i++) w.WriteStringValue(i < kv.Value.Length ? kv.Value[i] ?? "" : "");
+                    w.WriteEndArray();
+                }
+                w.WriteEndObject();
+                w.WriteEndObject();
+            }
+            Put("card-text.json", mem.ToArray());
+            textTerms = terms.Count; textLanguages = languages.Count;
+            RevivalMod.Log.Msg($"[art export] card text: {textTerms} entries in {textLanguages} languages ({mem.Length / 1024} KB)");
+        }
+
         private static void Finish()
         {
             ReleaseAnchor();
             Say("Exporting card frames...");
             Frames();
+            Say("Exporting card text...");
+            try { Texts(); }
+            catch (Exception e) { RevivalMod.Log.Warning("[art export] card text: " + e.Message); }
             var info = new StringBuilder();
             info.Append("{\n  \"made\": \"").Append(DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")).Append("\",\n");
             info.Append("  \"mod\": \"").Append(RevivalMod.Version).Append("\",\n");
             info.Append("  \"game\": \"").Append(Application.version).Append("\",\n");
             info.Append("  \"platform\": \"").Append(Application.platform.ToString()).Append("\",\n");
-            info.Append($"  \"art\": {written},\n  \"masks\": {masks},\n  \"frames\": {frames},\n  \"artSize\": {ArtSize},\n  \"maskSize\": {MaskSize},\n");
+            info.Append($"  \"art\": {written},\n  \"masks\": {masks},\n  \"frames\": {frames},\n  \"textTerms\": {textTerms},\n  \"textLanguages\": {textLanguages},\n  \"artSize\": {ArtSize},\n  \"maskSize\": {MaskSize},\n");
             info.Append("  \"missing\": [").Append(string.Join(", ", missing.ConvertAll(m => "\"" + m + "\""))).Append("]\n}\n");
             Put("export.json", Encoding.UTF8.GetBytes(info.ToString()));
             zip.Dispose(); zip = null;
