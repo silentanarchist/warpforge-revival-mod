@@ -15,9 +15,9 @@ namespace WarpforgeRevival
     /// Settings > Mod > Export card art: writes the card pictures from this copy of the game into one zip
     /// in the mod's folder (UserData/WarpforgeRevival/card-art-export.zip), for the website to show
     /// from the player's own computer instead of from the server:
-    ///   card-art/&lt;card id&gt;.jpg      every card's art, 384 x 384 (what the site's Card viewer draws)
+    ///   card-art/&lt;card id&gt;.jpg      every card's art, 512 x 512 (the game's own pictures are 1024 x 1024)
     ///   card-masks/&lt;card id&gt;.png    troops and warlords: the art's own see-through parts as a mask,
-    ///                                 192 x 192 (white, alpha = where the figure is drawn over the frame)
+    ///                                 256 x 256 (white, alpha = where the figure is drawn over the frame)
     ///   card-frames/&lt;army&gt;_&lt;troop|stratagem&gt;_&lt;1-4&gt;.png   the faction frames by rarity, 684 x 960
     ///   export.json                   what was written, from which game and mod version
     /// Everything is read through the game's own loader (Addressables), drawn smaller on the graphics
@@ -26,7 +26,7 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class CardArtExport
     {
-        private const int ArtSize = 384, MaskSize = 192, InFlight = 6;
+        private const int ArtSize = 512, MaskSize = 256, InFlight = 6;
         private const double FrameBudgetMs = 20;
         // where the card sits in a 1024 x 1024 frame texture (the site's frames are this part)
         private const int FrameX = 170, FrameTop = 36, FrameW = 684, FrameH = 960;
