@@ -466,6 +466,7 @@ namespace WarpforgeRevival
                     if (token != null)
                     {
                         Save(token);
+                        try { RevivalMod.Cards?.SyncAgainAfterSignIn(); } catch (Exception e) { RevivalMod.Log.Warning("[signin] content: " + e.Message); }
                         creating = false;
                         termsAsked = false;
                         RevivalMod.Log.Msg("[signin] signed in as " + name + (create ? " (new account)" : ""));

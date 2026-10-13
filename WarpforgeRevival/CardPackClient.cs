@@ -27,6 +27,17 @@ namespace WarpforgeRevival
         public int CardCount { get; private set; }
         public string PackJson { get; private set; }
         public bool FromCache { get; private set; }
+        private volatile bool bundlesRefused;                // a bundle needed a sign-in the game did not have yet
+
+        /// <summary>After a sign-in: if a content bundle was refused for want of one, fetch them again now
+        /// (they are used from the next start).</summary>
+        public void SyncAgainAfterSignIn()
+        {
+            if (!bundlesRefused) return;
+            bundlesRefused = false;
+            RevivalMod.Log.Msg("Signed in: downloading the content bundles that needed a sign-in");
+            Task.Run(Sync);
+        }
 
         public CardPackClient(string server, string dataDir)
         {
@@ -81,7 +92,19 @@ namespace WarpforgeRevival
                 var path = Path.Combine(ContentDir, name);
                 if (File.Exists(path) && Sha256File(path) == want) continue;
                 RevivalMod.Log.Msg($"Downloading content bundle {name} ({b.GetProperty("size").GetInt64() / 1024} KB)...");
-                var data = await http.GetByteArrayAsync(server + b.GetProperty("url").GetString());
+                // the game's own files are only for signed-in players: the saved game sign-in goes along
+                using var req = new HttpRequestMessage(HttpMethod.Get, server + b.GetProperty("url").GetString());
+                var login = GameSignIn.Token();
+                if (login != null) req.Headers.TryAddWithoutValidation("X-Revival-Login", login);
+                using var reply = await http.SendAsync(req);
+                if (reply.StatusCode == HttpStatusCode.Forbidden || reply.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    bundlesRefused = true;
+                    RevivalMod.Log.Warning($"Content bundle {name} needs a signed-in game; it is downloaded after you sign in and used from the next start");
+                    continue;
+                }
+                reply.EnsureSuccessStatusCode();
+                var data = await reply.Content.ReadAsByteArrayAsync();
                 var got = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
                 if (got != want) throw new InvalidDataException($"bundle {name} checksum mismatch");
                 File.WriteAllBytes(path + ".tmp", data);
