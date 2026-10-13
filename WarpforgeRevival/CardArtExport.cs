@@ -35,10 +35,11 @@ namespace WarpforgeRevival
 
         private static bool running;
         private static readonly Queue<Art> todo = new Queue<Art>();
-        private static readonly List<(Art art, AsyncOperationHandle<Sprite> load, float since)> loading = new List<(Art, AsyncOperationHandle<Sprite>, float)>();
-        private static AsyncOperationHandle<Sprite> anchor;   // (interop handles are objects: null = none)            // keeps the current faction's art bundle loaded
+        private static readonly List<(Art art, AsyncOperationHandle<Texture2D> load, float since)> loading = new List<(Art, AsyncOperationHandle<Texture2D>, float)>();
+        private static AsyncOperationHandle<Texture2D> anchor;   // (interop handles are objects: null = none)            // keeps the current faction's art bundle loaded
         private static int anchorArmy = int.MinValue;
         private static int total, done, written, masks, frames, sinceCleanup;
+        private static AsyncOperation unloading;
         private static readonly List<string> missing = new List<string>();
         private static ZipArchive zip;
         private static string zipPath, partPath;
@@ -66,7 +67,7 @@ namespace WarpforgeRevival
                 todo.Clear(); loading.Clear(); missing.Clear();
                 foreach (var a in cards) todo.Enqueue(a);
                 total = cards.Count; done = written = masks = frames = sinceCleanup = 0;
-                anchor = null; anchorArmy = int.MinValue;
+                anchor = null; anchorArmy = int.MinValue; unloading = null;
                 clock = Stopwatch.StartNew();
                 running = true;
                 int ids = 0; foreach (var a in cards) ids += a.Cards.Count;
@@ -109,6 +110,7 @@ namespace WarpforgeRevival
             var frameClock = Stopwatch.StartNew();
             try
             {
+                if ((object)unloading != null) { if (!unloading.isDone) return; unloading = null; }
                 while (frameClock.Elapsed.TotalMilliseconds < FrameBudgetMs)
                 {
                     // keep a few pictures loading, one faction at a time (its art bundle stays loaded meanwhile)
@@ -116,14 +118,20 @@ namespace WarpforgeRevival
                     {
                         var a = todo.Dequeue();
                         if (a.Army != anchorArmy) NewFaction(a.Army);
-                        loading.Add((a, new AssetReference(a.Guid).LoadAssetAsync<Sprite>(), Time.realtimeSinceStartup));
+                        loading.Add((a, new AssetReference(a.Guid).LoadAssetAsync<Texture2D>(), Time.realtimeSinceStartup));
                     }
                     if (loading.Count == 0) break;
                     int ready = loading.FindIndex(l => l.load.IsDone || Time.realtimeSinceStartup - l.since > 30f);
                     if (ready < 0) return;                               // waiting for the game's loader
                     var (art, load, _) = loading[ready];
                     loading.RemoveAt(ready);
-                    Picture(art, load);
+                    try { Picture(art, load); }
+                    catch (Exception e)        // one bad picture must not stop the rest
+                    {
+                        foreach (var c in art.Cards) missing.Add(c.id);
+                        if (missing.Count <= 20) RevivalMod.Log.Warning($"[art export] picture of {art.Cards[0].id} skipped: {e.Message}");
+                        if (missing.Count > 200) throw new Exception("too many pictures failed", e);
+                    }
                     done++;
                     if (done % 25 == 0 || done == total) Say($"Exporting card art... {done} / {total}");
                 }
@@ -136,7 +144,9 @@ namespace WarpforgeRevival
         {
             ReleaseAnchor();
             anchorArmy = army;
-            Resources.UnloadUnusedAssets();
+            // the last faction's pictures go before the next one loads (waited for in Tick: an unload
+            // still running while new pictures load can take those with it)
+            unloading = Resources.UnloadUnusedAssets();
         }
 
         private static void ReleaseAnchor()
@@ -145,21 +155,20 @@ namespace WarpforgeRevival
             anchor = null;
         }
 
-        private static void Picture(Art art, AsyncOperationHandle<Sprite> load)
+        private static void Picture(Art art, AsyncOperationHandle<Texture2D> load)
         {
-            Sprite sprite = null;
-            try { if (load.IsDone && load.Status == AsyncOperationStatus.Succeeded) sprite = load.Result; } catch { }
-            if ((object)sprite == null || (object)sprite.texture == null)
+            Texture2D tex = null;
+            try { if (load.IsDone && load.Status == AsyncOperationStatus.Succeeded) tex = load.Result; } catch { }
+            if (!Alive(tex))
             {
                 foreach (var c in art.Cards) missing.Add(c.id);
                 RevivalMod.Log.Warning($"[art export] picture {art.Guid} did not load ({art.Cards[0].id})");
                 try { Addressables.Release(load); } catch { }
                 return;
             }
-            var rgba = Read(sprite, ArtSize, ArtSize, null);
+            var rgba = Read(tex, new Rect(0, 0, tex.width, tex.height), ArtSize, ArtSize, null);
             // the first picture of a faction keeps its bundle loaded; the rest are let go straight away
             if ((object)anchor == null) anchor = load; else try { Addressables.Release(load); } catch { }
-            if (++sinceCleanup >= 40) { sinceCleanup = 0; Resources.UnloadUnusedAssets(); }
 
             var rgb = new byte[ArtSize * ArtSize * 3];
             for (int i = 0, j = 0; i < rgb.Length; i += 3, j += 4) { rgb[i] = rgba[j]; rgb[i + 1] = rgba[j + 1]; rgb[i + 2] = rgba[j + 2]; }
@@ -193,10 +202,13 @@ namespace WarpforgeRevival
         /// top row first. With <paramref name="crop"/> (in the sprite's own pixels, from its top left) only
         /// that part is read, at full size.
         /// </summary>
-        private static byte[] Read(Sprite sprite, int width, int height, RectInt? crop)
+        private static bool Alive(UnityEngine.Object o)
         {
-            var tex = sprite.texture;
-            var r = sprite.textureRect;
+            try { return (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero; } catch { return false; }
+        }
+
+        private static byte[] Read(Texture tex, Rect r, int width, int height, RectInt? crop)
+        {
             var scale = new Vector2(r.width / tex.width, r.height / tex.height);
             var offset = new Vector2(r.x / tex.width, r.y / tex.height);
             RenderTexture full = null, half = null, prev = RenderTexture.active;
@@ -263,11 +275,11 @@ namespace WarpforgeRevival
                         {
                             var pair = so.GetClanFrame(army, (CardTier)tier, type);
                             var sprite = pair.Item1;
-                            if ((object)sprite == null || (object)sprite.texture == null) continue;
+                            if (!Alive(sprite) || !Alive(sprite.texture)) { RevivalMod.Log.Warning($"[art export] frame {army} {word} {tier + 1} not loaded"); continue; }
                             var r = sprite.textureRect;
                             float k = r.width / 1024f;
                             var crop = new RectInt((int)Math.Round(FrameX * k), (int)Math.Round(FrameTop * k), (int)Math.Round(FrameW * k), (int)Math.Round(FrameH * k));
-                            var rgba = Read(sprite, 0, 0, crop);
+                            var rgba = Read(sprite.texture, r, 0, 0, crop);
                             Put($"card-frames/{army}_{word}_{tier + 1}.png", ImageEncoders.Png(rgba, crop.width, crop.height, 4));
                             frames++;
                             try { so.ReleaseCardFrame(army, (CardTier)tier, type); } catch { }
