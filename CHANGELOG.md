@@ -19,6 +19,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Settings > Mod:** the website button is now called **Open** and opens the website's home page (it opened the Card Creator).
 
 ### Fixes
+- **Mulligan:** after Continue, the mulligan cards no longer stay on screen under the Offence / Defence card pick; they appear in your hand once the pick is done. Not yet confirmed in play.
 - **Draft:** after picking a pack, the next packs appear once the server has answered, instead of the packs you just chose from coming back for a moment (and refusing a tap). Should fix it on slower connections, phones especially; not yet confirmed in play.
 - **Crash and freeze reports (testers):** no report is offered after the game was put in the background (phone screen off, home button, another app) and closed or ended by the phone afterwards, or after an update replaced the mod or the game. Not yet confirmed in play.
 - **Draft:** when a Draft search ends against the AI, the AI now plays a deck that fits the Draft's rules: a Classic deck in Classic Draft (it was given a Skirmish bot deck), and in a Draft with other deck rules the bot deck nearest its deck size. Not yet confirmed in play.
