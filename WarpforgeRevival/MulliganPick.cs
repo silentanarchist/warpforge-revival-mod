@@ -15,7 +15,13 @@ namespace WarpforgeRevival
     /// Offence card step switched back on (BattlefieldCards) the pick window opens in between, so the
     /// mulligan cards stayed on screen around and under it, and were hard to click past.
     ///
-    /// Now, when the pick window opens during the mulligan, those cards are hidden. They are shown again
+    /// The mulligan's last step also plays the Offence / Defence reveal (BattleManager's
+    /// ApplyOffensiveAndDefensiveEffects) before it moves the cards into the hand, so the player going
+    /// second - who has no pick window - saw the opponent's Offence card shown under their mulligan cards.
+    ///
+    /// Now, when the pick window opens during the mulligan, and at the start of the mulligan's last step
+    /// (PlayerHand.FinishMulliganFinalPhase, before the reveal) while the Offence step is on, those cards
+    /// are hidden. They are shown again
     /// as the game moves them into the hand (they appear there; the mulligan screen does not come back),
     /// or, as a safety net, when the mulligan is cancelled, when the mulligan is over by any other way,
     /// or after two minutes - so a hand can never stay invisible.
@@ -27,10 +33,17 @@ namespace WarpforgeRevival
         private const float SafetySeconds = 120f;
 
         [HarmonyPatch(typeof(ChooseCardMenu), nameof(ChooseCardMenu.Setup))]
-        private static class OnPickOpened
+        private static class OnPickOpened { private static void Postfix() => Hide("pick window open"); }
+
+        // The last step, before the Offence / Defence reveal: the mulligan closes first, then the card shows.
+        [HarmonyPatch(typeof(PlayerHand), nameof(PlayerHand.FinishMulliganFinalPhase))]
+        private static class OnFinalStep
         {
-            private static void Postfix()
-            {
+            private static void Prefix() { if (ServerSettings.OffenseCards) Hide("mulligan closed before the Offence / Defence reveal"); }
+        }
+
+        private static void Hide(string when)
+        {
                 try
                 {
                     var bm = BattleManager.Instance;
@@ -55,11 +68,10 @@ namespace WarpforgeRevival
                     if (n > 0)
                     {
                         hiddenAt = Time.realtimeSinceStartup;
-                        RevivalMod.Log.Msg($"[mulligan] pick window open: {n} mulligan card(s) hidden until they go into the hand");
+                        RevivalMod.Log.Msg($"[mulligan] {when}: {n} mulligan card(s) hidden until they go into the hand");
                     }
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[mulligan] could not hide the mulligan cards: " + e.Message); Restore("after an error"); }
-            }
         }
 
         // The cards go into the hand here: show them first, so the game moves visible cards (and can run
