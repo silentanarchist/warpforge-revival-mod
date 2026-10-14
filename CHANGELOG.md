@@ -3,7 +3,7 @@
 Newest first. Each release page on GitHub carries its own section from this file.
 Changes made on the server take effect for everyone at once; the ones listed here are those players notice.
 
-## Unreleased
+## 0.13.26-w - 2026-10-14
 
 ### New
 - **Offence cards per game mode:** each game mode has its own Offence card switch, set by the server owner on the website's Server page. All current modes have it on; a new mode starts with it off. Replays remember whether the match had the pick.
