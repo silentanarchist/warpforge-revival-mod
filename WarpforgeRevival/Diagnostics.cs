@@ -254,9 +254,25 @@ namespace WarpforgeRevival
             catch { }
         }
 
+        // Unity repeats this one for every temporary picture it makes (the format falls back by itself and
+        // nothing looks different), so after the first it is left out of the log.
+        private static bool formatFallbackShown;
+
         private static void UnityLogWarning(Il2CppSystem.Object message)
         {
-            try { RevivalMod.Log.Warning("[unity] " + message?.ToString()); } catch { }
+            try
+            {
+                string text = message?.ToString();
+                if (text != null && text.Contains("RenderTexture::GetTemporary fallbacks to"))
+                {
+                    if (formatFallbackShown) return;
+                    formatFallbackShown = true;
+                    RevivalMod.Log.Warning("[unity] " + text + " (harmless; further warnings like this are left out of the log)");
+                    return;
+                }
+                RevivalMod.Log.Warning("[unity] " + text);
+            }
+            catch { }
         }
     }
 
