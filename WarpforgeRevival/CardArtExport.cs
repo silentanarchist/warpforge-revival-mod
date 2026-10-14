@@ -15,9 +15,10 @@ namespace WarpforgeRevival
     /// Settings > Mod > Export card art: writes the card pictures from this copy of the game into one zip
     /// in the mod's folder (UserData/WarpforgeRevival/card-art-export.zip), for the website to show
     /// from the player's own computer instead of from the server:
-    ///   card-art/&lt;card id&gt;.jpg      every card's art, 512 x 512 (the game's own pictures are 1024 x 1024)
+    ///   card-art/&lt;card id&gt;.jpg      every card's art, 512 x 512 (the game's own pictures are 1024 x 1024);
+    ///                                 with "Compress Card Art" unticked, at the picture's own size (0.13.27)
     ///   card-masks/&lt;card id&gt;.png    troops and warlords: the art's own see-through parts as a mask,
-    ///                                 256 x 256 (white, alpha = where the figure is drawn over the frame)
+    ///                                 half the art's size (white, alpha = where the figure is drawn over the frame)
     ///   card-frames/&lt;army&gt;_&lt;troop|stratagem&gt;_&lt;1-4&gt;.png   the faction frames by rarity, 684 x 960
     ///   card-text.json                the cards' names, rules text and lore in every language the game has,
     ///                                 as the game's own text entries: {"languages": [{name, code}],
@@ -29,7 +30,9 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class CardArtExport
     {
-        private const int ArtSize = 512, MaskSize = 256, InFlight = 6;
+        private const int ArtSize = 512, InFlight = 6;
+        private static bool compress = true;      // 512 x 512 at JPEG quality 85; off: the picture's own size at 95
+        private static int artSizeSeen;
         private const double FrameBudgetMs = 20;
         // where the card sits in a 1024 x 1024 frame texture (the site's frames are this part)
         private const int FrameX = 170, FrameTop = 36, FrameW = 684, FrameH = 960;
@@ -54,10 +57,12 @@ namespace WarpforgeRevival
         internal static string FilePath => Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival", "card-art-export.zip");
 
         /// <summary>Starts an export; <paramref name="progress"/> gets short texts for the button (on the main thread).</summary>
-        internal static void Start(Action<string> progress)
+        internal static void Start(Action<string> progress, bool compressArt = true)
         {
             if (running) return;
             report = progress;
+            compress = compressArt;
+            artSizeSeen = 0;
             try
             {
                 var cards = Gather();
@@ -74,7 +79,7 @@ namespace WarpforgeRevival
                 clock = Stopwatch.StartNew();
                 running = true;
                 int ids = 0; foreach (var a in cards) ids += a.Cards.Count;
-                RevivalMod.Log.Msg($"[art export] started: {ids} cards with art, {total} pictures, writing {zipPath}");
+                RevivalMod.Log.Msg($"[art export] started: {ids} cards with art, {total} pictures, {(compress ? "compressed to 512 x 512" : "full size")}, writing {zipPath}");
                 Say($"Exporting card art... 0 / {total}");
             }
             catch (Exception e) { Fail(e); }
@@ -181,29 +186,33 @@ namespace WarpforgeRevival
                 return;
             }
             if (done == 0) RevivalMod.Log.Msg($"[art export] first picture: a {got.GetIl2CppType().Name}, {tex.width} x {tex.height}");
-            var rgba = Read(tex, rect, ArtSize, ArtSize, null);
+            // compressed: 512 x 512; full size: the picture as the game has it (an even size, for the mask)
+            int w = compress ? ArtSize : Math.Max(2, (int)rect.width & ~1), h = compress ? ArtSize : Math.Max(2, (int)rect.height & ~1);
+            if (artSizeSeen == 0) artSizeSeen = w;
+            var rgba = Read(tex, rect, w, h, null);
             // the first picture of a faction keeps its bundle loaded; the rest are let go straight away
             if ((object)anchor == null) anchor = load; else try { Addressables.Release(load); } catch { }
 
-            var rgb = new byte[ArtSize * ArtSize * 3];
+            var rgb = new byte[w * h * 3];
             for (int i = 0, j = 0; i < rgb.Length; i += 3, j += 4) { rgb[i] = rgba[j]; rgb[i + 1] = rgba[j + 1]; rgb[i + 2] = rgba[j + 2]; }
-            byte[] jpg = ImageEncoders.Jpeg(rgb, ArtSize, ArtSize, 85);
+            byte[] jpg = ImageEncoders.Jpeg(rgb, w, h, compress ? 85 : 95);
 
             // troops and warlords: the art's see-through parts are drawn over the frame
             byte[] mask = null;
             if (art.Cards.Exists(c => c.type == (int)CardTypeOptions.Minion || c.type == (int)CardTypeOptions.Hero))
             {
-                var la = new byte[MaskSize * MaskSize * 2];
+                int mw = w / 2, mh = h / 2;
+                var la = new byte[mw * mh * 2];
                 bool clear = false;
-                for (int y = 0; y < MaskSize; y++)
-                    for (int x = 0; x < MaskSize; x++)
+                for (int y = 0; y < mh; y++)
+                    for (int x = 0; x < mw; x++)
                     {
-                        int s = ((y * 2) * ArtSize + x * 2) * 4 + 3, r = ArtSize * 4;
+                        int s = ((y * 2) * w + x * 2) * 4 + 3, r = w * 4;
                         int a = (rgba[s] + rgba[s + 4] + rgba[s + r] + rgba[s + r + 4] + 2) / 4;
                         if (a < 250) clear = true;
-                        la[(y * MaskSize + x) * 2] = 255; la[(y * MaskSize + x) * 2 + 1] = (byte)a;
+                        la[(y * mw + x) * 2] = 255; la[(y * mw + x) * 2 + 1] = (byte)a;
                     }
-                if (clear) mask = ImageEncoders.Png(la, MaskSize, MaskSize, 2);
+                if (clear) mask = ImageEncoders.Png(la, mw, mh, 2);
             }
             foreach (var c in art.Cards)
             {
@@ -395,7 +404,7 @@ namespace WarpforgeRevival
             info.Append("  \"mod\": \"").Append(RevivalMod.Version).Append("\",\n");
             info.Append("  \"game\": \"").Append(Application.version).Append("\",\n");
             info.Append("  \"platform\": \"").Append(Application.platform.ToString()).Append("\",\n");
-            info.Append($"  \"art\": {written},\n  \"masks\": {masks},\n  \"frames\": {frames},\n  \"textTerms\": {textTerms},\n  \"textLanguages\": {textLanguages},\n  \"artSize\": {ArtSize},\n  \"maskSize\": {MaskSize},\n");
+            info.Append($"  \"art\": {written},\n  \"masks\": {masks},\n  \"frames\": {frames},\n  \"textTerms\": {textTerms},\n  \"textLanguages\": {textLanguages},\n  \"artSize\": {(artSizeSeen > 0 ? artSizeSeen : ArtSize)},\n  \"maskSize\": {(artSizeSeen > 0 ? artSizeSeen : ArtSize) / 2},\n  \"compressed\": {(compress ? "true" : "false")},\n");
             info.Append("  \"missing\": [").Append(string.Join(", ", missing.ConvertAll(m => "\"" + m + "\""))).Append("]\n}\n");
             Put("export.json", Encoding.UTF8.GetBytes(info.ToString()));
             zip.Dispose(); zip = null;

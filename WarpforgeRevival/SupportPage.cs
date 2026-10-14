@@ -144,6 +144,7 @@ namespace WarpforgeRevival
             AddCheckButton(faq, faqT);
             AddReportButton(faq, faqT);
             AddExportButton(faq, faqT);
+            AddCompressBox();
 
             // The phone layout of this page keeps the button and its introduction switched off and
             // shows its own wording instead (which was just hidden with the rest of the publisher's
@@ -153,6 +154,7 @@ namespace WarpforgeRevival
             if ((object)check != null) shown += Show(check, root);
             ReportVisible(root);
             if ((object)export != null && export.Pointer != IntPtr.Zero) shown += Show(export, root);
+            if ((object)compressRow != null && compressRow.Pointer != IntPtr.Zero) { shown += Show(compressRow, root); ShowTick(); }
             if (shown > 0 && !reported) RevivalMod.Log.Msg($"[support] switched on {shown} hidden part(s) of the page so the button and its text show");
 
             // The tab's button down the side of the window carries the same word as the heading.
@@ -319,10 +321,122 @@ namespace WarpforgeRevival
         private static void OnExport()
         {
             if (CardArtExport.Running) return;
+            RevivalMod.Log.Msg("[support] Export card art pressed, Compress Card Art " + (compressArt ? "on" : "off"));
             CardArtExport.Start(text =>
             {
                 try { if ((object)exportLabel != null && exportLabel.Pointer != IntPtr.Zero) SetText(exportLabel, text); } catch { }
-            });
+            }, compressArt);
+        }
+
+        // ---- "Compress Card Art" tick box under the export button (0.13.27): on (the default) the art is
+        // 512 x 512 as before; off it is written at the game's own size, which takes much longer.
+        private const string CompressName = "WFR Compress card art";
+        private const string CompressWarning = "Warning: Slower devices may take 5 minutes or longer if you disable this option.";
+        private static bool compressArt = true;
+        private static Transform compressRow;
+        private static UnityEngine.UI.Image compressTick;
+
+        private static void AddCompressBox()
+        {
+            if ((object)export == null || export.Pointer == IntPtr.Zero) return;
+            var parent = export.parent;
+            if ((object)parent == null) return;
+            var old = parent.Find(CompressName);
+            if ((object)old != null)
+            {
+                compressRow = old;
+                var tick = old.Find("Box/Tick");
+                compressTick = (object)tick == null ? null : tick.GetComponent<UnityEngine.UI.Image>();
+                ShowTick();
+                return;
+            }
+            var src = export.Cast<RectTransform>();
+            float bw = Mathf.Max(200f, src.rect.width), bh = Mathf.Max(40f, src.rect.height);
+            float rowH = bh * 1.5f;
+            var go = new GameObject(CompressName);
+            var rt = go.AddComponent<RectTransform>();
+            rt.SetParent(parent, false);
+            rt.anchorMin = src.anchorMin; rt.anchorMax = src.anchorMax; rt.pivot = src.pivot;
+            rt.sizeDelta = new Vector2(src.sizeDelta.x, rowH);
+            go.transform.SetSiblingIndex(export.GetSiblingIndex() + 1);
+            var le = go.AddComponent<UnityEngine.UI.LayoutElement>();
+            le.preferredHeight = rowH; le.minHeight = rowH; le.preferredWidth = bw;
+            if ((object)parent.GetComponent<UnityEngine.UI.LayoutGroup>() == null)
+                rt.anchoredPosition = src.anchoredPosition - new Vector2(0f, (bh + rowH) / 2f + 12f);
+            compressRow = go.transform;
+
+            var font = (object)exportLabel != null ? exportLabel.font : null;
+            float size = (object)exportLabel != null && exportLabel.fontSize > 0 ? exportLabel.fontSize : 28f;
+            float boxS = Mathf.Round(bh * 0.5f);
+
+            // the clickable part: the box and its label, the top half of the row
+            var hit = new GameObject("Hit");
+            var hrt = hit.AddComponent<RectTransform>();
+            hrt.SetParent(go.transform, false);
+            hrt.anchorMin = new Vector2(0f, 0.45f); hrt.anchorMax = new Vector2(1f, 1f);
+            hrt.offsetMin = Vector2.zero; hrt.offsetMax = Vector2.zero;
+            var hitImg = hit.AddComponent<UnityEngine.UI.Image>();
+            hitImg.color = new Color(0f, 0f, 0f, 0f);                  // invisible, but catches the click
+            var btn = hit.AddComponent<UnityEngine.UI.Button>();
+            btn.targetGraphic = hitImg;
+            btn.onClick.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() =>
+            {
+                if (CardArtExport.Running) return;
+                compressArt = !compressArt;
+                ShowTick();
+                RevivalMod.Log.Msg("[support] Compress Card Art " + (compressArt ? "on" : "off"));
+            })));
+
+            var box = new GameObject("Box");
+            var brt = box.AddComponent<RectTransform>();
+            brt.SetParent(hit.transform, false);
+            brt.anchorMin = brt.anchorMax = new Vector2(0f, 0.5f); brt.pivot = new Vector2(0f, 0.5f);
+            brt.sizeDelta = new Vector2(boxS, boxS); brt.anchoredPosition = new Vector2(4f, 0f);
+            var frame = box.AddComponent<UnityEngine.UI.Image>();
+            frame.color = new Color(0.85f, 0.75f, 0.5f, 1f);
+            frame.raycastTarget = false;
+            var inner = new GameObject("Inner");
+            var irt = inner.AddComponent<RectTransform>();
+            irt.SetParent(box.transform, false);
+            irt.anchorMin = Vector2.zero; irt.anchorMax = Vector2.one; irt.offsetMin = new Vector2(3f, 3f); irt.offsetMax = new Vector2(-3f, -3f);
+            var innerImg = inner.AddComponent<UnityEngine.UI.Image>();
+            innerImg.color = new Color(0.08f, 0.07f, 0.06f, 1f);
+            innerImg.raycastTarget = false;
+            var tickGo = new GameObject("Tick");
+            var trt = tickGo.AddComponent<RectTransform>();
+            trt.SetParent(box.transform, false);
+            trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.offsetMin = new Vector2(7f, 7f); trt.offsetMax = new Vector2(-7f, -7f);
+            compressTick = tickGo.AddComponent<UnityEngine.UI.Image>();
+            compressTick.color = new Color(0.95f, 0.8f, 0.35f, 1f);
+            compressTick.raycastTarget = false;
+
+            var label = new GameObject("Label");
+            var lrt = label.AddComponent<RectTransform>();
+            lrt.SetParent(hit.transform, false);
+            lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+            lrt.offsetMin = new Vector2(boxS + 16f, 0f); lrt.offsetMax = Vector2.zero;
+            var lt = label.AddComponent<TextMeshProUGUI>();
+            if ((object)font != null) lt.font = font;
+            lt.text = "Compress Card Art"; lt.fontSize = size * 0.85f; lt.color = Color.white;
+            lt.alignment = TextAlignmentOptions.MidlineLeft; lt.enableWordWrapping = false; lt.raycastTarget = false;
+
+            var warn = new GameObject("Warning");
+            var wrt = warn.AddComponent<RectTransform>();
+            wrt.SetParent(go.transform, false);
+            wrt.anchorMin = new Vector2(0f, 0f); wrt.anchorMax = new Vector2(1f, 0.45f);
+            wrt.offsetMin = new Vector2(4f, 0f); wrt.offsetMax = Vector2.zero;
+            var wt = warn.AddComponent<TextMeshProUGUI>();
+            if ((object)font != null) wt.font = font;
+            wt.text = CompressWarning; wt.fontSize = size * 0.55f; wt.color = new Color(1f, 0.8f, 0.45f, 1f);
+            wt.alignment = TextAlignmentOptions.TopLeft; wt.enableWordWrapping = true; wt.raycastTarget = false;
+
+            ShowTick();
+            RevivalMod.Log.Msg("[support] Compress Card Art box added" + ((object)parent.GetComponent<UnityEngine.UI.LayoutGroup>() == null ? " (placed by hand)" : ""));
+        }
+
+        private static void ShowTick()
+        {
+            try { if ((object)compressTick != null && compressTick.Pointer != IntPtr.Zero) compressTick.enabled = compressArt; } catch { }
         }
 
         /// <summary>The report button only for testers (switched on by the phone layout fix like the others).</summary>

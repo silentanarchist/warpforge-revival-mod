@@ -3,6 +3,12 @@
 Newest first. Each release page on GitHub carries its own section from this file.
 Changes made on the server take effect for everyone at once; the ones listed here are those players notice.
 
+
+## Unreleased
+
+### New
+- **Settings > Mod > Compress Card Art:** a tick box under Export card art, on by default (the art is saved at 512 x 512, as before). Untick it to save the art at the game's own size (1024 x 1024) for the best quality; this takes much longer, and slower devices may need 5 minutes or longer. Not yet confirmed in play.
+
 ## 0.13.26-w - 2026-10-14
 
 ### New
