@@ -39,7 +39,7 @@ namespace WarpforgeRevival
         [HarmonyPatch(typeof(PlayerHand), nameof(PlayerHand.FinishMulliganFinalPhase))]
         private static class OnFinalStep
         {
-            private static void Prefix() { if (ServerSettings.OffenseCards) Hide("mulligan closed before the Offence / Defence reveal"); }
+            private static void Prefix() { if (BattlefieldCards.PickOn) Hide("mulligan closed before the Offence / Defence reveal"); }
         }
 
         private static void Hide(string when)

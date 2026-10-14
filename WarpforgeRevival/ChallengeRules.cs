@@ -18,7 +18,8 @@ namespace WarpforgeRevival
     ///  - the mode's gameplay variables (warlord health, mana, cards drawn, hand limit, overtime) are
     ///    set on the mode for the length of the match and put back afterwards;
     ///  - the starting hand, the second player's extra cards and the turn timer are read from here
-    ///    by LongGame (starting hand) and TurnClock.
+    ///    by LongGame (starting hand) and TurnClock;
+    ///  - the Offence card pick and who goes first (0.13.24) are applied by MatchOptions.
     /// A challenge without "revivalRules" is an ordinary Classic/Skirmish challenge, as before.
     /// </summary>
     internal static class ChallengeRules
@@ -46,12 +47,18 @@ namespace WarpforgeRevival
             new Field("manaPerTurn", "Mana gained per turn", 0, 5),
             new Field("overtimeTurn", "Overtime starts on turn", 5, 60),
             new Field("turnSeconds", "Turn timer (seconds)", 30, 300, 5),
+            new Field("offenseCards", "Offence cards", 0, 1),
+            // 0 the game decides (warlord initiative, then a coin toss), 1 the challenger, 2 the friend challenged
+            new Field("firstPlayer", "Goes first", 0, 2),
         };
 
         /// <summary>A rule's value as the menu shows it ("x1.4", "+5", "4").</summary>
         internal static string Show(string key, int v) =>
             key == "warlordHealthMultiplier" ? "x" + (v / 10.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
-            : key == "warlordLifeChange" && v > 0 ? "+" + v : v.ToString();
+            : key == "warlordLifeChange" && v > 0 ? "+" + v
+            : key == "offenseCards" ? (v == 1 ? "On" : "Off")
+            : key == "firstPlayer" ? (v == 1 ? "You" : v == 2 ? "Opponent" : "Random")      // as the challenger sees it
+            : v.ToString();
 
         /// <summary>
         /// Keeps the starting hand within the hand limit: the starting hand at most the limit, and the
@@ -119,7 +126,8 @@ namespace WarpforgeRevival
                        $"Warlord health: {Show("warlordHealthMultiplier", G("warlordHealthMultiplier"))}, then {(change >= 0 ? "+" : "")}{change}\n" +
                        $"Starting hand: {G("startingHand")} (+{G("secondPlayerExtraCards")} for the second player) · hand limit {G("handLimit")}\n" +
                        $"Mana: starts {G("startingMana")} / {G("startingManaSecond")} (first / second player), +{G("manaPerTurn")} per turn\n" +
-                       $"Cards drawn per turn: {G("drawCardsPerTurn")} · overtime from turn {G("overtimeTurn")} · turn timer {G("turnSeconds")} s";
+                       $"Cards drawn per turn: {G("drawCardsPerTurn")} · overtime from turn {G("overtimeTurn")} · turn timer {G("turnSeconds")} s\n" +
+                       $"Offence cards: {(G("offenseCards") == 1 ? "on" : "off")} · goes first: {(G("firstPlayer") == 1 ? "your challenger" : G("firstPlayer") == 2 ? "you" : "random")}";
             }
         }
 
@@ -147,6 +155,8 @@ namespace WarpforgeRevival
             r.Values["warlordHealthMultiplier"] = (int)Math.Round(factor * 10);
             int secs = ServerSettings.TurnSeconds ?? RevivalMod.Config.TurnSeconds;
             r.Values["turnSeconds"] = secs >= 30 && secs <= 300 ? secs : 60;
+            r.Values["offenseCards"] = ServerSettings.OffenceFor(eventId) ? 1 : 0;
+            r.Values["firstPlayer"] = 0;
             foreach (var f in Fields)
             {
                 int v = r.Values.TryGetValue(f.Key, out int got) ? got : f.Min;
@@ -217,7 +227,7 @@ namespace WarpforgeRevival
             outgoing = rules;
             outgoingTo = to;
             outgoingAt = Time.realtimeSinceStartup;
-            Apply(rules, null);           // the challenger's own match uses them too
+            Apply(rules, null, true);     // the challenger's own match uses them too
         }
 
         /// <summary>
@@ -390,12 +400,27 @@ namespace WarpforgeRevival
         /// <summary>The chosen mode of a custom-rules challenge being played (not set for a replay).</summary>
         internal static string ActiveEvent => active != null && !activeIsReplay && battleSeen ? active.EventId : null;
 
+        // whether this game sent the challenge whose rules are active (false for the friend who accepted, and for replays)
+        private static bool activeIsChallenger;
+
+        /// <summary>The match about to start (or being played) is under these rules: a challenge's or a replay's saved ones.</summary>
+        internal static bool Active => active != null;
+        internal static bool ActiveIsReplay => active != null && activeIsReplay;
+        internal static bool ActiveIsChallenger => active != null && activeIsChallenger;
+        internal static string RulesEvent => active?.EventId;
+        /// <summary>The Offence card pick under the active rules (1 on, 0 off), or null when they do not say (older replays).</summary>
+        internal static int? Offence => active?.Get("offenseCards");
+        /// <summary>Who goes first under a challenge's rules: 0 the game decides, 1 the challenger, 2 the friend challenged.</summary>
+        internal static int FirstPlayer => active?.Get("firstPlayer") ?? 0;
+        /// <summary>A replay's saved rules say a challenge forced who went first in it.</summary>
+        internal static bool ReplayForcedFirst => active != null && activeIsReplay && active.Get("forcedFirst") == 1;
+
         // a replay's saved rules (Replays): the next battle, if it is that replay, is played under them
         private static bool activeIsReplay;
 
         internal static void ForReplay(RuleSet rules)
         {
-            Apply(rules, null);
+            Apply(rules, null, false);
             activeIsReplay = true;
         }
 
@@ -433,17 +458,18 @@ namespace WarpforgeRevival
                     RevivalMod.Log.Msg($"[challenge] challenge match starting with '{opponent}': {(rules == null ? "ordinary rules" : "custom rules")}");
                     // nothing is cleared here for an ordinary one: rules already noted stay until the battle
                     // (which only uses them in a friend match), a call-off, or 5 minutes
-                    if (rules != null && !ReferenceEquals(rules, active)) Apply(rules, null);
+                    if (rules != null && !ReferenceEquals(rules, active)) Apply(rules, null, ReferenceEquals(rules, outgoing));
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[challenge] match start: " + e.Message); }
                 return true;
             }
         }
 
-        private static void Apply(RuleSet rules, IPlayEvent ev)
+        private static void Apply(RuleSet rules, IPlayEvent ev, bool challenger)
         {
             Restore();
             active = rules;
+            activeIsChallenger = challenger;
             activeAt = Time.realtimeSinceStartup;
             battleSeen = false;
             RevivalMod.Log.Msg($"[challenge] next match with custom rules in {rules.EventId}: {rules.ToJson()["v"]?.ToJsonString()}");
@@ -456,6 +482,12 @@ namespace WarpforgeRevival
         private static class BattleStart
         {
             private static void Prefix(BattleManager __instance)
+            {
+                Rules(__instance);
+                MatchOptions.BattleStarting(__instance);     // the Offence card pick for this match, once its rules are known
+            }
+
+            private static void Rules(BattleManager __instance)
             {
                 bool replay = Replays.IsReplay(__instance);
                 if (active != null && activeIsReplay != replay)
@@ -518,7 +550,7 @@ namespace WarpforgeRevival
             if (!found && opponent.Length == 0 && incoming.Count == 1) { got = incoming.Values.First(); found = true; opponent = incoming.Keys.First(); }
             if (!found || now - got.at > 300f) { RevivalMod.Log.Msg($"[challenge] friend match: no challenge rules for '{opponent}'"); return; }
             RevivalMod.Log.Msg($"[challenge] friend match with {opponent}: the accepted challenge's rules");
-            Apply(got.rules, null);
+            Apply(got.rules, null, false);
         }
 
         private static void Set(GameplayVariablesData gv, string key, RuleSet rules)
@@ -568,6 +600,7 @@ namespace WarpforgeRevival
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] restore: " + e.Message); }
             active = null;
             activeIsReplay = false;
+            activeIsChallenger = false;
             activeVars = null;
             saved.Clear();
         }

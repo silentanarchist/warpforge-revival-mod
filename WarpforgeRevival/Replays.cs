@@ -71,6 +71,11 @@ namespace WarpforgeRevival
             ["startingMana"] = (0, 20), ["startingManaSecond"] = (0, 20), ["manaPerTurn"] = (0, 10),
             ["overtimeTurn"] = (0, 200), ["turnSeconds"] = (0, 600),
         };
+        /// <summary>Saved from 0.13.24 on, both or neither: the Offence card pick (0/1) and whether a challenge forced who went first (0/1).</summary>
+        private static readonly Dictionary<string, (int min, int max)> Optional = new Dictionary<string, (int, int)>
+        {
+            ["offenseCards"] = (0, 1), ["forcedFirst"] = (0, 1),
+        };
         private static readonly Regex EventPattern = new Regex(@"^[A-Za-z0-9_.-]{1,64}$");
         private static readonly Regex CardsPattern = new Regex(@"^[A-Za-z0-9._-]{1,80}$");
 
@@ -103,11 +108,17 @@ namespace WarpforgeRevival
                         ["startingMana"] = gv.startingMana, ["startingManaSecond"] = gv.startingManaSecond, ["manaPerTurn"] = gv.manaPerTurn,
                         ["overtimeTurn"] = gv.overtimeTurn,
                         ["turnSeconds"] = ChallengeRules.TurnSeconds ?? ServerSettings.TurnSeconds ?? RevivalMod.Config.TurnSeconds,
+                        ["offenseCards"] = BattlefieldCards.PickOn ? 1 : 0,
+                        ["forcedFirst"] = MatchOptions.ForcedFirst ? 1 : 0,
                     };
                     string ev = ChallengeRules.ActiveEvent ?? EventOf(md) ?? LongGame.PlayingEventId() ?? "";
                     string cards = RevivalMod.Cards?.CardsVersion ?? RevivalMod.Cards?.PackVersion ?? "";
                     string bad = Math.Abs(factor * 10 - tenths) > 0.001 ? "warlordHealthMultiplier" : null;
-                    foreach (var kv in v) if (bad == null && (kv.Value < Ranges[kv.Key].min || kv.Value > Ranges[kv.Key].max)) bad = kv.Key;
+                    foreach (var kv in v)
+                    {
+                        var range = Ranges.TryGetValue(kv.Key, out var rr) ? rr : Optional[kv.Key];
+                        if (bad == null && (kv.Value < range.min || kv.Value > range.max)) bad = kv.Key;
+                    }
                     if (bad == null && !EventPattern.IsMatch(ev)) bad = "mode";
                     if (bad == null && !CardsPattern.IsMatch(cards)) bad = "card pack";
                     if (bad != null) { RevivalMod.Log.Msg($"[replay] this match's rules are not saved with its replay ({bad} out of range)"); return; }
@@ -121,7 +132,7 @@ namespace WarpforgeRevival
             }
         }
 
-        private static string EventOf(MatchData md)
+        internal static string EventOf(MatchData md)
         {
             try
             {
@@ -192,11 +203,13 @@ namespace WarpforgeRevival
             var r = new ChallengeRules.RuleSet { EventId = ev.GetString() };
             foreach (var p in vals.EnumerateObject())
             {
-                if (!Ranges.TryGetValue(p.Name, out var range) || r.Values.ContainsKey(p.Name)) return null;
+                if ((!Ranges.TryGetValue(p.Name, out var range) && !Optional.TryGetValue(p.Name, out range)) || r.Values.ContainsKey(p.Name)) return null;
                 if (!Whole(p.Value, out int n) || n < range.min || n > range.max) return null;
                 r.Values[p.Name] = n;
             }
-            if (r.Values.Count != Ranges.Count) return null;
+            // every rule; the 0.13.24 ones both or neither (older replays have neither)
+            if (r.Values.Count != Ranges.Count && r.Values.Count != Ranges.Count + Optional.Count) return null;
+            foreach (var k in Ranges.Keys) if (!r.Values.ContainsKey(k)) return null;
             return (r, mod, cards.GetString());
         }
 

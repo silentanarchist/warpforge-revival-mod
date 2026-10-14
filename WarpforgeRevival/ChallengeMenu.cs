@@ -170,22 +170,23 @@ namespace WarpforgeRevival
 
             var preset = ChallengeRules.Preset(ev, mode);
             int r = 0;
+            const float rowH = 0.052f;     // 13 rules (0.13.24 added Offence cards and Goes first) and the buttons fit below the mode
             foreach (var f in ChallengeRules.Fields)
             {
-                float top = 0.84f - r * 0.06f;
+                float top = 0.84f - r * rowH;
                 int v = values.Get(f.Key) ?? f.Min;
                 bool changed = preset.Get(f.Key) != v;
-                TestersPage.Text(area, "L_" + f.Key, f.Label, 22, TextAlignmentOptions.Left, changed ? new Color(1f, 0.85f, 0.45f, 1f) : Color.white, x0, top - 0.06f, 0.74f, top);
-                var minus = TestersPage.Button(area, "M_" + f.Key, "-", 0.75f, top - 0.054f, 0.8f, top - 0.004f, TestersPage.Tile);
-                TestersPage.Text(area, "V_" + f.Key, ChallengeRules.Show(f.Key, v), 24, TextAlignmentOptions.Center, Color.white, 0.8f, top - 0.06f, 0.9f, top);
-                var plus = TestersPage.Button(area, "P_" + f.Key, "+", 0.9f, top - 0.054f, 0.95f, top - 0.004f, TestersPage.Tile);
+                TestersPage.Text(area, "L_" + f.Key, f.Label, 21, TextAlignmentOptions.Left, changed ? new Color(1f, 0.85f, 0.45f, 1f) : Color.white, x0, top - rowH, 0.74f, top);
+                var minus = TestersPage.Button(area, "M_" + f.Key, "-", 0.75f, top - rowH + 0.005f, 0.8f, top - 0.004f, TestersPage.Tile);
+                TestersPage.Text(area, "V_" + f.Key, ChallengeRules.Show(f.Key, v), 22, TextAlignmentOptions.Center, Color.white, 0.8f, top - rowH, 0.9f, top);
+                var plus = TestersPage.Button(area, "P_" + f.Key, "+", 0.9f, top - rowH + 0.005f, 0.95f, top - 0.004f, TestersPage.Tile);
                 var field = f;
                 TestersPage.OnClick(minus, () => Step(field, -1));
                 TestersPage.OnClick(plus, () => Step(field, +1));
                 r++;
             }
 
-            float by = 0.84f - r * 0.06f - 0.015f;
+            float by = 0.84f - r * rowH - 0.015f;
             var reset = TestersPage.Button(area, "Reset", "Mode's own rules", x0, by - 0.075f, 0.62f, by, TestersPage.Tile);
             TestersPage.OnClick(reset, () => { values = null; status = ""; dirty = true; });
             var send = TestersPage.Button(area, "Send", friendId == null ? "Pick a friend" : "Challenge " + friendName, 0.64f, by - 0.075f, x1, by,
@@ -218,7 +219,10 @@ namespace WarpforgeRevival
                 if ((object)manager == null) { status = "Challenges are not available right now."; dirty = true; return; }
                 var rules = new ChallengeRules.RuleSet { EventId = mode, Values = new Dictionary<string, int>(values.Values) };
                 ChallengeRules.Outgoing(friendId, rules);
-                bool first = UnityEngine.Random.value < 0.5f;
+                // who goes first: the rules' choice (1 the challenger, 2 the friend), otherwise a coin toss as before;
+                // MatchOptions makes sure of it on both sides once the match starts
+                int fp = rules.Get("firstPlayer") ?? 0;
+                bool first = fp == 1 ? true : fp == 2 ? false : UnityEngine.Random.value < 0.5f;
                 RevivalMod.Log.Msg($"[challenge] challenging {friendId} in {mode}");
                 manager.StartChallengeWithUser(friendName ?? friendId, friendId, first, ev);
                 status = $"Challenge sent to {friendName}. They see your rules when it arrives.";

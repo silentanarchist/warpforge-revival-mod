@@ -16,13 +16,14 @@ namespace WarpforgeRevival
     /// switches it off in three places (all asking one "is this feature on" function that always
     /// answers no) and, with nothing unlocked on a revival server, would offer no cards anyway.
     ///
-    /// When the server's "offenseCards" setting is on, those three places are switched back on and
+    /// For a match whose game mode has its Offence card switch on (the server's settings; chosen per
+    /// match by MatchOptions as it starts), those three places are switched back on and
     /// the cards on offer are:
     ///  - going first: every Offence card of the battlefield (the defender's faction) - a real choice;
     ///  - going second: the Defence card saved in your deck, taken automatically as before; only a
     ///    deck without one gets to choose from the faction's Defence cards.
     /// With the setting off the game behaves as shipped (Defence card from the deck, no Offence card).
-    /// Both players get the setting from the same server, so they always agree.
+    /// Both players get the setting from the same server (or the same challenge rules), so they always agree.
     /// </summary>
     internal static class BattlefieldCards
     {
@@ -41,6 +42,9 @@ namespace WarpforgeRevival
 
         private static readonly object Gate = new object();
         private static bool applied;
+
+        /// <summary>Whether the pick step is on right now (for the match being played).</summary>
+        internal static bool PickOn => applied;
         private static bool broken;
 
         private static byte[] Original(long site)

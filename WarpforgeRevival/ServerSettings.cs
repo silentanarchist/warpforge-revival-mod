@@ -79,8 +79,24 @@ namespace WarpforgeRevival
         /// </summary>
         public static string CreatorUrl => !string.IsNullOrEmpty(creatorUrl) ? creatorUrl : RevivalMod.Config.ServerUrl + "/creator";
 
-        /// <summary>Whether the Offence card pick step runs (the server's "offenseCards" setting).</summary>
+        /// <summary>The server's single Offence card switch ("offenseCards"), used only when it does not send one per mode.</summary>
         public static bool OffenseCards => offenseCards;
+
+        // "offenseCardModes": {eventId: true/false} - each game mode's own Offence card switch (from its
+        // gameplayVariables on the server); null when the server does not send it (older server)
+        private static volatile System.Collections.Generic.Dictionary<string, bool> offenceModes;
+
+        /// <summary>
+        /// Whether a match in this game mode has the Offence card pick: the mode's own switch on the
+        /// server; a mode the server does not list (a new mode, a tutorial) has none. A server that does
+        /// not send the switches per mode: its single "offenseCards" switch for everything.
+        /// </summary>
+        public static bool OffenceFor(string eventId)
+        {
+            var modes = offenceModes;
+            if (modes == null) return offenseCards;
+            return eventId != null && modes.TryGetValue(eventId, out bool on) && on;
+        }
 
         /// <summary>Turn length chosen by the server, or null when it has not set one.</summary>
         public static int? TurnSeconds => turnSeconds > 0 ? turnSeconds : (int?)null;
@@ -109,7 +125,7 @@ namespace WarpforgeRevival
                         if (turnSeconds != 0) RevivalMod.Log.Msg("[settings] the server no longer provides settings; using local values");
                         turnSeconds = 0;
                         offenseCards = false;
-                        BattlefieldCards.Set(false);
+                        offenceModes = null;
                         return;
                     }
                     using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
@@ -179,9 +195,21 @@ namespace WarpforgeRevival
                     if (hands.Count != modeHands.Count)
                         RevivalMod.Log.Msg($"[settings] server settings: starting hand set by {hands.Count} game mode(s)");
                     modeHands = hands;
-                    if (offence != offenseCards) RevivalMod.Log.Msg($"[settings] server settings: Offence cards {(offence ? "on" : "off")}");
+                    if (offence != offenseCards) RevivalMod.Log.Msg($"[settings] server settings: Offence cards {(offence ? "on" : "off")} (used when the server has no per-mode switch)");
                     offenseCards = offence;
-                    BattlefieldCards.Set(offence);
+                    System.Collections.Generic.Dictionary<string, bool> om = null;
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("offenseCardModes", out var oms) && oms.ValueKind == JsonValueKind.Object)
+                    {
+                        om = new System.Collections.Generic.Dictionary<string, bool>();
+                        foreach (var m in oms.EnumerateObject())
+                            if (m.Value.ValueKind == JsonValueKind.True || m.Value.ValueKind == JsonValueKind.False) om[m.Name] = m.Value.GetBoolean();
+                    }
+                    string Describe(System.Collections.Generic.Dictionary<string, bool> d) =>
+                        d == null ? "none" : string.Join(", ", System.Linq.Enumerable.Select(System.Linq.Enumerable.OrderBy(d, kv => kv.Key), kv => kv.Key + (kv.Value ? " on" : " off")));
+                    if (Describe(om) != Describe(offenceModes)) RevivalMod.Log.Msg("[settings] server settings: Offence cards per mode: " + Describe(om));
+                    offenceModes = om;
+                    // the pick is switched on or off for each match as it starts (MatchOptions), not here:
+                    // a refresh during a match must not change it
                     if (seconds != turnSeconds) RevivalMod.Log.Msg($"[settings] server settings: turn timer {(seconds > 0 ? seconds + "s" : "not set")}");
                     turnSeconds = seconds;
                 }
