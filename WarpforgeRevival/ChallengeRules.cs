@@ -148,9 +148,12 @@ namespace WarpforgeRevival
                 r.Values["handLimit"] = gv.handLimit;
                 r.Values["overtimeTurn"] = gv.overtimeTurn;
             }
+            // a mode that does not set its own starting hand (Classic) uses the game's: 3 cards, +1 for the
+            // second player (read from the game once a match has been played)
             var (hand, extra) = ServerSettings.ModeHand(eventId);
-            r.Values["startingHand"] = hand > 0 ? hand : 4;
-            r.Values["secondPlayerExtraCards"] = extra >= 0 ? extra : 1;
+            var (gameHand, gameExtra) = LongGame.GameDefaultHand;
+            r.Values["startingHand"] = hand > 0 ? hand : gameHand > 0 ? gameHand : 3;
+            r.Values["secondPlayerExtraCards"] = extra >= 0 ? extra : gameExtra >= 0 ? gameExtra : 1;
             double factor = eventId == ServerSettings.LongGameEvent && ServerSettings.LongGameHealth > 0 ? ServerSettings.LongGameHealth : 1.0;
             r.Values["warlordHealthMultiplier"] = (int)Math.Round(factor * 10);
             int secs = ServerSettings.TurnSeconds ?? RevivalMod.Config.TurnSeconds;

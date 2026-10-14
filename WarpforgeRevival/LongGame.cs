@@ -459,6 +459,9 @@ namespace WarpforgeRevival
         // so set them for a Long Game match and put the game's values back for any other.
         private static int gameHand = -1, gameSecondExtra = -1;
 
+        /// <summary>The game's own starting hand and second player's extra cards (seen at the first match; -1 before).</summary>
+        internal static (int hand, int extra) GameDefaultHand => (gameHand, gameSecondExtra);
+
         internal static bool InLongMatch()
         {
             try
