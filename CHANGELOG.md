@@ -13,7 +13,6 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Crash and freeze reports (testers):** if the game crashes, freezes, or is closed while frozen, the next start offers to send a report with what was saved at the time. On PC a frozen game also shows a short message after 30 seconds. Reports that can't be sent are kept and sent at the next start. Known issue: the offer sometimes pops up even though the game did not crash (mostly on Android); it can be ignored.
 
 ### Changed
-- **Log:** Unity's warning that a picture format (B4G4R4A4_UNormPack16) is not supported is written once instead of every time; it is harmless (Unity picks another format by itself).
 - **Card versions:** the old card pack is no longer downloaded (nothing used its cards). Replays record the server's card bundle version instead, the same on PC and Android, so a replay only plays with the cards it was recorded with; replays recorded before still play.
 - **Sign-in window:** the first box is now called **Username**, the same as on the website (it said Name), and the server's messages there say username too.
 - **Android: Settings > General > Quit** now closes the game completely (it also leaves the recent apps), the same way the game closes after an update. Before, it could leave the game half-open.
