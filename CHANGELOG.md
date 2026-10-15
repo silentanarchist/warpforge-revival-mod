@@ -7,6 +7,8 @@ Changes made on the server take effect for everyone at once; the ones listed her
 ## Unreleased
 
 ### New
+- **Friend challenges:** a new rule, **Unspent mana carried over (at most)** (0 to 5). It starts at the chosen mode's value (Skirmish: 1, as in its original rules), and replays keep it. Both players need this version.
+- **Friend challenges:** the - and + buttons are hidden when they would not change a value (at its lowest or highest).
 - **Settings > Mod > Compress Card Art:** a tick box under Export card art, on by default (the art is saved at 512 x 512, as before). Untick it to save the art at the game's own size (1024 x 1024) for the best quality; this takes much longer, and slower devices may need 5 minutes or longer. Not yet confirmed in play.
 
 ### Changed

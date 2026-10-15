@@ -45,6 +45,8 @@ namespace WarpforgeRevival
             new Field("startingMana", "Starting mana (first player)", 0, 10),
             new Field("startingManaSecond", "Starting mana (second player)", 0, 10),
             new Field("manaPerTurn", "Mana gained per turn", 0, 5),
+            // 0.13.33: unspent mana carried over to the next turn, at most this much (Skirmish: 1)
+            new Field("manaAccumulation", "Unspent mana carried over (at most)", 0, 5),
             new Field("overtimeTurn", "Overtime starts on turn", 5, 60),
             new Field("turnSeconds", "Turn timer (seconds)", 30, 300, 5),
             new Field("offenseCards", "Offence cards", 0, 1),
@@ -125,7 +127,7 @@ namespace WarpforgeRevival
                 return $"Mode: {modeName}\n" +
                        $"Warlord health: {Show("warlordHealthMultiplier", G("warlordHealthMultiplier"))}, then {(change >= 0 ? "+" : "")}{change}\n" +
                        $"Starting hand: {G("startingHand")} (+{G("secondPlayerExtraCards")} for the second player) · hand limit {G("handLimit")}\n" +
-                       $"Mana: starts {G("startingMana")} / {G("startingManaSecond")} (first / second player), +{G("manaPerTurn")} per turn\n" +
+                       $"Mana: starts {G("startingMana")} / {G("startingManaSecond")} (first / second player), +{G("manaPerTurn")} per turn, up to {G("manaAccumulation")} unspent carried over\n" +
                        $"Cards drawn per turn: {G("drawCardsPerTurn")} · overtime from turn {G("overtimeTurn")} · turn timer {G("turnSeconds")} s\n" +
                        $"Offence cards: {(G("offenseCards") == 1 ? "on" : "off")} · goes first: {(G("firstPlayer") == 1 ? "your challenger" : G("firstPlayer") == 2 ? "you" : "random")}";
             }
@@ -145,6 +147,7 @@ namespace WarpforgeRevival
                 r.Values["startingManaSecond"] = gv.startingManaSecond;
                 r.Values["manaPerTurn"] = gv.manaPerTurn;
                 r.Values["drawCardsPerTurn"] = gv.drawCardsPerTurn;
+                r.Values["manaAccumulation"] = gv.manaAccumulation;
                 r.Values["handLimit"] = gv.handLimit;
                 r.Values["overtimeTurn"] = gv.overtimeTurn;
             }
@@ -529,9 +532,10 @@ namespace WarpforgeRevival
             saved.Clear();
             Set(gv, "warlordLifeChange", active); Set(gv, "startingMana", active); Set(gv, "startingManaSecond", active);
             Set(gv, "manaPerTurn", active); Set(gv, "drawCardsPerTurn", active); Set(gv, "handLimit", active); Set(gv, "overtimeTurn", active);
+            Set(gv, "manaAccumulation", active);
             battleSeen = true;
             RevivalMod.Log.Msg($"{done}: mana {gv.startingMana}/{gv.startingManaSecond} +{gv.manaPerTurn}, " +
-                               $"draw {gv.drawCardsPerTurn}, hand limit {gv.handLimit}, overtime {gv.overtimeTurn}, health change {gv.warlordLifeChange}");
+                               $"draw {gv.drawCardsPerTurn}, hand limit {gv.handLimit}, overtime {gv.overtimeTurn}, health change {gv.warlordLifeChange}, mana carried over {gv.manaAccumulation}");
             return true;
         }
 
@@ -572,6 +576,7 @@ namespace WarpforgeRevival
             "startingManaSecond" => gv.startingManaSecond,
             "manaPerTurn" => gv.manaPerTurn,
             "drawCardsPerTurn" => gv.drawCardsPerTurn,
+            "manaAccumulation" => gv.manaAccumulation,
             "handLimit" => gv.handLimit,
             "overtimeTurn" => gv.overtimeTurn,
             _ => 0,
@@ -586,6 +591,7 @@ namespace WarpforgeRevival
                 case "startingManaSecond": gv.startingManaSecond = v; break;
                 case "manaPerTurn": gv.manaPerTurn = v; break;
                 case "drawCardsPerTurn": gv.drawCardsPerTurn = v; break;
+                case "manaAccumulation": gv.manaAccumulation = v; break;
                 case "handLimit": gv.handLimit = v; break;
                 case "overtimeTurn": gv.overtimeTurn = v; break;
             }

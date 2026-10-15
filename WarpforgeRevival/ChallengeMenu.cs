@@ -170,19 +170,26 @@ namespace WarpforgeRevival
 
             var preset = ChallengeRules.Preset(ev, mode);
             int r = 0;
-            const float rowH = 0.052f;     // 13 rules (0.13.24 added Offence cards and Goes first) and the buttons fit below the mode
+            const float rowH = 0.049f;     // 14 rules (0.13.33 added carried-over mana) and the buttons fit below the mode
             foreach (var f in ChallengeRules.Fields)
             {
                 float top = 0.84f - r * rowH;
                 int v = values.Get(f.Key) ?? f.Min;
                 bool changed = preset.Get(f.Key) != v;
                 TestersPage.Text(area, "L_" + f.Key, f.Label, 21, TextAlignmentOptions.Left, changed ? new Color(1f, 0.85f, 0.45f, 1f) : Color.white, x0, top - rowH, 0.74f, top);
-                var minus = TestersPage.Button(area, "M_" + f.Key, "-", 0.75f, top - rowH + 0.005f, 0.8f, top - 0.004f, TestersPage.Tile);
                 TestersPage.Text(area, "V_" + f.Key, ChallengeRules.Show(f.Key, v), 22, TextAlignmentOptions.Center, Color.white, 0.8f, top - rowH, 0.9f, top);
-                var plus = TestersPage.Button(area, "P_" + f.Key, "+", 0.9f, top - rowH + 0.005f, 0.95f, top - 0.004f, TestersPage.Tile);
                 var field = f;
-                TestersPage.OnClick(minus, () => Step(field, -1));
-                TestersPage.OnClick(plus, () => Step(field, +1));
+                // a button that would not change anything (at the lowest or highest value) is left out
+                if (Next(field, -1) != v)
+                {
+                    var minus = TestersPage.Button(area, "M_" + f.Key, "-", 0.75f, top - rowH + 0.005f, 0.8f, top - 0.004f, TestersPage.Tile);
+                    TestersPage.OnClick(minus, () => Step(field, -1));
+                }
+                if (Next(field, +1) != v)
+                {
+                    var plus = TestersPage.Button(area, "P_" + f.Key, "+", 0.9f, top - rowH + 0.005f, 0.95f, top - 0.004f, TestersPage.Tile);
+                    TestersPage.OnClick(plus, () => Step(field, +1));
+                }
                 r++;
             }
 
@@ -197,14 +204,23 @@ namespace WarpforgeRevival
             if (!builtLogged) { builtLogged = true; RevivalMod.Log.Msg($"[challenge] menu built: {friends.Count} friend(s), presets {string.Join(", ", presets)}"); }
         }
 
+        /// <summary>What one press of - (dir -1) or + (dir +1) would set; the same value when the press would do nothing.</summary>
+        private static int Next(ChallengeRules.Field f, int dir)
+        {
+            int v = values?.Get(f.Key) ?? f.Min;
+            int next = Math.Clamp(v + dir * f.Step, f.Min, f.Max);
+            // the starting hand cannot go past the hand limit (nor the second player's hand with its extra cards)
+            if (f.Key == "startingHand" && next > (values?.Get("handLimit") ?? 99)) return v;
+            if (f.Key == "secondPlayerExtraCards" && (values?.Get("startingHand") ?? 0) + next > (values?.Get("handLimit") ?? 99)) return v;
+            return next;
+        }
+
         private static void Step(ChallengeRules.Field f, int dir)
         {
             if (values == null) return;
             int v = values.Get(f.Key) ?? f.Min;
-            int next = Math.Clamp(v + dir * f.Step, f.Min, f.Max);
-            // the starting hand cannot go past the hand limit (nor the second player's hand with its extra cards)
-            if (f.Key == "startingHand" && next > (values.Get("handLimit") ?? 99)) return;
-            if (f.Key == "secondPlayerExtraCards" && (values.Get("startingHand") ?? 0) + next > (values.Get("handLimit") ?? 99)) return;
+            int next = Next(f, dir);
+            if (next == v) return;
             values.Values[f.Key] = next;
             ChallengeRules.CapHand(values.Values);       // a lower hand limit pulls the starting hand down with it
             dirty = true;

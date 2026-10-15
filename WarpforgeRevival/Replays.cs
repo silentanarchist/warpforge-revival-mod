@@ -71,10 +71,14 @@ namespace WarpforgeRevival
             ["startingMana"] = (0, 20), ["startingManaSecond"] = (0, 20), ["manaPerTurn"] = (0, 10),
             ["overtimeTurn"] = (0, 200), ["turnSeconds"] = (0, 600),
         };
-        /// <summary>Saved from 0.13.24 on, both or neither: the Offence card pick (0/1) and whether a challenge forced who went first (0/1).</summary>
+        /// <summary>
+        /// Rules saved by newer mods (older replays lack them; any of them may be missing): from 0.13.24 the Offence
+        /// card pick (0/1) and whether a challenge forced who went first (0/1); from 0.13.33 the unspent mana
+        /// carried over to the next turn.
+        /// </summary>
         private static readonly Dictionary<string, (int min, int max)> Optional = new Dictionary<string, (int, int)>
         {
-            ["offenseCards"] = (0, 1), ["forcedFirst"] = (0, 1),
+            ["offenseCards"] = (0, 1), ["forcedFirst"] = (0, 1), ["manaAccumulation"] = (0, 10),
         };
         private static readonly Regex EventPattern = new Regex(@"^[A-Za-z0-9_.-]{1,64}$");
         private static readonly Regex CardsPattern = new Regex(@"^[A-Za-z0-9._-]{1,80}$");
@@ -110,6 +114,7 @@ namespace WarpforgeRevival
                         ["turnSeconds"] = ChallengeRules.TurnSeconds ?? ServerSettings.TurnSeconds ?? RevivalMod.Config.TurnSeconds,
                         ["offenseCards"] = BattlefieldCards.PickOn ? 1 : 0,
                         ["forcedFirst"] = MatchOptions.ForcedFirst ? 1 : 0,
+                        ["manaAccumulation"] = gv.manaAccumulation,
                     };
                     string ev = ChallengeRules.ActiveEvent ?? EventOf(md) ?? LongGame.PlayingEventId() ?? "";
                     string cards = RevivalMod.Cards?.CardsVersion ?? RevivalMod.Cards?.PackVersion ?? "";
@@ -207,8 +212,7 @@ namespace WarpforgeRevival
                 if (!Whole(p.Value, out int n) || n < range.min || n > range.max) return null;
                 r.Values[p.Name] = n;
             }
-            // every rule; the 0.13.24 ones both or neither (older replays have neither)
-            if (r.Values.Count != Ranges.Count && r.Values.Count != Ranges.Count + Optional.Count) return null;
+            // every rule of the first set; the newer ones may be missing (older replays)
             foreach (var k in Ranges.Keys) if (!r.Values.ContainsKey(k)) return null;
             return (r, mod, cards.GetString());
         }
