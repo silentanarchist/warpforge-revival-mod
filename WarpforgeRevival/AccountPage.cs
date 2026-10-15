@@ -116,6 +116,13 @@ namespace WarpforgeRevival
 
         private const string Unreachable = "Could not reach the server.";
 
+        private static string Inner(Exception e)
+        {
+            string text = e.Message;
+            for (var i = e.InnerException; i != null; i = i.InnerException) text += " / " + i.GetType().Name + ": " + i.Message;
+            return text;
+        }
+
         private static void Send(string op, string name, string passphrase, Action<bool, string> done)
         {
             string ticket = PlayFabTransport.SessionTicket;
@@ -143,7 +150,21 @@ namespace WarpforgeRevival
                     msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
                     string login = op == "unlink" ? GameSignIn.Token() : null;      // the one saved sign-in to cancel
                     if (login != null) msg.Headers.TryAddWithoutValidation("X-Revival-Login", login);
-                    using var reply = await Http.SendAsync(msg);
+                    System.Net.Http.HttpResponseMessage reply;
+                    try { reply = await Http.SendAsync(msg); }
+                    catch (System.Net.Http.HttpRequestException first)
+                    {
+                        // usually a kept-open connection the server had already closed: one more try on a new one
+                        RevivalMod.Log.Msg("[account] " + op + ": sending failed (" + Inner(first) + "); trying once more");
+                        await System.Threading.Tasks.Task.Delay(500);
+                        using var again = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url)
+                        {
+                            Content = new System.Net.Http.StringContent(System.Text.Encoding.UTF8.GetString(ms.ToArray()), System.Text.Encoding.UTF8, "application/json")
+                        };
+                        foreach (var h in msg.Headers) again.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                        reply = await Http.SendAsync(again);
+                    }
+                    using var replyOwned = reply;
                     using var doc = System.Text.Json.JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
                     var root = doc.RootElement;
                     if (reply.IsSuccessStatusCode && root.TryGetProperty("data", out var data))
@@ -173,7 +194,7 @@ namespace WarpforgeRevival
                 catch (Exception e)
                 {
                     message = Unreachable;
-                    RevivalMod.Log.Warning("[account] " + op + ": " + e.Message);
+                    RevivalMod.Log.Warning("[account] " + op + ": " + Inner(e));
                 }
                 if (done != null) PlayFabTransport.OnMainThread(() => done(ok, message));
             });
@@ -248,69 +269,30 @@ namespace WarpforgeRevival
             catch (Exception e) { RevivalMod.Log.Warning("[account] " + e.Message); }
         }
 
-        // ---- layout once linked (0.13.29): the password row is gone, so the message line and the button
-        // move up under the username box, and an "Open profile on website" button goes under the button.
+        // ---- "Open profile on website" button once linked (0.13.29; placed on the button's row in 0.13.31).
         private const string ProfileName = "WFR Open profile";
-        private static readonly System.Collections.Generic.Dictionary<IntPtr, Vector3> home = new System.Collections.Generic.Dictionary<IntPtr, Vector3>();
-
-        private static (float top, float bottom, float height) Span(RectTransform rt)
-        {
-            var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
-            rt.GetWorldCorners(c);
-            float lo = Math.Min(c[0].y, c[1].y), hi = Math.Max(c[0].y, c[1].y);
-            return (hi, lo, hi - lo);
-        }
-
-        private static readonly System.Collections.Generic.Dictionary<IntPtr, Vector3> placed = new System.Collections.Generic.Dictionary<IntPtr, Vector3>();
-
-        /// <summary>
-        /// Where a part of the page was before it was moved (kept per object, so moving is never added up).
-        /// If the game has put it somewhere else since (it lays the tab out again), that is the new home.
-        /// </summary>
-        private static Vector3 Home(Transform t)
-        {
-            var now = t.position;
-            if (!home.TryGetValue(t.Pointer, out var p) || (placed.TryGetValue(t.Pointer, out var last) && (now - last).sqrMagnitude > 1e-6f))
-                home[t.Pointer] = p = now;
-            return p;
-        }
-
-        private static void Place(Transform t, Vector3 at)
-        {
-            t.position = at;
-            placed[t.Pointer] = t.position;
-        }
-
         private static void Arrange(AccountTab tab, bool linked)
         {
+            // The page's own layout places the buttons (and puts them back whenever it is laid out again,
+            // e.g. when the pointer moves over one), so the Sign out button is left where it puts it. The
+            // "Open profile on website" button is kept out of that layout (ignoreLayout) and placed on the
+            // same row, starting at the left edge of the username box - well away from Sign out on the right.
+            // The message line is not part of that layout; it goes up just under the username box.
             var user = tab.emailInput;
-            var msg = tab.errorMessage;
             var button = tab.registerButton;
-            if ((object)user == null || (object)msg == null || (object)button == null) return;
+            if ((object)user == null || (object)button == null) return;
             var userRt = user.GetComponent<RectTransform>();
-            var msgRt = msg.GetComponent<RectTransform>();
-            if ((object)userRt == null || (object)msgRt == null) return;
-            var msgT = msg.transform;
             var btnT = button.transform;
-            Vector3 msgHome = Home(msgT), btnHome = Home(btnT);
-            float dy = 0f;
-            if (linked)
-            {
-                // the message line's top goes just under the username box (it never moves down)
-                var u = Span(userRt);
-                Place(msgT, msgHome);
-                var m = Span(msgRt);
-                dy = Math.Max(0f, (u.bottom - u.height * 0.6f) - m.top);
-            }
-            Place(msgT, msgHome + new Vector3(0f, dy, 0f));
-            Place(btnT, btnHome + new Vector3(0f, dy, 0f));
+            if ((object)userRt == null || (object)btnT.parent == null) return;
 
-            var profile = btnT.parent == null ? null : btnT.parent.Find(ProfileName);
-            if ((object)profile == null && linked && (object)btnT.parent != null)
+            var profile = btnT.parent.Find(ProfileName);
+            if ((object)profile == null && linked)
             {
                 var go = UnityEngine.Object.Instantiate(button.gameObject, btnT.parent, false);
                 go.name = ProfileName;
                 profile = go.transform;
+                var le = go.GetComponent<UnityEngine.UI.LayoutElement>() ?? go.AddComponent<UnityEngine.UI.LayoutElement>();
+                le.ignoreLayout = true;
                 var copy = go.GetComponent<UnityEngine.UI.Button>();
                 if ((object)copy != null)
                 {
@@ -327,15 +309,72 @@ namespace WarpforgeRevival
                 }
                 RevivalMod.Log.Msg("[account] Open profile button added");
             }
-            if ((object)profile != null)
+            if ((object)profile == null) return;
+            profile.gameObject.SetActive(linked);
+            if (!linked) return;
+            // the message line (which the page's layout leaves alone) goes up just under the username box,
+            // into the space the hidden password row left
+            var msg = tab.errorMessage;
+            var msgRt = (object)msg == null ? null : msg.GetComponent<RectTransform>();
+            if ((object)msgRt != null)
             {
-                profile.gameObject.SetActive(linked);
-                var brt = button.GetComponent<RectTransform>();
-                float h = (object)brt != null ? Span(brt).height : 0f;
-                profile.position = btnT.position - new Vector3(0f, h * 1.35f, 0f);
-                var copy = profile.GetComponent<UnityEngine.UI.Button>();
-                if ((object)copy != null) copy.interactable = true;
+                var u = Corners(userRt);
+                var m = Corners(msgRt);
+                float target = u.bottom - (u.top - u.bottom) * 0.5f;
+                if (Math.Abs(m.top - target) > 0.001f) msg.transform.position += new Vector3(0f, target - m.top, 0f);
+
+                // and the row of buttons goes up under the message line. The row is the buttons' own holder, moved
+                // as a whole (the page's layout arranges the buttons inside it, not the holder itself); it is only
+                // moved when it holds nothing else of the page (not the username box nor the message line).
+                var row = btnT.parent;
+                var rowRt = row.GetComponent<RectTransform>();
+                if ((object)rowRt != null && !Under(userRt.transform, row) && !Under(msg.transform, row))
+                {
+                    var brt = button.GetComponent<RectTransform>();
+                    if ((object)brt != null)
+                    {
+                        var b = Corners(brt);
+                        m = Corners(msgRt);
+                        float lineH = Math.Max(0.0001f, (u.top - u.bottom) * 0.35f);
+                        float want = m.bottom - lineH;                      // the buttons' top, a little under the text
+                        if (Math.Abs(b.top - want) > 0.001f)
+                        {
+                            row.position += new Vector3(0f, want - b.top, 0f);
+                            if (!rowLogged) { rowLogged = true; RevivalMod.Log.Msg("[account] button row '" + row.name + "' moved up under the message line"); }
+                        }
+                    }
+                }
+                else if (!rowLogged) { rowLogged = true; RevivalMod.Log.Msg("[account] button row not moved: its holder '" + row.name + "' also holds other parts of the page"); }
             }
+            var prt = profile.GetComponent<RectTransform>();
+            if ((object)prt == null) return;
+            // same row as the button; its left edge on the username box's left edge
+            float userLeft = Left(userRt), half = profile.position.x - Left(prt);
+            profile.position = new Vector3(userLeft + half, btnT.position.y, btnT.position.z);
+            var c = profile.GetComponent<UnityEngine.UI.Button>();
+            if ((object)c != null) c.interactable = true;
+        }
+
+        private static bool rowLogged;
+
+        private static bool Under(Transform t, Transform ancestor)
+        {
+            for (; (object)t != null; t = t.parent) if (t.Pointer == ancestor.Pointer) return true;
+            return false;
+        }
+
+        private static (float top, float bottom) Corners(RectTransform rt)
+        {
+            var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
+            rt.GetWorldCorners(c);
+            return (Math.Max(c[0].y, c[1].y), Math.Min(c[0].y, c[1].y));
+        }
+
+        private static float Left(RectTransform rt)
+        {
+            var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
+            rt.GetWorldCorners(c);
+            return Math.Min(c[0].x, c[2].x);
         }
 
         private static void OpenProfile()
@@ -428,7 +467,8 @@ namespace WarpforgeRevival
             Apply(tab);
             Say(tab, Status());
             // the link may have been changed from the site since the game started
-            Send("status", null, null, (ok, message) => { Apply(tab); Say(tab, ok ? Status() : message, !ok); });
+            // if this re-check fails but the link is already known (from the sign-in), keep showing it
+            Send("status", null, null, (ok, message) => { Apply(tab); bool keep = !ok && StatusKnown; Say(tab, ok || keep ? Status() : message, !ok && !keep); });
         }
 
 #if ANDROID_PORT

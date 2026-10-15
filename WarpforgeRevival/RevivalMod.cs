@@ -4,10 +4,9 @@ using MelonLoader;
 
 [assembly: MelonInfo(typeof(WarpforgeRevival.RevivalMod), "Warpforge Revival", WarpforgeRevival.RevivalMod.Version, "Warpforge Revival community")]
 [assembly: MelonGame("Everguild", "Warpforge")]
-#if ANDROID_PORT
-// the phone build applies its hooks itself, with the game's garbage collector paused (see PatchQuietly)
+// The mod applies its hooks itself, one class at a time (SafePatch): MelonLoader's automatic PatchAll stops
+// at the first hook that fails. The phone build also pauses the game's garbage collector meanwhile (PatchQuietly).
 [assembly: MelonLoader.HarmonyDontPatchAll]
-#endif
 
 namespace WarpforgeRevival
 {
@@ -21,9 +20,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.13.30-a";
+        public const string Version = "0.13.32-a";
 #else
-        public const string Version = "0.13.30-w";
+        public const string Version = "0.13.32-w";
 #endif
 
         /// <summary>
@@ -97,12 +96,13 @@ namespace WarpforgeRevival
                 if (!Il2CppInterop.Runtime.IL2CPP.il2cpp_gc_is_disabled()) { Il2CppInterop.Runtime.IL2CPP.il2cpp_gc_disable(); paused = true; }
             }
             catch (Exception e) { LoggerInstance.Warning("[startup] could not pause the game's memory clean-up: " + e.Message); }
-            try { HarmonyInstance.PatchAll(MelonAssembly.Assembly); }
+            try { SafePatch.All(HarmonyInstance, MelonAssembly.Assembly); }
             catch (Exception e) { LoggerInstance.Error("[startup] applying the hooks failed: " + e); }
             finally
             {
                 if (paused) try { Il2CppInterop.Runtime.IL2CPP.il2cpp_gc_enable(); } catch { }
             }
+            NoNotifications.Apply(HarmonyInstance);      // on their own, after the rest (see NoNotifications)
             LoggerInstance.Msg($"[startup] hooks applied in {clock.ElapsedMilliseconds} ms{(paused ? " with the game's memory clean-up paused" : "")}");
         }
 #endif
@@ -114,6 +114,10 @@ namespace WarpforgeRevival
 #if ANDROID_PORT
             RuntimeSettings.Apply();         // before the hooks: they are where the runtime has crashed
             if (!ScreenCheck.RuntimeBroken) PatchQuietly();
+#else
+            // what MelonLoader's automatic PatchAll did at this point, one hook class at a time (SafePatch)
+            try { SafePatch.All(HarmonyInstance, MelonAssembly.Assembly); }
+            catch (Exception e) { LoggerInstance.Error("[startup] applying the hooks failed: " + e); }
 #endif
             Config = RevivalConfig.Load();
             try
