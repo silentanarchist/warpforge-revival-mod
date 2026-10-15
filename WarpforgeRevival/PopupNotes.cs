@@ -11,6 +11,8 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class PopupNotes
     {
+        private const string EverguildMail = "support@everguild.com", RevivalMail = "wf-revival@silentanarchist.com";
+
         [HarmonyPatch(typeof(WindowsManager), nameof(WindowsManager.LoadPopUpAndShow))]
         private static class Shown
         {
@@ -38,6 +40,14 @@ namespace WarpforgeRevival
                     if (replayWhy != null && (shown ?? text ?? "").IndexOf("loading match replay", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         text = replayWhy;
+                        localizeTexts = false;
+                        shown = text;
+                    }
+                    // the game's error popups end "contact support@everguild.com": the publisher is gone, so point at the revival
+                    if ((shown ?? "").IndexOf(EverguildMail, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        text = System.Text.RegularExpressions.Regex.Replace(shown, System.Text.RegularExpressions.Regex.Escape(EverguildMail), RevivalMail,
+                                                                            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                         localizeTexts = false;
                         shown = text;
                     }

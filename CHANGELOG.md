@@ -10,6 +10,9 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Settings > Mod > Compress Card Art:** a tick box under Export card art, on by default (the art is saved at 512 x 512, as before). Untick it to save the art at the game's own size (1024 x 1024) for the best quality; this takes much longer, and slower devices may need 5 minutes or longer. Not yet confirmed in play.
 
 ### Changed
+- **Settings > Account:** once linked, the message and the Sign out button sit right under the username box, and a new **Open profile on website** button opens your profile page on the website.
+- **Error popups** that told you to contact the game's old publisher (support@everguild.com) now give the revival's address, wf-revival@silentanarchist.com.
+- **Android:** the game no longer asks for permission to send phone notifications (it never sends any on a revival server).
 - **Server name:** the mod now connects to **wf-revival.silentanarchist.com**, and the website moves there too. If your settings still name warpforge.silentanarchist.com, the mod switches them over by itself; while the new name is not reachable yet, the old one (the same server) is used. The old name keeps working for now and will be retired in a later update.
 
 ## 0.13.26-w - 2026-10-14

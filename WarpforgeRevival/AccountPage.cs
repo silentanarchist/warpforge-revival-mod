@@ -237,6 +237,8 @@ namespace WarpforgeRevival
                     }
                 }
 
+                try { Arrange(tab, linked); } catch (Exception e) { RevivalMod.Log.Warning("[account] layout: " + e.Message); }
+
                 if (!described)
                 {
                     described = true;
@@ -244,6 +246,109 @@ namespace WarpforgeRevival
                 }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[account] " + e.Message); }
+        }
+
+        // ---- layout once linked (0.13.29): the password row is gone, so the message line and the button
+        // move up under the username box, and an "Open profile on website" button goes under the button.
+        private const string ProfileName = "WFR Open profile";
+        private static readonly System.Collections.Generic.Dictionary<IntPtr, Vector3> home = new System.Collections.Generic.Dictionary<IntPtr, Vector3>();
+
+        private static (float top, float bottom, float height) Span(RectTransform rt)
+        {
+            var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
+            rt.GetWorldCorners(c);
+            float lo = Math.Min(c[0].y, c[1].y), hi = Math.Max(c[0].y, c[1].y);
+            return (hi, lo, hi - lo);
+        }
+
+        private static readonly System.Collections.Generic.Dictionary<IntPtr, Vector3> placed = new System.Collections.Generic.Dictionary<IntPtr, Vector3>();
+
+        /// <summary>
+        /// Where a part of the page was before it was moved (kept per object, so moving is never added up).
+        /// If the game has put it somewhere else since (it lays the tab out again), that is the new home.
+        /// </summary>
+        private static Vector3 Home(Transform t)
+        {
+            var now = t.position;
+            if (!home.TryGetValue(t.Pointer, out var p) || (placed.TryGetValue(t.Pointer, out var last) && (now - last).sqrMagnitude > 1e-6f))
+                home[t.Pointer] = p = now;
+            return p;
+        }
+
+        private static void Place(Transform t, Vector3 at)
+        {
+            t.position = at;
+            placed[t.Pointer] = t.position;
+        }
+
+        private static void Arrange(AccountTab tab, bool linked)
+        {
+            var user = tab.emailInput;
+            var msg = tab.errorMessage;
+            var button = tab.registerButton;
+            if ((object)user == null || (object)msg == null || (object)button == null) return;
+            var userRt = user.GetComponent<RectTransform>();
+            var msgRt = msg.GetComponent<RectTransform>();
+            if ((object)userRt == null || (object)msgRt == null) return;
+            var msgT = msg.transform;
+            var btnT = button.transform;
+            Vector3 msgHome = Home(msgT), btnHome = Home(btnT);
+            float dy = 0f;
+            if (linked)
+            {
+                // the message line's top goes just under the username box (it never moves down)
+                var u = Span(userRt);
+                Place(msgT, msgHome);
+                var m = Span(msgRt);
+                dy = Math.Max(0f, (u.bottom - u.height * 0.6f) - m.top);
+            }
+            Place(msgT, msgHome + new Vector3(0f, dy, 0f));
+            Place(btnT, btnHome + new Vector3(0f, dy, 0f));
+
+            var profile = btnT.parent == null ? null : btnT.parent.Find(ProfileName);
+            if ((object)profile == null && linked && (object)btnT.parent != null)
+            {
+                var go = UnityEngine.Object.Instantiate(button.gameObject, btnT.parent, false);
+                go.name = ProfileName;
+                profile = go.transform;
+                var copy = go.GetComponent<UnityEngine.UI.Button>();
+                if ((object)copy != null)
+                {
+                    copy.onClick = new UnityEngine.UI.Button.ButtonClickedEvent();     // not the original's "link / sign out"
+                    copy.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(OpenProfile)));
+                }
+                var label = go.GetComponentInChildren<TMP_Text>(true);
+                if ((object)label != null)
+                {
+                    var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
+                    if ((object)loc != null) loc.enabled = false;
+                    label.text = "Open profile on website";
+                    label.enableAutoSizing = true;
+                }
+                RevivalMod.Log.Msg("[account] Open profile button added");
+            }
+            if ((object)profile != null)
+            {
+                profile.gameObject.SetActive(linked);
+                var brt = button.GetComponent<RectTransform>();
+                float h = (object)brt != null ? Span(brt).height : 0f;
+                profile.position = btnT.position - new Vector3(0f, h * 1.35f, 0f);
+                var copy = profile.GetComponent<UnityEngine.UI.Button>();
+                if ((object)copy != null) copy.interactable = true;
+            }
+        }
+
+        private static void OpenProfile()
+        {
+            try
+            {
+                string site = ServerSettings.CreatorUrl;
+                string url;
+                try { url = new Uri(site).GetLeftPart(UriPartial.Authority) + "/profile"; } catch { url = site; }
+                RevivalMod.Log.Msg("[account] opening the website profile: " + url);
+                Application.OpenURL(url);
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[account] open profile: " + e.Message); }
         }
 
         /// <summary>
