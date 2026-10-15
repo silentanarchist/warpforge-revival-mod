@@ -28,7 +28,24 @@ namespace WarpforgeRevival
         public const int DefaultPort = 8780;
 
         /// <summary>The community server, used when the settings file is new or the address is left blank.</summary>
-        public const string DefaultServer = "warpforge.silentanarchist.com";
+        public const string DefaultServer = "wf-revival.silentanarchist.com";
+
+        /// <summary>
+        /// The community server's earlier name (until 0.13.27). A settings file that still names it is
+        /// switched to <see cref="DefaultServer"/> once, and while the new name does not answer the old
+        /// one is used instead. Both are the same server. To be removed in a later update, once players
+        /// have moved over.
+        /// </summary>
+        public const string OldServer = "warpforge.silentanarchist.com";
+
+        /// <summary>The address as written, if it names only <see cref="OldServer"/> (any spelling of it); otherwise null.</summary>
+        private static string NamesOldServer(string value)
+        {
+            string t = (value ?? "").Trim().TrimEnd('/').ToLowerInvariant();
+            foreach (var prefix in new[] { "https://", "http://" }) if (t.StartsWith(prefix)) t = t.Substring(prefix.Length);
+            if (t.EndsWith(":" + DefaultPort)) t = t.Substring(0, t.Length - (":" + DefaultPort).Length);
+            return t == OldServer ? t : null;
+        }
 
         /// <summary>
         /// The server address as the mod uses it, decided once per run (see <see cref="Resolve"/>).
@@ -62,6 +79,22 @@ namespace WarpforgeRevival
             string secure = "https://" + plain.Substring("http://".Length);
             string remembered = secureServer != null ? (secureServer.Value ?? "") : "";
             string why = Probe(secure);
+            if (why != null && string.Equals(host, DefaultServer, System.StringComparison.OrdinalIgnoreCase))
+            {
+                // the new name may not be reachable everywhere yet: the old name is the same server
+                string old = "https://" + OldServer + secure.Substring(("https://" + host).Length);
+                string whyOld = Probe(old);
+                if (whyOld == null)
+                {
+                    RevivalMod.Log.Warning("[secure] " + host + " did not answer over https (" + why + "); using the server's earlier name " + OldServer + " this time");
+                    return old;
+                }
+                if (remembered.Equals(OldServer, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    RevivalMod.Log.Warning("[secure] neither " + host + " nor " + OldServer + " answered over https (" + why + "); the mod will not use an unencrypted connection to them");
+                    return secure;
+                }
+            }
             if (why == null)
             {
                 if (remembered != host)
@@ -159,6 +192,12 @@ namespace WarpforgeRevival
                 loadingVideo = cat.CreateEntry("LoadingVideo", "Normal",
                     description: "Phones only. Normal: the game's own loading-screen video. Still: no video is decoded (on a Pixel 6 Pro the hardware video decoder leaves the menu black about 1 start in 5); the clip's last frame is shown as a picture instead, once \"6 - fix loading video.bat\" has put it on the phone. Off: no video, dark loading screen. Texture: the video drawn through a texture (did not help)"),
             };
+            // the server's earlier name becomes the new one (once; the settings file keeps the change)
+            if (NamesOldServer(c.serverUrl.Value) != null)
+            {
+                MelonLoader.MelonLogger.Msg("[config] server address " + c.serverUrl.Value + " changed to the server's new name " + DefaultServer);
+                c.serverUrl.Value = DefaultServer;
+            }
             cat.SaveToFile(false);
             return c;
         }
