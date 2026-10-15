@@ -214,6 +214,8 @@ namespace WarpforgeRevival
             }
             // every rule of the first set; the newer ones may be missing (older replays)
             foreach (var k in Ranges.Keys) if (!r.Values.ContainsKey(k)) return null;
+            // replays from before 0.13.33 were all played without unspent mana carried over (every mode had 0)
+            if (!r.Values.ContainsKey("manaAccumulation")) r.Values["manaAccumulation"] = 0;
             return (r, mod, cards.GetString());
         }
 
