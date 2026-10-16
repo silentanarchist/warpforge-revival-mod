@@ -27,6 +27,9 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Friend challenges:** a Custom Test deck can no longer end up in a Classic challenge. Choosing a deck on the Custom Test page also set it as your Classic deck, so a challenge could start with a 60-card deck. Now the challenge stops with a message asking you to pick a Classic deck first.
 - **Deck editor > Deck info:** the Troops and Stratagems lines show how many of each the deck has again (they showed only the words).
 
+### Fixed
+- **The AI's deck fits the mode:** in your first games of Skirmish (or Classic) against the AI, the game took the AI's deck from the Classic list whatever the mode, so a 12-card Skirmish deck could face a 30-card AI. The AI now gets a deck of the mode's size. Not yet confirmed in play.
+
 ## 0.13.26-w - 2026-10-14
 
 ### New

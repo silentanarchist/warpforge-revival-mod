@@ -5,17 +5,16 @@ using Il2Cpp;
 namespace WarpforgeRevival
 {
     /// <summary>
-    /// Draft against the AI. When a Draft search ends against a bot, the match is a ClosedDeckBot match,
-    /// and the game (MatchData.GetBotDeck) always gives that bot a deck from the Skirmish bot list
-    /// (AIBotsConfig "BotListFastMode"), because Everguild's own Draft was a Skirmish mode.
-    ///
-    /// The revival's Draft modes set their own rules on the server (the event's gameplayVariables), so
-    /// the bot's deck follows the deck size of the Draft being played: decks are drawn from both
-    /// bot lists (Classic, the one Classic searches use, and Skirmish) and the one whose size is
-    /// nearest the mode's deck size is used. A Classic draft (30 cards) gets a Classic bot deck, a
-    /// Skirmish draft (12 cards) a Skirmish one, and a Draft with other deck rules the nearest fit,
-    /// with nothing to change in the mod when such a mode is added.
-    /// Everguild's timed alliance drafts (TimedDraftEvent) keep the game's own army-matched pick.
+    /// The AI's deck fits the mode being played (MatchData.GetBotDeck).
+    ///  - Draft against the AI (ClosedDeckBot): the game always gives that bot a deck from the Skirmish bot list
+    ///    (AIBotsConfig "BotListFastMode"), because Everguild's own Draft was a Skirmish mode. The revival's Draft
+    ///    modes set their own deck size, so the bot's deck is the one, from either list, nearest that size.
+    ///  - Skirmish and Classic against the AI (FastModeBot, UnrankedBot; owner, 2026-10-16, replay GYJJ-9K55): in a
+    ///    player's first games of a mode the game is in its "first games" state and takes the bot's deck from the
+    ///    normal (Classic) list whatever the mode, so a 12-card Skirmish player met a 30-card Classic AI. When the
+    ///    game's pick does not fit the mode's deck size, a deck of the nearest size is drawn from the bot lists.
+    /// Decks are drawn straight from the server's two bot lists (AIBotsConfig BotList and BotListFastMode), so the
+    /// "first games" state cannot send it to the wrong list. Everguild's timed alliance drafts keep the game's own pick.
     /// </summary>
     [HarmonyPatch(typeof(MatchData), nameof(MatchData.GetBotDeck))]
     internal static class DraftBotDeck
@@ -25,7 +24,10 @@ namespace WarpforgeRevival
 
         private static bool Prefix(MatchData __instance, MatchType matchType, ref PrebuiltDeck __result)
         {
-            if (inside || matchType != MatchType.ClosedDeckBot) return true;
+            if (inside) return true;
+            bool draft = matchType == MatchType.ClosedDeckBot;
+            if (!draft && matchType != MatchType.FastModeBot && matchType != MatchType.UnrankedBot) return true;
+            string tag = draft ? "[draft]" : "[bot deck]";
             try
             {
                 var ev = __instance.CurrentEvent;
@@ -34,25 +36,29 @@ namespace WarpforgeRevival
                 int want = (object)rules == null ? 0 : rules.deckSize;
                 if (want <= 0)
                 {
-                    RevivalMod.Log.Msg("[draft] this Draft's deck size is not known; the AI keeps the game's own deck");
+                    RevivalMod.Log.Msg($"{tag} this mode's deck size is not known; the AI keeps the game's own deck");
                     return true;
                 }
                 inside = true;
-                PrebuiltDeck best = null;
-                int bestGap = int.MaxValue;
-                string bestList = null;
-                foreach (var (type, list) in new[] { (MatchType.UnrankedBot, "Classic"), (MatchType.ClosedDeckBot, "Skirmish") })
+                if (!draft)
                 {
-                    for (int i = 0; i < TriesPerList && bestGap > 0; i++)
+                    // the game's own pick first; only replaced when it does not fit
+                    var own = __instance.GetBotDeck(matchType);
+                    int ownSize = Size(own);
+                    if (ownSize == want) { __result = own; return false; }
+                    RevivalMod.Log.Msg($"{tag} the game picked '{(own == null ? "none" : own.deckName)}' ({ownSize} cards) for a {want}-card {matchType} match; picking one that fits");
+                    var fit = Nearest(__instance, want, out string fitList);
+                    if ((object)fit == null || Math.Abs(Size(fit) - want) >= Math.Abs(ownSize - want))
                     {
-                        var deck = __instance.GetBotDeck(type);
-                        int size = Size(deck);
-                        if (size <= 0) continue;
-                        int gap = Math.Abs(size - want);
-                        if (gap < bestGap) { best = deck; bestGap = gap; bestList = list; }
+                        if ((object)own == null) return true;
+                        __result = own;
+                        return false;
                     }
-                    if (bestGap == 0) break;
+                    RevivalMod.Log.Msg($"{tag} {want}-card {matchType}: the AI plays the {fitList} bot deck '{fit.deckName}' ({Size(fit)} cards)");
+                    __result = fit;
+                    return false;
                 }
+                var best = Nearest(__instance, want, out string bestList);
                 if ((object)best == null)
                 {
                     RevivalMod.Log.Msg("[draft] no bot deck found; the AI keeps the game's own deck");
@@ -64,12 +70,38 @@ namespace WarpforgeRevival
             }
             catch (Exception e)
             {
-                RevivalMod.Log.Warning("[draft] AI deck: " + e.Message);
+                RevivalMod.Log.Warning($"{tag} AI deck: " + e.Message);
                 return true;
             }
             finally { inside = false; }
         }
 
+        /// <summary>The bot deck, from either of the server's bot lists, whose size is nearest want (null if none).</summary>
+        private static PrebuiltDeck Nearest(MatchData match, int want, out string listName)
+        {
+            listName = null;
+            PrebuiltDeck best = null;
+            int bestGap = int.MaxValue;
+            var collection = PlayerDataManager.singletonManager?.PrebuiltDeckCollection;
+            if ((object)collection == null) return null;
+            foreach (var (name, pick) in new (string, Func<AIBotsConfig.BotConfig>)[] { ("Classic", match.GetNormalBotConfig), ("Skirmish", match.GetFastModeBotConfig) })
+            {
+                Il2CppSystem.Collections.Generic.List<LoadableReference<PrebuiltDeck>> decks = null;
+                try { var config = pick(); decks = (object)config == null ? null : config.GetBotDecks(); } catch { }
+                if (decks == null || decks.Count == 0) continue;
+                for (int i = 0; i < TriesPerList && bestGap > 0; i++)
+                {
+                    PrebuiltDeck deck = null;
+                    try { deck = collection.GetRandomDeck(decks, null, null); } catch { }
+                    int size = Size(deck);
+                    if (size <= 0) continue;
+                    int gap = Math.Abs(size - want);
+                    if (gap < bestGap) { best = deck; bestGap = gap; listName = name; }
+                }
+                if (bestGap == 0) break;
+            }
+            return best;
+        }
         private static int Size(PrebuiltDeck deck)
         {
             if ((object)deck == null || deck.m_CachedPtr == IntPtr.Zero) return 0;
