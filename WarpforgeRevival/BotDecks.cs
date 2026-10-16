@@ -22,7 +22,7 @@ namespace WarpforgeRevival
     ///
     /// The fix, in two parts:
     ///  1. GetRandomDeck always keeps the list check (the root cause), for every caller.
-    ///  2. Against the AI, the list follows the mode's deck size (GameplayData.deckSize from the server's game modes):
+    ///  2. Against the AI (UnrankedBot, RankedBot, FastModeBot, ClosedDeckBot), the list follows the mode's deck size (GameplayData.deckSize from the server's game modes):
     ///     a deck of exactly that size, from the mode's own list first, then the other list. With no deck of that
     ///     size (today: 60-card Custom Test / Long Game), the Classic list is used. Classic Draft (30) therefore gets
     ///     Classic bot decks and a Skirmish Draft (12) would get Skirmish ones; a 60-card bot deck added to a bot list
@@ -91,7 +91,7 @@ namespace WarpforgeRevival
             private static bool Prefix(MatchData __instance, MatchType matchType, ref PrebuiltDeck __result)
             {
                 bool skirmishList = matchType == MatchType.FastModeBot || matchType == MatchType.ClosedDeckBot;
-                if (!skirmishList && matchType != MatchType.UnrankedBot) return true;
+                if (!skirmishList && matchType != MatchType.UnrankedBot && matchType != MatchType.RankedBot) return true;
                 string tag = matchType == MatchType.ClosedDeckBot ? "[draft]" : "[bot deck]";
                 try
                 {
