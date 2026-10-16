@@ -24,7 +24,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Server name:** the mod now connects to **wf-revival.silentanarchist.com**, and the website moves there too. If your settings still name warpforge.silentanarchist.com, the mod switches them over by itself; while the new name is not reachable yet, the old one (the same server) is used. The old name keeps working for now and will be retired in a later update.
 
 ### Fixes
-- **The AI's deck fits the mode:** the AI could play any of the game's prebuilt decks, whatever the mode, so a 12-card Skirmish deck could face a 30-card Classic AI. The AI now plays a deck from the right bot list: Skirmish bot decks in Skirmish, Classic ones in Classic, and a deck of the Draft's size in Draft. Not yet confirmed in play.
+- **The AI's deck fits the mode:** the AI could play any of the game's prebuilt decks, whatever the mode (a server setting kept from the original game switched off the game's own bot-list check), so a 12-card Skirmish deck could face a 30-card Classic AI. The check is back on, and the AI's deck now follows the mode's deck size: Classic and Classic Draft get Classic bot decks, Skirmish gets Skirmish ones, and modes with no bot deck of their size (60-card Custom Test) get a Classic one. Not yet confirmed in play.
 - **Friend challenges:** a Custom Test deck can no longer end up in a Classic challenge. Choosing a deck on the Custom Test page also set it as your Classic deck, so a challenge could start with a 60-card deck. Now the challenge stops with a message asking you to pick a Classic deck first.
 - **Deck editor > Deck info:** the Troops and Stratagems lines show how many of each the deck has again (they showed only the words).
 
