@@ -97,6 +97,11 @@ namespace WarpforgeRevival
         internal static string LinkedAccount => linkedName ?? "";
         /// <summary>True when the linked site account is an in-game tester.</summary>
         internal static bool IsTester => tester;
+        /// <summary>Whether the linked site account has a recovery code: null until the server has said (servers before 2026-10-16 do not).</summary>
+        internal static bool? HasRecovery => hasRecovery;
+        private static bool? hasRecovery;
+        /// <summary>A recovery code was just made in the game (RecoveryCode).</summary>
+        internal static void RecoveryMade() => hasRecovery = true;
         /// <summary>True once the server has answered whether this player is linked (and so whether it is a tester).</summary>
         internal static bool StatusKnown => linkedName != null;
 
@@ -176,6 +181,8 @@ namespace WarpforgeRevival
                             GameSignIn.SignedOut(op == "unlink" && linked.Length > 0
                                 ? "Signed out of " + linked + " on this device. Start the game again to sign in - with this account or another one."
                                 : "This game was unlinked from its account. Start the game again and sign in.");
+                        if (data.TryGetProperty("recovery", out var rc) && (rc.ValueKind == System.Text.Json.JsonValueKind.True || rc.ValueKind == System.Text.Json.JsonValueKind.False))
+                            hasRecovery = linked.Length > 0 && rc.ValueKind == System.Text.Json.JsonValueKind.True;
                         bool changed = linked != linkedName || isTester != tester;
                         linkedName = linked;
                         tester = isTester;

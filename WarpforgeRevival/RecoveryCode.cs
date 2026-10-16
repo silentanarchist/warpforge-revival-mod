@@ -223,6 +223,7 @@ namespace WarpforgeRevival
                     }
                     if ((object)passBox != null && passBox.Pointer != IntPtr.Zero) passBox.SetTextWithoutNotify("");
                     code = made; shown = false;
+                    AccountPage.RecoveryMade();
                     savedTo = Save(name ?? account ?? "account", made, at ?? "");
                     RevivalMod.Log.Msg("[account] recovery code made" + (savedTo != null ? " and saved to a file" : "; the file could not be saved"));
                     status = "";

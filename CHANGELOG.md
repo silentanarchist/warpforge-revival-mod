@@ -7,6 +7,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 ## Unreleased
 
 ### New
+- **Recovery code reminder:** if your linked account has no recovery code, the game's own popup on the main menu asks you to make one. **Set it up** opens Settings > Account; **Not now** asks again 3 days later. Until a code exists it asks once each time the game starts, never during a match. Not yet confirmed in play.
 - **Report a player:** in your Profile's battle log, **REPORT** (next to CODE) on a match against another player opens a short form: why (cheating, unsportsmanlike, stalling / AFK, other), what happened, and whether to send your recent game log. The admins review the match from both players' recordings and the server's own record of it. Not yet confirmed in play.
 - **Anti-cheat (report only):** during online matches the game's own built-in detectors are switched on: one notices the game's memory being edited (mana, health and the like), the other the game being sped up. They block nothing; an alarm only goes to the admins as a report. Not yet confirmed in play.
 - **Settings > Account: recovery code.** Once linked, a password box and **Create recovery code** sit under Open profile and Sign out. The code is saved to a file (Downloads, or the mod's UserData folder if the game cannot write there) and shown hidden, with **Show** and **Copy** buttons, so it stays safe on stream. It is the same code the website's Profile page makes; making one cancels the old one.
