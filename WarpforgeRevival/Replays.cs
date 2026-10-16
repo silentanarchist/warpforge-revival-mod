@@ -157,6 +157,52 @@ namespace WarpforgeRevival
             return recorded == c.CardsVersion || recorded == c.PackVersion;
         }
 
+        // ---- in-match card numbers -> card ids, taken every few seconds while a match runs (0.13.39)
+        private static readonly Dictionary<int, (string id, bool own)> seenCards = new Dictionary<int, (string, bool)>();
+        private static float nextCardLook;
+        private static bool cardsFromReplay;
+
+        /// <summary>From the update loop: notes the match's cards (each card's in-match number, card id and side).</summary>
+        internal static void NoteCards()
+        {
+            float now = UnityEngine.Time.realtimeSinceStartup;
+            if (now < nextCardLook) return;
+            nextCardLook = now + 3f;
+            try
+            {
+                var battle = BattleManager.Instance;
+                if ((object)battle == null || battle.Pointer == IntPtr.Zero || battle.m_CachedPtr == IntPtr.Zero) return;
+                if (IsReplay(battle)) { cardsFromReplay = true; return; }
+                if (cardsFromReplay) { seenCards.Clear(); cardsFromReplay = false; }
+                var manager = UnityEngine.Object.FindObjectOfType<BattleCardManager>();
+                var all = (object)manager == null ? null : manager.GetAllCardsInGame();
+                if (all == null) return;
+                if (all.Count > 0 && seenCards.Count > 0 && !seenCards.ContainsKey(all[0].uniqueInGameID)) seenCards.Clear();    // a new match
+                for (int i = 0; i < all.Count && seenCards.Count < 600; i++)
+                {
+                    var c = all[i];
+                    if ((object)c == null) continue;
+                    string id = c.rawCardData?.uniqueId;
+                    if (string.IsNullOrEmpty(id) || id.Length > 64) continue;
+                    seenCards[c.uniqueInGameID] = (id, c.isPlayer);
+                }
+            }
+            catch { }
+        }
+
+        private static JsonObject CardList()
+        {
+            if (seenCards.Count == 0 || cardsFromReplay) return null;
+            var list = new JsonArray();
+            foreach (var kv in seenCards)
+            {
+                if (kv.Key < 0 || kv.Key > 100000 || !System.Text.RegularExpressions.Regex.IsMatch(kv.Value.id, "^[A-Za-z0-9._-]{1,64}$")) continue;
+                list.Add(new JsonArray(kv.Key, kv.Value.id, kv.Value.own ? 1 : 0));
+            }
+            seenCards.Clear();
+            return new JsonObject { ["v"] = 1, ["cards"] = list };
+        }
+
         internal static bool IsReplay(BattleManager battle)
         {
             try { return battle.IsReplayMatch(); } catch { return false; }
@@ -180,6 +226,9 @@ namespace WarpforgeRevival
                 if (data == null || !fresh) { RevivalMod.Log.Msg("[replay] recording sent without its rules"); return payload; }
                 data["revivalRules"] = JsonNode.Parse(rules);
                 RevivalMod.Log.Msg("[replay] rules sent with the recording");
+                // which card each in-match number was, so the admins' review of a reported match can name cards (0.13.39)
+                var cards = CardList();
+                if (cards != null) data["revivalCards"] = cards;
                 return System.Text.Encoding.UTF8.GetBytes(root.ToJsonString());
             }
             catch (Exception e) { RevivalMod.Log.Warning("[replay] adding the rules to the recording: " + e.Message); return payload; }

@@ -50,7 +50,7 @@ namespace WarpforgeRevival
             ring[(int)((n - 1) % RingSize)] = DateTime.Now.ToString("HH:mm:ss.fff") + " " + line;
         }
 
-        private static string RecentLog()
+        internal static string RecentLog()
         {
             long n = Interlocked.Read(ref written);
             var sb = new StringBuilder();

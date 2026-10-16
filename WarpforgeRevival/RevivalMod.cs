@@ -20,9 +20,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.13.38-a";
+        public const string Version = "0.13.39-a";
 #else
-        public const string Version = "0.13.38-w";
+        public const string Version = "0.13.39-w";
 #endif
 
         /// <summary>
@@ -215,6 +215,7 @@ namespace WarpforgeRevival
             if (ScreenCheck.RuntimeBroken) return;
             GameSignIn.Draw();
             BugReport.OnGUI();
+            PlayerReports.OnGUI();
         }
 
         public override void OnApplicationQuit() => BugReport.End();
@@ -263,6 +264,8 @@ namespace WarpforgeRevival
             MulliganPick.Tick();
             Replays.Tick();
             ReplayCodes.Tick();
+            Replays.NoteCards();
+            AntiCheat.Tick();
             AccountPage.Tick();
             GameSignIn.Tick();
             FriendsLive.Tick();

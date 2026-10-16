@@ -139,6 +139,8 @@ namespace WarpforgeRevival
             t.alignment = TextAlignmentOptions.Center;
             t.color = new Color(0.79f, 0.64f, 0.29f, 1f);           // the game's gold
             t.raycastTarget = false;
+            try { PlayerReports.Place(item, match, rt, parent, w, h, gap); }
+            catch (Exception e) { RevivalMod.Log.Warning("[report] battle log button: " + e.Message); }
             string index = match.recordingIndex;
             b.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() => Ask(index, t))));
             if (!placedLogged)
