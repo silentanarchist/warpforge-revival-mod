@@ -145,6 +145,7 @@ namespace WarpforgeRevival
             AddReportButton(faq, faqT);
             AddExportButton(faq, faqT);
             AddCompressBox();
+            AddWatchButton(faq, faqT);
 
             // The phone layout of this page keeps the button and its introduction switched off and
             // shows its own wording instead (which was just hidden with the rest of the publisher's
@@ -155,6 +156,7 @@ namespace WarpforgeRevival
             ReportVisible(root);
             if ((object)export != null && export.Pointer != IntPtr.Zero) shown += Show(export, root);
             if ((object)compressRow != null && compressRow.Pointer != IntPtr.Zero) { shown += Show(compressRow, root); ShowTick(); }
+            if ((object)watch != null && watch.Pointer != IntPtr.Zero) { shown += Show(watch, root); PlaceWatch(faqT); }
             if (shown > 0 && !reported) RevivalMod.Log.Msg($"[support] switched on {shown} hidden part(s) of the page so the button and its text show");
 
             // The tab's button down the side of the window carries the same word as the heading.
@@ -318,6 +320,63 @@ namespace WarpforgeRevival
             button.onClick.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(OnExport)));
         }
 
+        // ---- Watch a replay code (0.13.37): the first button of a second column, right of the website
+        // button. Plays the replay whose code is on the clipboard (ReplayCodes); the button's text says
+        // what is happening.
+        private const string WatchName = "WFR Watch replay code", WatchText = "Watch a replay code";
+        private static Transform watch;
+        private static TMP_Text watchLabel;
+        private static float watchResetAt;
+        private static bool watchLogged;
+
+        private static void AddWatchButton(UrlButton faq, Transform faqT)
+        {
+            var parent = faqT.parent;
+            if ((object)parent == null) return;
+            var old = parent.Find(WatchName);
+            if ((object)old != null) { watch = old; watchLabel = old.GetComponentInChildren<TMP_Text>(true); return; }
+            var go = UnityEngine.Object.Instantiate(faq.gameObject, parent, false);
+            go.name = WatchName;
+            watch = go.transform;
+            var url = go.GetComponent<UrlButton>();
+            if ((object)url != null) UnityEngine.Object.DestroyImmediate(url);
+            var le = go.GetComponent<UnityEngine.UI.LayoutElement>() ?? go.AddComponent<UnityEngine.UI.LayoutElement>();
+            le.ignoreLayout = true;                     // not stacked with the first column
+            watchLabel = go.GetComponentInChildren<TMP_Text>(true);
+            SetText(watchLabel, WatchText);
+            var button = go.GetComponent<UnityEngine.UI.Button>() ?? go.GetComponentInChildren<UnityEngine.UI.Button>(true);
+            if ((object)button == null) { RevivalMod.Log.Warning("[support] the watch button has no button to click"); return; }
+            button.onClick.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() =>
+            {
+                ReplayCodes.WatchStatus = text => { WatchLabel(string.IsNullOrEmpty(text) ? WatchText : text); watchResetAt = Time.realtimeSinceStartup + 4f; };
+                ReplayCodes.WatchFromClipboard();
+            })));
+            PlaceWatch(faqT);
+        }
+
+        private static void WatchLabel(string text)
+        {
+            try { if ((object)watchLabel != null && watchLabel.Pointer != IntPtr.Zero) SetText(watchLabel, text); } catch { }
+        }
+
+        /// <summary>Same row as the website button, one button's width plus a gap to its right.</summary>
+        private static void PlaceWatch(Transform faqT)
+        {
+            try
+            {
+                if ((object)watch == null || watch.Pointer == IntPtr.Zero || (object)faqT == null) return;
+                var src = faqT.Cast<RectTransform>();
+                var rt = watch.Cast<RectTransform>();
+                var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
+                src.GetWorldCorners(c);
+                float width = Math.Abs(c[2].x - c[0].x);
+                watch.position = faqT.position + new Vector3(width * 1.12f, 0f, 0f);
+                rt.sizeDelta = src.sizeDelta;
+                if (!watchLogged) { watchLogged = true; RevivalMod.Log.Msg($"[support] Watch a replay code button placed right of the website button (width {width:0.00})"); }
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[support] watch button: " + e.Message); }
+        }
+
         private static void OnExport()
         {
             if (CardArtExport.Running) return;
@@ -465,6 +524,7 @@ namespace WarpforgeRevival
         internal static void Tick()
         {
             if (resetAt > 0f && Time.realtimeSinceStartup >= resetAt) { resetAt = 0f; checking = false; Label(CheckText); }
+            if (watchResetAt > 0f && Time.realtimeSinceStartup >= watchResetAt) { watchResetAt = 0f; WatchLabel(WatchText); }
             if ((object)page == null) return;
             try
             {
@@ -478,6 +538,7 @@ namespace WarpforgeRevival
                 if ((object)check != null && check.Pointer != IntPtr.Zero) shown += Show(check, pageRoot);
                 ReportVisible(pageRoot);
                 if ((object)export != null && export.Pointer != IntPtr.Zero) shown += Show(export, pageRoot);
+                if ((object)watch != null && watch.Pointer != IntPtr.Zero) { shown += Show(watch, pageRoot); PlaceWatch(pageButton); }
                 if (!tickReported)
                 {
                     tickReported = true;

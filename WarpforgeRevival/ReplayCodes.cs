@@ -18,7 +18,7 @@ namespace WarpforgeRevival
     ///  - Profile > battle log: each match with a replay gets a CODE button next to its replay button.
     ///    It asks the server for the match's code (POST /playfab/Revival/ReplayCode; the same code
     ///    every time) and copies it to the clipboard.
-    ///  - Social > Challenge: "Watch a replay" reads a code from the clipboard and plays it through the
+    ///  - Settings > Mod: "Watch a replay code" reads a code from the clipboard and plays it through the
     ///    game's own replay loading (PlayerDataManager.RecoverMatchRecording with the code as the record
     ///    name; the server answers with the copy kept for that code), exactly like the battle log's
     ///    replay button, so the replay's own rules are used (Replays).
@@ -31,8 +31,8 @@ namespace WarpforgeRevival
         private static readonly Regex Dashed = new Regex(@"\b([0-9A-Za-z]{4})-([0-9A-Za-z]{4})\b");
         private static readonly Regex Code = new Regex(@"^[0-9A-HJKMNP-TV-Z]{8}$");
 
-        /// <summary>The line under Social > Challenge's Watch a replay button.</summary>
-        internal static string WatchStatus = "";
+        /// <summary>What watching a code is doing, for the button that started it (Settings > Mod).</summary>
+        internal static Action<string> WatchStatus = _ => { };
 
         internal static void Tick()
         {
@@ -100,10 +100,18 @@ namespace WarpforgeRevival
             float left = lp.x + rb.rect.xMin * rb.localScale.x;
             float midY = lp.y + rb.rect.center.y * rb.localScale.y;
             rt.localPosition = new Vector3(left - gap - w / 2f, midY, lp.z);
+            // see-through, with a thin gold edge, so it sits on the row's own background
             var img = go.AddComponent<Image>();
-            img.color = new Color(0.16f, 0.18f, 0.22f, 0.95f);
+            img.color = new Color(0f, 0f, 0f, 0.28f);
+            var edge = go.AddComponent<Outline>();
+            edge.effectColor = new Color(0.79f, 0.64f, 0.29f, 0.55f);
+            edge.effectDistance = new Vector2(1.5f, -1.5f);
             var b = go.AddComponent<Button>();
             b.targetGraphic = img;
+            var colors = b.colors;
+            colors.highlightedColor = new Color(1.6f, 1.4f, 1.0f, 1f);
+            colors.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f);
+            b.colors = colors;
             var font = item.GetComponentInChildren<TMP_Text>(true);
             var label = new GameObject("Label");
             var lrt = label.AddComponent<RectTransform>();
@@ -112,12 +120,13 @@ namespace WarpforgeRevival
             var t = label.AddComponent<TextMeshProUGUI>();
             if ((object)font != null) t.font = font.font;
             t.text = "CODE";
-            t.fontSize = Mathf.Clamp(h * 0.38f, 14f, 30f);
+            t.fontSize = Mathf.Clamp(h * 0.32f, 13f, 26f);
+            t.characterSpacing = 4f;
             t.alignment = TextAlignmentOptions.Center;
             t.color = new Color(0.79f, 0.64f, 0.29f, 1f);           // the game's gold
             t.raycastTarget = false;
             string index = match.recordingIndex;
-            b.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() => Ask(index))));
+            b.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() => Ask(index, t))));
             if (!placedLogged)
             {
                 placedLogged = true;
@@ -125,12 +134,28 @@ namespace WarpforgeRevival
             }
         }
 
-        private static void Ask(string index)
+        /// <summary>The button's own text says what happened (COPIED for a moment), then goes back to CODE.</summary>
+        private static void Flash(TMP_Text label, string text, float seconds)
+        {
+            try
+            {
+                if ((object)label == null || label.Pointer == IntPtr.Zero) return;
+                label.text = text;
+                if (seconds <= 0) return;
+                System.Threading.Tasks.Task.Delay((int)(seconds * 1000)).ContinueWith(_ => Main.Enqueue(() =>
+                {
+                    try { if ((object)label != null && label.Pointer != IntPtr.Zero && label.text == text) label.text = "CODE"; } catch { }
+                }));
+            }
+            catch { }
+        }
+
+        private static void Ask(string index, TMP_Text label)
         {
             string ticket = PlayFabTransport.SessionTicket;
             if (string.IsNullOrEmpty(ticket)) { Notice("Sign in first"); return; }
             string url = RevivalMod.Config.ServerUrl + "/playfab/Revival/ReplayCode";
-            Notice("Getting the replay code…");
+            Flash(label, "...", 0);
             System.Threading.Tasks.Task.Run(async () =>
             {
                 string code = null, error = null;
@@ -157,11 +182,13 @@ namespace WarpforgeRevival
                     {
                         GUIUtility.systemCopyBuffer = code;
                         RevivalMod.Log.Msg($"[replay code] {code} copied for match {index}");
+                        Flash(label, "COPIED", 2.5f);
                         Notice($"Replay code {code} copied");
                     }
                     else
                     {
                         RevivalMod.Log.Warning($"[replay code] no code for match {index}: {error}");
+                        Flash(label, "NO CODE", 3f);
                         Notice("No replay code: " + error);
                     }
                 });
@@ -178,8 +205,8 @@ namespace WarpforgeRevival
             string code = Normalize(text);
             if (code.Length == 0)
             {
-                WatchStatus = "Copy a replay code first (like K7M2-QX9P), then press the button.";
-                ChallengeMenu.Refresh();
+                WatchStatus("Copy a replay code first");
+                
                 return;
             }
             Watch(code);
@@ -188,9 +215,9 @@ namespace WarpforgeRevival
         internal static void Watch(string code)
         {
             var pd = PlayerDataManager.singletonManager;
-            if ((object)pd == null) { WatchStatus = "Not signed in yet."; ChallengeMenu.Refresh(); return; }
-            WatchStatus = $"Loading replay {Show(code)}…";
-            ChallengeMenu.Refresh();
+            if ((object)pd == null) { WatchStatus("Not signed in yet.");  return; }
+            WatchStatus($"Loading {Show(code)}...");
+            
             RevivalMod.Log.Msg($"[replay code] watching {code}");
             Action<BattleRecordData> found = record =>
             {
@@ -198,23 +225,23 @@ namespace WarpforgeRevival
                 {
                     if ((object)record == null)
                     {
-                        WatchStatus = $"No replay could be loaded for {Show(code)}. Check the code; the owner may have removed it.";
-                        ChallengeMenu.Refresh();
+                        WatchStatus($"No replay for {Show(code)}");
+                        
                         return;
                     }
-                    WatchStatus = "";
-                    ChallengeMenu.Refresh();
+                    WatchStatus("");
+                    
                     var mm = Il2CppEverguild.MatchMakerManager.Instance;
-                    if ((object)mm == null) { WatchStatus = "Replays cannot start from here right now."; ChallengeMenu.Refresh(); return; }
+                    if ((object)mm == null) { WatchStatus("Replay could not start");  return; }
                     mm.StartReplayMatch(record, 1f);
                 }
-                catch (Exception e) { RevivalMod.Log.Warning("[replay code] start: " + e); WatchStatus = "The replay could not start."; ChallengeMenu.Refresh(); }
+                catch (Exception e) { RevivalMod.Log.Warning("[replay code] start: " + e); WatchStatus("Replay could not start");  }
             };
             Action<string> failed = e =>
             {
                 RevivalMod.Log.Warning($"[replay code] {code}: {e}");
-                WatchStatus = $"No replay could be loaded for {Show(code)}.";
-                ChallengeMenu.Refresh();
+                WatchStatus($"No replay for {Show(code)}");
+                
             };
             pd.RecoverMatchRecording(code, DelegateSupport.ConvertDelegate<Il2CppSystem.Action<BattleRecordData>>(found),
                                      DelegateSupport.ConvertDelegate<Il2CppSystem.Action<string>>(failed), "", "");
