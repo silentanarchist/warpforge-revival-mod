@@ -49,6 +49,9 @@ namespace WarpforgeRevival
             return (object)ev == null ? id : TestersPage.Label(ev.TryCast<LiveOpsEvent>(), EventLabelReferenceType.Title, id);
         }
 
+        /// <summary>Rebuilds the menu on the next frame (ReplayCodes' status line changed).</summary>
+        internal static void Refresh() => dirty = true;
+
         /// <summary>Called every frame from the mod's update loop.</summary>
         internal static void Tick()
         {
@@ -145,7 +148,7 @@ namespace WarpforgeRevival
             int row = 0;
             foreach (var (id, name, state) in friends)
             {
-                if (row >= 11) break;
+                if (row >= 9) break;          // the bottom of the column is Watch a replay (ReplayCodes)
                 float top = 0.88f - row * 0.075f;
                 bool picked = id == friendId;
                 string hint = state == "online" ? "  (online)" : state == "playing" ? "  (in a match)" : "  (offline)";
@@ -157,6 +160,13 @@ namespace WarpforgeRevival
             }
             if (friends.Count == 0)
                 TestersPage.Text(area, "NoFriends", "Add friends in the Friends tab first.", 24, TextAlignmentOptions.Left, TestersPage.Dim, 0.02f, 0.7f, 0.34f, 0.86f);
+
+            // bottom left: watch a replay from a code someone shared (ReplayCodes)
+            TestersPage.Text(area, "WatchTitle", "Watch a replay", 30, TextAlignmentOptions.Left, Color.white, 0.02f, 0.135f, 0.34f, 0.19f);
+            var watch = TestersPage.Button(area, "WatchCode", "Paste code and watch", 0.02f, 0.07f, 0.34f, 0.13f, TestersPage.Tile);
+            TestersPage.OnClick(watch, ReplayCodes.WatchFromClipboard);
+            TestersPage.Text(area, "WatchStatus", string.IsNullOrEmpty(ReplayCodes.WatchStatus) ? "Copy a replay code, then press the button. Get codes from your Profile's battle log." : ReplayCodes.WatchStatus,
+                             19, TextAlignmentOptions.TopLeft, TestersPage.Dim, 0.02f, 0.0f, 0.34f, 0.065f);
 
             // right: mode and rules
             float x0 = 0.38f, x1 = 0.98f;

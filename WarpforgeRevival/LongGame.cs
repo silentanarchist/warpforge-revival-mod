@@ -74,6 +74,19 @@ namespace WarpforgeRevival
             System.Runtime.InteropServices.Marshal.WriteByte(deck.Pointer + 0x70, 1);
         }
 
+        /// <summary>A deck stored as a Long Game (Custom Test) deck, whatever page is open.</summary>
+        internal static bool IsStoredLong(CardDeck deck)
+        {
+            try { return !string.IsNullOrEmpty(EventId) && StoredAsLong(deck); } catch { return false; }
+        }
+
+        /// <summary>Forgets that the Long Game page is open (a friend challenge is never Long Game; see ChallengeDecks).</summary>
+        internal static void LeavePage()
+        {
+            if (page == Page.Long || editingLong) RevivalMod.Log.Msg("[long] Long Game page state cleared for a friend challenge");
+            page = Page.None; editingLong = false;
+        }
+
         /// <summary>Whether this is a Long Game deck (it is stored under the Long Game play mode).</summary>
         internal static bool Applies(CardDeck deck)
         {

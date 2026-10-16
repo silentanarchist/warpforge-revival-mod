@@ -445,11 +445,16 @@ namespace WarpforgeRevival
             // The game's own challenge is left exactly as it is (0.12.35-0.12.37 switched the challenge to the
             // chosen mode here, which stopped the friend's accept from starting the match). Only the rules
             // are noted for the coming match; they go onto the match itself when the battle starts.
-            private static bool Prefix(ChallengeManager __instance, ref bool __result)
+            private static bool Prefix(ChallengeManager __instance, IPlayEvent playEvent, ref bool __result)
             {
                 try
                 {
                     string opponent = __instance.currentOpponentPlayfabId ?? "";
+                    if (!ChallengeDecks.DeckOk(playEvent, "challenging"))
+                    {
+                        __result = false;
+                        return false;
+                    }
                     if (refused.Contains(opponent))
                     {
                         RevivalMod.Log.Warning($"[challenge] not starting the match with {opponent}: its rules were refused");

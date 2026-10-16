@@ -7,6 +7,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 ## Unreleased
 
 ### New
+- **Replay codes:** in your Profile's battle log, **CODE** next to a match copies a short code for its replay (like K7M2-QX9P) to share on Discord or anywhere. To watch one, copy the code and press **Paste code and watch** under **Social > Challenge**. A code keeps working after the match leaves your battle log; see and remove your codes on the website's Profile page. Not yet confirmed in play.
 - **Friend challenges:** a new rule, **Unspent mana carried over (at most)** (0 to 5). It starts at the chosen mode's value (Skirmish: 1, as in its original rules), and replays keep it; replays saved before this play back without any carried over, as they were played. Both players need this version.
 - **Friend challenges:** the - and + buttons are hidden when they would not change a value (at its lowest or highest).
 - **Settings > Mod > Compress Card Art:** a tick box under Export card art, on by default (the art is saved at 512 x 512, as before). Untick it to save the art at the game's own size (1024 x 1024) for the best quality; this takes much longer, and slower devices may need 5 minutes or longer. Not yet confirmed in play.
@@ -17,6 +18,10 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Settings > Account:** once linked, the "Linked to ..." line and the buttons sit right under the username box, with a new **Open profile on website** button (left) beside Sign out (right), which opens your profile page on the website. The page no longer shows "Could not reach the server" when a re-check of the link fails while the link is known.
 - **Error popups** that told you to contact the game's old publisher (support@everguild.com) now give the revival's address, wf-revival@silentanarchist.com.
 - **Server name:** the mod now connects to **wf-revival.silentanarchist.com**, and the website moves there too. If your settings still name warpforge.silentanarchist.com, the mod switches them over by itself; while the new name is not reachable yet, the old one (the same server) is used. The old name keeps working for now and will be retired in a later update.
+
+### Fixes
+- **Friend challenges:** a Custom Test deck can no longer end up in a Classic challenge. Choosing a deck on the Custom Test page also set it as your Classic deck, so a challenge could start with a 60-card deck. Now the challenge stops with a message asking you to pick a Classic deck first.
+- **Deck editor > Deck info:** the Troops and Stratagems lines show how many of each the deck has again (they showed only the words).
 
 ## 0.13.26-w - 2026-10-14
 
