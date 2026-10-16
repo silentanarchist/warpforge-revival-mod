@@ -98,8 +98,22 @@ namespace WarpforgeRevival
             rt.sizeDelta = new Vector2(w, h);
             Vector3 lp = rb.localPosition;
             float left = lp.x + rb.rect.xMin * rb.localScale.x;
-            float midY = lp.y + rb.rect.center.y * rb.localScale.y;
-            rt.localPosition = new Vector3(left - gap - w / 2f, midY, lp.z);
+            // the pin button sits left of the replay button: start left of whichever is further left
+            try
+            {
+                var pin = item.pinButton;
+                if ((object)pin != null && pin.gameObject.activeInHierarchy)
+                {
+                    var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
+                    pin.GetComponent<RectTransform>().GetWorldCorners(c);
+                    float pinLeft = Math.Min(parent.InverseTransformPoint(c[0]).x, parent.InverseTransformPoint(c[2]).x);
+                    left = Math.Min(left, pinLeft);
+                }
+            }
+            catch { }
+            // a little lower than the replay button's middle (owner, 2026-10-16: down and left of where it was)
+            float midY = lp.y + rb.rect.center.y * rb.localScale.y - h * 0.55f;
+            rt.localPosition = new Vector3(left - gap * 2f - w / 2f, midY, lp.z);
             // see-through, with a thin gold edge, so it sits on the row's own background
             var img = go.AddComponent<Image>();
             img.color = new Color(0f, 0f, 0f, 0.28f);
