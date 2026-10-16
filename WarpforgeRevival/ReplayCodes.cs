@@ -87,8 +87,9 @@ namespace WarpforgeRevival
             if ((object)old != null) UnityEngine.Object.Destroy(old.gameObject);
             if (!replay.gameObject.activeSelf || string.IsNullOrEmpty(match.recordingIndex)) return;
 
-            // a box of the replay button's height, its own width, left of the replay button; kept out of any layout
-            float h = rb.rect.height, w = Mathf.Max(h * 1.9f, 80f), gap = Mathf.Max(6f, h * 0.12f);
+            // a box a little shorter than the replay button, kept out of any layout; Arrange puts it between
+            // the mode's icon and the player's own name (owner, 2026-10-16), REPORT beside the opponent's name
+            float h = Mathf.Max(rb.rect.height * 0.8f, 34f), w = Mathf.Max(h * 2.1f, 80f);
             var go = new GameObject(ButtonName);
             var rt = go.AddComponent<RectTransform>();
             rt.SetParent(parent, false);
@@ -97,23 +98,7 @@ namespace WarpforgeRevival
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(w, h);
             Vector3 lp = rb.localPosition;
-            float left = lp.x + rb.rect.xMin * rb.localScale.x;
-            // the pin button sits left of the replay button: start left of whichever is further left
-            try
-            {
-                var pin = item.pinButton;
-                if ((object)pin != null && pin.gameObject.activeInHierarchy)
-                {
-                    var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
-                    pin.GetComponent<RectTransform>().GetWorldCorners(c);
-                    float pinLeft = Math.Min(parent.InverseTransformPoint(c[0]).x, parent.InverseTransformPoint(c[2]).x);
-                    left = Math.Min(left, pinLeft);
-                }
-            }
-            catch { }
-            // a little lower than the replay button's middle (owner, 2026-10-16: down and left of where it was)
-            float midY = lp.y + rb.rect.center.y * rb.localScale.y - h * 0.55f;
-            rt.localPosition = new Vector3(left - gap * 2f - w / 2f, midY, lp.z);
+            rt.localPosition = new Vector3(lp.x - w, lp.y, lp.z);          // until Arrange has measured the names
             // see-through, with a thin gold edge, so it sits on the row's own background
             var img = go.AddComponent<Image>();
             img.color = new Color(0f, 0f, 0f, 0.28f);
@@ -139,8 +124,12 @@ namespace WarpforgeRevival
             t.alignment = TextAlignmentOptions.Center;
             t.color = new Color(0.79f, 0.64f, 0.29f, 1f);           // the game's gold
             t.raycastTarget = false;
-            try { PlayerReports.Place(item, match, rt, parent, w, h, gap); }
+            t.enableAutoSizing = true; t.fontSizeMin = 9f; t.fontSizeMax = t.fontSize;
+            RectTransform report = null;
+            try { report = PlayerReports.Place(item, match, rt, parent, w, h); }
             catch (Exception e) { RevivalMod.Log.Warning("[report] battle log button: " + e.Message); }
+            Arrange(item, parent, rt, report, w);
+            Main.Enqueue(() => Arrange(item, parent, rt, report, w));    // again once the row has been laid out
             string index = match.recordingIndex;
             b.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() => Ask(index, t))));
             if (!placedLogged)
@@ -148,6 +137,85 @@ namespace WarpforgeRevival
                 placedLogged = true;
                 RevivalMod.Log.Msg($"[replay code] battle log: CODE button placed, replay button {rb.rect.width:0}x{h:0} at {lp.x:0},{lp.y:0} in {parent.name}");
             }
+        }
+
+        // ---------------------------------------------------------------- where the buttons go
+
+        private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
+
+        /// <summary>A box in parent's space: the text actually drawn (not its whole box), or null.</summary>
+        private static Rect? TextSpan(TMP_Text text, Transform parent)
+        {
+            if (!Alive(text) || !text.gameObject.activeInHierarchy || string.IsNullOrEmpty(text.text)) return null;
+            text.ForceMeshUpdate(false, false);
+            var b = text.textBounds;
+            if (b.size.x <= 0f) return RectSpan(text.rectTransform, parent);
+            Vector3 a = parent.InverseTransformPoint(text.transform.TransformPoint(b.min));
+            Vector3 c = parent.InverseTransformPoint(text.transform.TransformPoint(b.max));
+            return Rect.MinMaxRect(Math.Min(a.x, c.x), Math.Min(a.y, c.y), Math.Max(a.x, c.x), Math.Max(a.y, c.y));
+        }
+
+        private static Rect? RectSpan(RectTransform rt, Transform parent)
+        {
+            if (!Alive(rt) || !rt.gameObject.activeInHierarchy) return null;
+            var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
+            rt.GetWorldCorners(c);
+            Vector3 a = parent.InverseTransformPoint(c[0]), z = parent.InverseTransformPoint(c[2]);
+            return Rect.MinMaxRect(Math.Min(a.x, z.x), Math.Min(a.y, z.y), Math.Max(a.x, z.x), Math.Max(a.y, z.y));
+        }
+
+        /// <summary>Puts a button centred in the gap from left to right (at most width wide, at least 60%), at height y.</summary>
+        private static void PutIn(RectTransform b, float left, float right, float y, float width)
+        {
+            float room = right - left, w = Mathf.Clamp(room, width * 0.6f, width);
+            float x = (left + right) / 2f;
+            b.sizeDelta = new Vector2(w, b.sizeDelta.y);
+            b.localPosition = new Vector3(x, y, b.localPosition.z);
+        }
+
+        private static bool arrangedLogged;
+
+        /// <summary>
+        /// CODE between the mode's icon (left column) and the player's own name; REPORT between the opponent's
+        /// name and the opponent's rank icon (owner, 2026-10-16), both at the height of the player names.
+        /// </summary>
+        private static void Arrange(BattleLogItem item, Transform parent, RectTransform code, RectTransform report, float width)
+        {
+            try
+            {
+                if (!Alive(item) || !Alive(code)) return;
+                float pad = Math.Max(8f, width * 0.08f);
+                var me = item.playerInfo;
+                Rect? myName = Alive(me) ? TextSpan(me.playerName, parent) : null;
+                Rect? myIcon = Alive(me) && Alive(me.ratingImage) ? RectSpan(me.ratingImage.rectTransform, parent) : null;
+                Rect? mode = TextSpan(item.mode, parent);
+                if (myName.HasValue)
+                {
+                    float right = myName.Value.xMin - pad;
+                    float left = myIcon.HasValue && myIcon.Value.xMax < right ? myIcon.Value.xMax + pad
+                               : mode.HasValue && mode.Value.xMax < right ? mode.Value.xMax + pad : right - width;
+                    PutIn(code, left, right, myName.Value.center.y, width);
+                }
+                Rect? theirName = null, theirIcon = null;
+                if (Alive(report))
+                {
+                    var them = item.enemyInfo;
+                    theirName = Alive(them) ? TextSpan(them.playerName, parent) : null;
+                    theirIcon = Alive(them) && Alive(them.ratingImage) ? RectSpan(them.ratingImage.rectTransform, parent) : null;
+                    if (theirName.HasValue)
+                    {
+                        float left = theirName.Value.xMax + pad;
+                        float right = theirIcon.HasValue && theirIcon.Value.xMin > left ? theirIcon.Value.xMin - pad : left + width;
+                        PutIn(report, left, right, theirName.Value.center.y, width);
+                    }
+                }
+                if (!arrangedLogged && myName.HasValue)
+                {
+                    arrangedLogged = true;
+                    RevivalMod.Log.Msg($"[replay code] battle log layout: my name {myName}, my icon {myIcon}, mode {mode}, their name {theirName}, their icon {theirIcon}; CODE at {code.localPosition.x:0},{code.localPosition.y:0}");
+                }
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[replay code] arranging the battle log buttons: " + e.Message); }
         }
 
         /// <summary>The button's own text says what happened (COPIED for a moment), then goes back to CODE.</summary>

@@ -11,7 +11,7 @@ using UnityEngine.UI;
 namespace WarpforgeRevival
 {
     /// <summary>
-    /// Report a player: Profile > battle log has a REPORT button (left of CODE) on matches against
+    /// Report a player: Profile > battle log has a REPORT button (beside the opponent's name) on matches against
     /// another player. It opens a small form (reason, a note, "send my recent game log") and sends it to
     /// the server (POST /playfab/Revival/PlayerReport), which keeps both players' recordings of that
     /// match and the server's own record of it for the admins (website > Moderation > Reported players).
@@ -24,12 +24,13 @@ namespace WarpforgeRevival
 
         // ---------------------------------------------------------------- the button (from ReplayCodes.Place)
 
-        internal static void Place(BattleLogItem item, BattleLogMatch match, RectTransform code, Transform parent, float w, float h, float gap)
+        /// <summary>Makes the REPORT button (ReplayCodes.Arrange places it next to the opponent's name); null when the match was not against a player.</summary>
+        internal static RectTransform Place(BattleLogItem item, BattleLogMatch match, RectTransform code, Transform parent, float w, float h)
         {
             var old = parent.Find(ButtonName);
             if ((object)old != null) UnityEngine.Object.Destroy(old.gameObject);
             string enemy = match.enemyId ?? "";
-            if (enemy.Length != 16 || enemy == "AI" || !string.IsNullOrEmpty(match.botAltid)) return;     // only real players
+            if (enemy.Length != 16 || enemy == "AI" || !string.IsNullOrEmpty(match.botAltid)) return null;     // only real players
 
             var go = new GameObject(ButtonName);
             var rt = go.AddComponent<RectTransform>();
@@ -38,8 +39,7 @@ namespace WarpforgeRevival
             rt.anchorMin = rt.anchorMax = code.anchorMin;
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(w, h);
-            var lp = code.localPosition;
-            rt.localPosition = new Vector3(lp.x - w - gap, lp.y, lp.z);
+            rt.localPosition = code.localPosition;
             var img = go.AddComponent<Image>();
             img.color = new Color(0f, 0f, 0f, 0.28f);
             var edge = go.AddComponent<Outline>();
@@ -60,8 +60,10 @@ namespace WarpforgeRevival
             t.alignment = TextAlignmentOptions.Center;
             t.color = new Color(0.85f, 0.45f, 0.38f, 1f);
             t.raycastTarget = false;
+            t.enableAutoSizing = true; t.fontSizeMin = 9f; t.fontSizeMax = t.fontSize;
             string who = enemy, name = match.enemyName ?? "", index = match.recordingIndex ?? "";
             b.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() => Form.Show(who, name, index))));
+            return rt;
         }
 
         internal static void OnGUI()
