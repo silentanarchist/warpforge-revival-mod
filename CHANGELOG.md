@@ -7,6 +7,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 ## Unreleased
 
 ### New
+- **Settings > Account: recovery code.** Once linked, a password box and **Create recovery code** sit under Open profile and Sign out. The code is saved to a file (Downloads, or the mod's UserData folder if the game cannot write there) and shown hidden, with **Show** and **Copy** buttons, so it stays safe on stream. It is the same code the website's Profile page makes; making one cancels the old one.
 - **Replay codes:** in your Profile's battle log, **CODE** next to a match copies a short code for its replay (like K7M2-QX9P) to share on Discord or anywhere. To watch one, copy the code and press **Paste code and watch** under **Social > Challenge**. A code keeps working after the match leaves your battle log; see and remove your codes on the website's Profile page. Not yet confirmed in play.
 - **Friend challenges:** a new rule, **Unspent mana carried over (at most)** (0 to 5). It starts at the chosen mode's value (Skirmish: 1, as in its original rules), and replays keep it; replays saved before this play back without any carried over, as they were played. Both players need this version.
 - **Friend challenges:** the - and + buttons are hidden when they would not change a value (at its lowest or highest).

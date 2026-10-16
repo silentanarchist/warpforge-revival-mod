@@ -311,7 +311,7 @@ namespace WarpforgeRevival
             }
             if ((object)profile == null) return;
             profile.gameObject.SetActive(linked);
-            if (!linked) return;
+            if (!linked) { RecoveryCode.Place(tab, false, userRt, button, ""); return; }
             // the message line (which the page's layout leaves alone) goes up just under the username box,
             // into the space the hidden password row left
             var msg = tab.errorMessage;
@@ -353,7 +353,13 @@ namespace WarpforgeRevival
             profile.position = new Vector3(userLeft + half, btnT.position.y, btnT.position.z);
             var c = profile.GetComponent<UnityEngine.UI.Button>();
             if ((object)c != null) c.interactable = true;
+            // under this row: password box and "Create recovery code" (0.13.35)
+            try { RecoveryCode.Place(tab, true, userRt, button, linkedName ?? ""); }
+            catch (Exception e) { RevivalMod.Log.Warning("[account] recovery code part: " + e.Message); }
         }
+
+        /// <summary>Places the page's added parts again (RecoveryCode, after a code was made).</summary>
+        internal static void Rearrange(AccountTab tab) => Arrange(tab, !string.IsNullOrEmpty(linkedName));
 
         private static bool rowLogged;
 
