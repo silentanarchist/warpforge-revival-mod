@@ -179,7 +179,7 @@ namespace WarpforgeRevival
             float x = end - r.center.x + 40f;                 // in the holder's coordinates (the line's centre)
             float h = Math.Max(48f, Math.Min(64f, r.height + 8f));
             // raised a little so the result line under it stays above the member list
-            float y = h / 2f;
+            float y = h / 2f + 22f;
             // the add button as big as on the Friends tab (square, its border round the icon)
             var bs = addSize.x > 8f && addSize.y > 8f ? addSize : new Vector2(h + 16f, h + 16f);
             Lay(box.GetComponent<RectTransform>(), new Vector2(380f, h), new Vector2(0f, 0.5f), new Vector2(x, y));
