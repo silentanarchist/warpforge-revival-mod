@@ -57,6 +57,7 @@ namespace WarpforgeRevival
                 window.OnTabChanged = window.OnTabChanged == null
                     ? onChange
                     : Il2CppSystem.Delegate.Combine(window.OnTabChanged, onChange).Cast<Il2CppSystem.Action<WindowTabBase>>();
+                AllianceInvite.Build(window);
                 if (!builtLogged) { builtLogged = true; RevivalMod.Log.Msg($"[alliances] Join page set up as the Social window was built: {removed} placeholder invitation(s) removed"); }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[alliances] Join page: " + e.Message); }
@@ -104,6 +105,7 @@ namespace WarpforgeRevival
                         lastState = null;          // opening always refreshes (see ShouldRefresh)
                         if ((object)group == null) FreshJoinLists(manager);
                         tab.Refresh();
+                        AllianceInvite.Opened((object)group == null ? null : manager);
                         if (!openedLogged)
                         {
                             openedLogged = true;
