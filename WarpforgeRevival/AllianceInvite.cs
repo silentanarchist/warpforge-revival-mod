@@ -29,6 +29,7 @@ namespace WarpforgeRevival
         private static readonly ConcurrentQueue<Action> MainThread = new ConcurrentQueue<Action>();
 
         private static AllianceView view;
+        private static TMP_Text membersLine;          // the General page's "Members: n/30" (AllianceMemberList.memberLabel)
         private static GameObject holder;
         private static TMP_InputField box;
         private static Button button;
@@ -41,21 +42,27 @@ namespace WarpforgeRevival
         {
             try
             {
-                AllianceView target = null;
-                foreach (var v in window.GetComponentsInChildren<AllianceView>(true))
-                    if ((object)v != null && !ChallengeMenu.IsChallengeTab(v.GetComponentInParent<AlliancesTab>(true))) { target = v; break; }
+                // the General sub-tab of your own alliance's page (AlliancesTab's member variant), not the page that
+                // shows other alliances from the Join list
+                AllianceMemberTab memberTab = null;
+                foreach (var t in window.GetComponentsInChildren<AlliancesTab>(true))
+                    if ((object)t != null && !ChallengeMenu.IsChallengeTab(t)) { memberTab = t.allianceMemberVariant; break; }
+                var target = (object)memberTab != null ? memberTab.generalView : null;
+                var list = (object)target != null ? target.memberList : null;
+                var line = (object)list != null ? list.memberLabel : null;
                 FriendsTab friends = null;
                 foreach (var f in window.GetComponentsInChildren<FriendsTab>(true)) { friends = f; break; }
-                if ((object)target == null || (object)friends == null) return;
+                if ((object)line == null || (object)friends == null) { RevivalMod.Log.Warning("[alliances] invite box: the alliance page's General tab or the Friends tab was not found"); return; }
                 var input = friends.inputFieldUserName;
                 var add = friends.addButton;
                 if ((object)input == null || (object)add == null) return;
-                if ((object)target.transform.Find(HolderName) != null) return;
+                if ((object)line.transform.Find(HolderName) != null) return;
 
                 view = target;
+                membersLine = line;
                 holder = new GameObject(HolderName);
                 var hrt = holder.AddComponent<RectTransform>();
-                holder.transform.SetParent(target.transform, false);
+                holder.transform.SetParent(line.transform, false);
                 holder.AddComponent<LayoutElement>().ignoreLayout = true;
                 hrt.sizeDelta = Vector2.zero;
 
@@ -111,6 +118,13 @@ namespace WarpforgeRevival
                 lineGo.GetComponent<RectTransform>().sizeDelta = new Vector2(700, 34);
 
                 holder.SetActive(false);
+                // the General button (also pressed by the game when the page opens): place it each time General shows
+                var general = memberTab.generalButton;
+                if ((object)general != null)
+                    general.onValueChanged.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<bool>>(new Action<bool>(on =>
+                    {
+                        if (on) Opened(SingletonBehaviour<AlliancesManager>.Instance);
+                    })));
                 if (!builtLogged) { builtLogged = true; RevivalMod.Log.Msg("[alliances] invite-by-friend-code box built with the Social window"); }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[alliances] invite box: " + e.Message); }
@@ -139,16 +153,9 @@ namespace WarpforgeRevival
 
         private static void Place()
         {
-            if ((object)view == null || view.m_CachedPtr == IntPtr.Zero || (object)holder == null) return;
-            // "Members: n/30": the page's text that starts with "Members"
-            TMP_Text members = null;
-            foreach (var t in view.GetComponentsInChildren<TMP_Text>(false))
-            {
-                if ((object)t == null || t.transform.IsChildOf(holder.transform)) continue;
-                var s = t.text;
-                if (!string.IsNullOrEmpty(s) && s.TrimStart().StartsWith("Members", StringComparison.OrdinalIgnoreCase)) { members = t; break; }
-            }
-            if ((object)members == null) { RevivalMod.Log.Warning("[alliances] invite box: no \"Members\" line on the alliance page"); return; }
+            if ((object)holder == null) return;
+            var members = membersLine;
+            if ((object)members == null || members.m_CachedPtr == IntPtr.Zero) return;
             // the box goes on the "Members" line itself (as its child), in that line's own coordinates, to the right of
             // where its words end; so it moves with the line and is drawn with it
             var mrt = members.rectTransform;
@@ -159,9 +166,9 @@ namespace WarpforgeRevival
             hrt.anchoredPosition = Vector2.zero;
             hrt.localScale = Vector3.one;
             hrt.localRotation = Quaternion.identity;
-            members.ForceMeshUpdate();
             var r = mrt.rect;
-            float words = Math.Min(members.preferredWidth, r.width > 0 ? r.width : members.preferredWidth);
+            float words = members.GetPreferredValues(members.text ?? "").x;
+            if (!(words > 0f) || words > r.width) words = Math.Min(260f, r.width);
             float end;
             var align = members.horizontalAlignment;
             if (align == HorizontalAlignmentOptions.Right) end = r.xMax;
