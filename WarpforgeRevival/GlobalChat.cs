@@ -505,7 +505,61 @@ namespace WarpforgeRevival
             try { me = m.PlayerId; } catch { }
             if (string.IsNullOrEmpty(me)) { nextPoll = now + 1f; return; }       // not signed in yet
             nextPoll = now + (UnityEngine.Application.isFocused ? 3f : 12f);
+            SyncAllianceChannel(m);
             Poll();
+        }
+
+        // ---------------------------------------------------------------- alliance chat (0.13.63)
+        private static string allianceChannel;
+
+        /// <summary>
+        /// The alliance chat is a channel named after the alliance id. The game subscribes to it through Photon Chat,
+        /// which the revival does not use, so the channel (and the chat window's alliance tab) never opened. Checked
+        /// with each chat poll, no hook: in an alliance, its channel is opened the way Photon would confirm it
+        /// (OnSubscribed); after leaving, the old one is closed (OnUnsubscribed). The server only hands an alliance's
+        /// messages to its members.
+        /// </summary>
+        private static void SyncAllianceChannel(ChatGlobalManager m)
+        {
+            try
+            {
+                var alliances = SingletonBehaviour<AlliancesManager>.Instance;
+                string want = null;
+                if ((object)alliances != null && alliances.IsInGroup)
+                {
+                    string id = alliances.CurrentGroupId;
+                    if (!string.IsNullOrEmpty(id)) want = id;
+                }
+                var open = new List<string>();
+                var channels = m.subscribedChannels;
+                if ((object)channels != null)
+                    for (int i = 0; i < channels.Count; i++)
+                    {
+                        var c = channels[i];
+                        if ((object)c != null && !string.IsNullOrEmpty(c.ChannelId)) open.Add(c.ChannelId);
+                    }
+                foreach (var name in open)
+                    if (name != GlobalChannel && name != want && IsAllianceChannel(name))
+                    {
+                        m.OnUnsubscribed(new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray(new[] { name }));
+                        RevivalMod.Log.Msg("[chat] alliance chat closed (no longer in that alliance)");
+                    }
+                if (want != null && !open.Contains(want))
+                {
+                    m.OnSubscribed(new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray(new[] { want }),
+                                   new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<bool>(new[] { true }));
+                    if (allianceChannel != want) RevivalMod.Log.Msg("[chat] alliance chat opened");
+                    allianceChannel = want;
+                }
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[chat] alliance chat: " + e.Message); }
+        }
+
+        private static bool IsAllianceChannel(string name)
+        {
+            if (name.Length != 16) return false;
+            foreach (char c in name) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+            return true;
         }
 
         private static volatile bool photonChatSkipped;

@@ -70,14 +70,26 @@ namespace WarpforgeRevival
             }
         }
 
+        // "Invite to alliance" (0.13.63): hidden by the mod while alliances were off. The game hides it itself unless
+        // you are in an alliance as Moderator or higher and the player is in none (the server says so since
+        // 2026-10-17), but it never shows it again once hidden, so it is shown before each profile is set up.
         [HarmonyPatch(typeof(ProfileTab), nameof(ProfileTab.Initialize))]
         private static class ProfileButtons
         {
+            private static void Prefix(ProfileTab __instance)
+            {
+                try
+                {
+                    var b = __instance.inviteToAllianceButton;
+                    if ((object)b != null && b.Pointer != IntPtr.Zero) b.gameObject.SetActive(true);
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[profile] " + e.Message); }
+            }
+
             private static void Postfix(ProfileTab __instance)
             {
                 try
                 {
-                    Hide(__instance.inviteToAllianceButton);
                     ProfileStats.Show(__instance, ShowFriendCode(__instance));
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[profile] " + e.Message); }
