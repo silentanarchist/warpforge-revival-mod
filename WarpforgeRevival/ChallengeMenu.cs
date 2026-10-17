@@ -20,7 +20,8 @@ namespace WarpforgeRevival
     /// with the game's own TabButtons.AssignTabButton, so the game wires its click like any other. In a postfix the
     /// copy is set up and added to the tab list after the game has filed its tabs by class, so the game's lookups
     /// (GetTab&lt;AlliancesTab&gt;) still find the real Alliances tab. From then on the game opens and closes the
-    /// Challenge tab itself; the page lives inside it and is drawn as the tab opens, in the same frame. The button's
+    /// Challenge tab itself; the page lives inside it and is drawn when the tab is picked (the window's OnTabChanged
+    /// event), in the same frame. The button's
     /// label, icon and place come from MenuLayout ("Challenge"). The real Alliances tab is the game's own again
     /// (hidden by MenuLayout until alliances work on the server).
     ///
@@ -144,6 +145,10 @@ namespace WarpforgeRevival
                     var tabs = __instance.tabs;
                     if (tabs != null && !tabs.Contains(tab)) tabs.Add(tab);     // after the game filed them by class
                     if (tab.gameObject.activeSelf) tab.gameObject.SetActive(false);
+                    var onChange = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<WindowTabBase>>(new Action<WindowTabBase>(TabChanged));
+                    __instance.OnTabChanged = __instance.OnTabChanged == null
+                        ? onChange
+                        : Il2CppSystem.Delegate.Combine(__instance.OnTabChanged, onChange).Cast<Il2CppSystem.Action<WindowTabBase>>();
                     Build(window, tab.transform);
                     RevivalMod.Log.Msg("[challenge] Challenge tab added to the Social window");
                 }
@@ -151,15 +156,13 @@ namespace WarpforgeRevival
             }
         }
 
-        // The page is drawn again each time the tab opens (the friend list may have changed), in the same frame.
-        [HarmonyPatch(typeof(WindowTabBase), nameof(WindowTabBase.TryOpenTab))]
-        private static class OnOpenTab
+        /// <summary>The window's own "tab changed" event (it lights the ribbon): the page is drawn again when the
+        /// Challenge tab is picked, in the same frame (the friend list may have changed). No hook: 0.13.52 hooked
+        /// WindowTabBase.TryOpenTab, which crashed the Android loader (its code starts 8 bytes before a page end).</summary>
+        private static void TabChanged(WindowTabBase to)
         {
-            private static void Postfix(WindowTabBase __instance)
-            {
-                try { if (IsChallengeTab(__instance) && Alive(window)) Build(window, tab.transform); }
-                catch (Exception e) { RevivalMod.Log.Warning("[challenge] menu: " + e.Message); }
-            }
+            try { if (IsChallengeTab(to) && Alive(window)) Build(window, tab.transform); }
+            catch (Exception e) { RevivalMod.Log.Warning("[challenge] menu: " + e.Message); }
         }
 
         // ---------------------------------------------------------------- the menu
