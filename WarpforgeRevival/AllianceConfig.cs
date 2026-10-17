@@ -17,9 +17,9 @@ namespace WarpforgeRevival
     /// 17/20; Dismiss on one threw a NullReferenceException). Opening the tab only fills the open-alliance list; the
     /// invitation list was filled (and its placeholder rows deleted) only when Join was clicked. Now, the build-once
     /// way: when the Social window is built (MenuLayout's SetupTabs postfix) the placeholder rows are deleted and the
-    /// empty section hidden, and the window's own "tab changed" event fills the invitation list when Alliances is
-    /// opened (the game's JoinAllianceMenu.FillGroupInvitations, called, not hooked; its shared "loading" flag is
-    /// cleared first, since the open-alliance list sets it). (0.13.57 hooked FillGroupInvitations instead.)
+    /// empty section hidden; when Alliances is opened (the window's own "tab changed" event) the current alliance is
+    /// fetched and the tab's own Refresh opens the right page (see TabOpened; 0.13.59). (0.13.57 hooked
+    /// FillGroupInvitations instead; 0.13.58 only filled the invitation list.)
     /// </summary>
     internal static class AllianceConfig
     {
@@ -46,24 +46,58 @@ namespace WarpforgeRevival
                         removed++;
                     }
                 if ((object)join.invitationList != null) join.invitationList.SetActive(false);   // shown again when there are real ones
-                var menu = join;
-                var onChange = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<WindowTabBase>>(new Action<WindowTabBase>(to =>
+                // neither page shows until the tab's own Refresh has picked one (see TabOpened)
+                var alliances = join.GetComponentInParent<AlliancesTab>(true);
+                if ((object)alliances != null)
                 {
-                    try
-                    {
-                        if ((object)to == null || (object)to.TryCast<AlliancesTab>() == null || ChallengeMenu.IsChallengeTab(to)) return;
-                        if ((object)menu == null || menu.m_CachedPtr == IntPtr.Zero) return;
-                        menu.loading = false;            // shared with the open-alliance list, which the tab fills as it opens
-                        menu.FillGroupInvitations();
-                    }
-                    catch (Exception e) { RevivalMod.Log.Warning("[alliances] invitations: " + e.Message); }
-                }));
+                    if ((object)alliances.allianceNotMemberVariant != null) alliances.allianceNotMemberVariant.gameObject.SetActive(false);
+                    if ((object)alliances.allianceMemberVariant != null) alliances.allianceMemberVariant.gameObject.SetActive(false);
+                }
+                var onChange = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<WindowTabBase>>(new Action<WindowTabBase>(TabOpened));
                 window.OnTabChanged = window.OnTabChanged == null
                     ? onChange
                     : Il2CppSystem.Delegate.Combine(window.OnTabChanged, onChange).Cast<Il2CppSystem.Action<WindowTabBase>>();
                 if (!builtLogged) { builtLogged = true; RevivalMod.Log.Msg($"[alliances] Join page set up as the Social window was built: {removed} placeholder invitation(s) removed"); }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[alliances] Join page: " + e.Message); }
+        }
+
+        private static bool openedLogged;
+
+        /// <summary>
+        /// The Alliances tab was picked (the window's own OnTabChanged event, no hook). The game decides between
+        /// "your alliance" and the Join page in AlliancesTab.Refresh, which it only runs when alliance data arrives at
+        /// sign-in, and on the revival server that start-up stops early ("Disabling Alliances before tutorial ends")
+        /// without asking for the current alliance. So: ask for it (AlliancesManager.GetCurrentGroup, fresh; storing
+        /// it also sets the player's member record, which is what IsInGroup checks), then let the tab's own Refresh
+        /// open the right page: your alliance, or the real Join page with invitations and open alliances.
+        /// </summary>
+        private static void TabOpened(WindowTabBase to)
+        {
+            try
+            {
+                if ((object)to == null || ChallengeMenu.IsChallengeTab(to)) return;
+                var tab = to.TryCast<AlliancesTab>();
+                if ((object)tab == null) return;
+                var manager = SingletonBehaviour<AlliancesManager>.Instance;
+                if ((object)manager == null) { tab.Refresh(); return; }
+                var done = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<Group>>(new Action<Group>(group =>
+                {
+                    try
+                    {
+                        if ((object)tab == null || tab.m_CachedPtr == IntPtr.Zero) return;
+                        tab.Refresh();
+                        if (!openedLogged)
+                        {
+                            openedLogged = true;
+                            RevivalMod.Log.Msg("[alliances] Alliances opened: " + ((object)group == null ? "not in an alliance, Join page" : "in '" + group.Name + "', alliance page"));
+                        }
+                    }
+                    catch (Exception e) { RevivalMod.Log.Warning("[alliances] opening the tab: " + e.Message); }
+                }));
+                manager.GetCurrentGroup(done, true);
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[alliances] opening the tab: " + e.Message); }
         }
 
         [HarmonyPatch(typeof(ConfigManager), nameof(ConfigManager.Unpack))]
