@@ -1,0 +1,68 @@
+diff --git a/Core/PatchSteps/GenerateCertificate.cs b/Core/PatchSteps/GenerateCertificate.cs
+index 37524a5..943a3d4 100644
+--- a/Core/PatchSteps/GenerateCertificate.cs
++++ b/Core/PatchSteps/GenerateCertificate.cs
+@@ -1,4 +1,4 @@
+-﻿using Org.BouncyCastle.Asn1.X509;
++using Org.BouncyCastle.Asn1.X509;
+ using Org.BouncyCastle.Crypto.Generators;
+ using Org.BouncyCastle.Crypto;
+ using Org.BouncyCastle.Security;
+@@ -46,6 +46,16 @@ IAE6kTSMMHC6bVbrbS/CC8hRW8m7yD3LUa1EjFJmRWXsCQ==
+ 
+     public bool Run(Patcher patcher)
+     {
++        // Warpforge Revival change: keep one signing key between runs (path given in LEMON_SIGNING_KEY),
++        // so a re-patched game installs over the previous patched copy instead of being refused.
++        string? keyFile = Environment.GetEnvironmentVariable("LEMON_SIGNING_KEY");
++        if (!string.IsNullOrEmpty(keyFile) && File.Exists(keyFile))
++        {
++            patcher.Logger.Log("Using the saved signing key");
++            patcher.Info.PemData = File.ReadAllText(keyFile);
++            return true;
++        }
++
+         patcher.Logger.Log("Generating certificate");
+ 
+         RsaKeyPairGenerator kpg = new();
+@@ -84,6 +94,11 @@ IAE6kTSMMHC6bVbrbS/CC8hRW8m7yD3LUa1EjFJmRWXsCQ==
+         pemWriter.WriteObject(new Org.BouncyCastle.Utilities.IO.Pem.PemObject("CERTIFICATE", certificate.GetEncoded()));
+         pemWriter.WriteObject(keyPair.Private);
+         patcher.Info.PemData = stringWriter.ToString();
++        if (!string.IsNullOrEmpty(keyFile))
++        {
++            try { File.WriteAllText(keyFile, patcher.Info.PemData); patcher.Logger.Log("Signing key saved for next time"); }
++            catch (Exception e) { patcher.Logger.Log("Could not save the signing key: " + e.Message); }
++        }
+ 
+         patcher.Logger.Log("Done");
+ 
+diff --git a/Core/PatchSteps/PatchManifest.cs b/Core/PatchSteps/PatchManifest.cs
+index a8ffe6e..def641e 100644
+--- a/Core/PatchSteps/PatchManifest.cs
++++ b/Core/PatchSteps/PatchManifest.cs
+@@ -1,4 +1,4 @@
+-﻿using System;
++using System;
+ using System.Collections.Generic;
+ using System.IO;
+ using System.IO.Compression;
+@@ -100,6 +100,18 @@ internal class PatchManifest : IPatchStep
+             appElement.Attributes.Add(new("requestLegacyExternalStorage", AndroidNamespaceUri, LegacyStorageAttributeResourceId, true));
+         }
+ 
++        // Warpforge Revival change: turn off heap pointer tagging. Newer phones tag the top byte of
++        // heap pointers; the loader's runtime drops that byte in places, and the system then aborts
++        // the app ("Pointer tag ... was truncated"). 16844306 = android:allowNativeHeapPointerTagging.
++        AxmlAttribute? tagging = appElement.Attributes.FirstOrDefault(attribute => attribute.Name == "allowNativeHeapPointerTagging");
++        if (tagging != null)
++            tagging.Value = false;
++        else
++        {
++            _logger!.Log("Turning off heap pointer tagging");
++            appElement.Attributes.Add(new("allowNativeHeapPointerTagging", AndroidNamespaceUri, 16844306, false));
++        }
++
+         // This has only been an issue for split APKs
+         if (_patcher!.Args.IsSplit)
+         {

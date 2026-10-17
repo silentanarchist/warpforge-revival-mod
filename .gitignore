@@ -3,8 +3,30 @@ bin/
 obj/
 *.dll
 *.pdb
-# reference libraries: these come from MelonLoader and from the game, and are not ours to publish
+# reference libraries: these come from MelonLoader, the loader package and the game, and are not ours to publish
 refs/
+refs-android/
+# never publish: the game, anything made from it, your signing key, logs
+*.xapk
+*.apks
+*.apk
+!releases/patcher/*.apk
+patcher/game-files/*
+!patcher/game-files/.gitkeep
+patcher/patched/
+patcher/work-temp/
+patcher/patch-log.txt
+patcher/phone-logs/
+patcher/phone-logs.zip
+patcher/uninstall-backup/
+patcher/tool/signing-key.pem
+patcher/tool/platform-tools/
+patcher/tool/ffmpeg/
+# downloaded by "1 - patch.bat" (patcher/tool/get-tools.ps1), and joined from those pieces on every run
+patcher/tool/*.part*
+patcher/tool/*.download
+patcher/tool/LemonPatch.exe
+patcher/tool/melon_data.zip
 # editor files
 .vs/
 .vscode/

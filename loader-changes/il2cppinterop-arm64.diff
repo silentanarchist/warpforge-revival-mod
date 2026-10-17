@@ -1,0 +1,705 @@
+diff --git a/Il2CppInterop.HarmonySupport/ArgumentGuard.cs b/Il2CppInterop.HarmonySupport/ArgumentGuard.cs
+new file mode 100644
+index 0000000..9ed090b
+--- /dev/null
++++ b/Il2CppInterop.HarmonySupport/ArgumentGuard.cs
+@@ -0,0 +1,142 @@
++using System;
++using System.Collections.Generic;
++using System.Runtime.InteropServices;
++using Il2CppInterop.Common;
++using Il2CppInterop.Runtime;
++using Il2CppInterop.Runtime.Runtime;
++using Microsoft.Extensions.Logging;
++
++namespace Il2CppInterop.HarmonySupport;
++
++// Warpforge Revival change.
++// On ARM64 the game's compiler does not bother to pass an argument that the called method never
++// reads: the register just holds whatever was in it. That is invisible to the game, but a patched
++// method hands every argument to managed code, and wrapping a leftover value as a game object
++// crashes. Before an object or text argument is wrapped it is therefore checked: it must be readable
++// memory that starts with a real class. Anything else is an argument the method does not use, and
++// is passed on as "nothing" (or, for the object the method belongs to, as a blank object of the
++// right class so the original method can still be called).
++internal static unsafe class ArgumentGuard
++{
++    [DllImport("libc", SetLastError = true)] private static extern int pipe(int* fds);
++    [DllImport("libc", SetLastError = true)] private static extern nint write(int fd, void* buf, nint count);
++    [DllImport("libc", SetLastError = true)] private static extern nint read(int fd, void* buf, nint count);
++
++    private static readonly object Gate = new();
++    private static readonly HashSet<nint> KnownClasses = new();
++    private static readonly HashSet<string> Warned = new();
++    private static bool _ready, _active;
++    private static int _readFd = -1, _writeFd = -1, _selfOffset = -1;
++
++    /// <summary>Reads one pointer without risking a crash: the kernel refuses unreadable addresses.</summary>
++    private static bool TryRead(nint address, out nint value)
++    {
++        value = 0;
++        nint v = 0;
++        if (write(_writeFd, (void*)address, sizeof(nint)) != sizeof(nint)) return false;
++        if (read(_readFd, &v, sizeof(nint)) != sizeof(nint)) return false;
++        value = v;
++        return true;
++    }
++
++    private static void Setup()
++    {
++        _ready = true;
++        try
++        {
++            if (RuntimeInformation.ProcessArchitecture != Architecture.Arm64) return;
++            int* fds = stackalloc int[2];
++            if (pipe(fds) != 0) return;
++            _readFd = fds[0];
++            _writeFd = fds[1];
++
++            // Every class holds a pointer to itself; find where, using three classes we know are real.
++            nint obj = Il2CppClassPointerStore<Il2CppSystem.Object>.NativeClassPtr;
++            nint str = Il2CppClassPointerStore<string>.NativeClassPtr;
++            nint arr = obj != 0 ? IL2CPP.il2cpp_array_class_get(obj, 1) : 0;
++            if (obj == 0 || str == 0 || arr == 0) return;
++            for (int off = 0x100; off >= 0; off -= 8)
++            {
++                if (TryRead(obj + off, out var a) && a == obj && TryRead(str + off, out var b) && b == str
++                    && TryRead(arr + off, out var c) && c == arr)
++                {
++                    _selfOffset = off;
++                    break;
++                }
++            }
++            _active = _selfOffset >= 0;
++            Logger.Instance.LogInformation(_active
++                ? "Argument check for patched methods is on (class marker at 0x{Offset})"
++                : "Argument check for patched methods could not be set up ({Offset})", _selfOffset.ToString("X"));
++        }
++        catch (Exception e)
++        {
++            Logger.Instance.LogWarning("Argument check for patched methods could not be set up: {Error}", e.Message);
++        }
++    }
++
++    private static bool LooksLikeObject(nint p, out nint klass)
++    {
++        klass = 0;
++        if ((p & 7) != 0 || (ulong)p < 0x10000 || ((ulong)p >> 48) != 0) return false;
++        if (!TryRead(p, out klass)) return false;
++        if ((klass & 7) != 0 || (ulong)klass < 0x10000 || ((ulong)klass >> 48) != 0) return false;
++        if (KnownClasses.Contains(klass)) return true;
++        if (!TryRead(klass + _selfOffset, out var self) || self != klass) return false;
++        KnownClasses.Add(klass);
++        return true;
++    }
++
++    private static void Warn(string what)
++    {
++        if (Warned.Add(what))
++            Logger.Instance.LogInformation("Patched method received an unused {What}; passing a stand-in", what);
++    }
++
++    public static T Get<T>(IntPtr ptr, int isThis)
++    {
++        Il2CppInterop.Runtime.Injection.HookStats.PatchedArguments++;
++        if (isThis != 0) Il2CppInterop.Runtime.Injection.HookStats.PatchedCalls++;
++        if (ptr == IntPtr.Zero && isThis == 0) return default;
++        lock (Gate)
++        {
++            if (!_ready) Setup();
++            if (!_active && ptr == IntPtr.Zero) return default;
++            if (_active)
++            {
++                nint expected = Il2CppClassPointerStore<T>.NativeClassPtr;
++                bool ok = LooksLikeObject(ptr, out var klass);
++                if (ok && isThis != 0 && expected != 0 && klass != expected && !IL2CPP.il2cpp_class_is_assignable_from(expected, klass))
++                    ok = false;
++                if (!ok)
++                {
++                    Warn((isThis != 0 ? "'this' of type " : "argument of type ") + typeof(T).FullName);
++                    if (isThis == 0 || expected == 0) return default;
++                    try { ptr = IL2CPP.il2cpp_object_new(expected); }
++                    catch { return default; }
++                    if (ptr == IntPtr.Zero) return default;
++                }
++            }
++        }
++        return Il2CppObjectPool.Get<T>(ptr);
++    }
++
++    public static string GetString(IntPtr ptr)
++    {
++        if (ptr == IntPtr.Zero) return null;
++        lock (Gate)
++        {
++            if (!_ready) Setup();
++            if (_active)
++            {
++                nint str = Il2CppClassPointerStore<string>.NativeClassPtr;
++                if (!LooksLikeObject(ptr, out var klass) || (str != 0 && klass != str))
++                {
++                    Warn("text argument");
++                    return null;
++                }
++            }
++        }
++        return IL2CPP.Il2CppStringToManaged(ptr);
++    }
++}
+diff --git a/Il2CppInterop.HarmonySupport/Il2CppDetourMethodPatcher.cs b/Il2CppInterop.HarmonySupport/Il2CppDetourMethodPatcher.cs
+index 0bd437e..d628ef0 100644
+--- a/Il2CppInterop.HarmonySupport/Il2CppDetourMethodPatcher.cs
++++ b/Il2CppInterop.HarmonySupport/Il2CppDetourMethodPatcher.cs
+@@ -146,9 +146,21 @@ internal unsafe class Il2CppDetourMethodPatcher : MethodPatcher
+         var unmanagedDelegate = unmanagedTrampolineMethod.CreateDelegate(unmanagedDelegateType);
+         DelegateCache.Add(unmanagedDelegate);
+ 
++        // Warpforge Revival change: note what follows the first instruction, to tell afterwards
++        // whether the hook stayed within 4 bytes (short methods on ARM64 need that).
++        ulong before1 = 0; uint before2 = 0;
++        bool watch = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
++        if (watch)
++        {
++            before1 = *(ulong*)(originalNativeMethodInfo.MethodPointer + 4);
++            before2 = *(uint*)(originalNativeMethodInfo.MethodPointer + 12);
++        }
+         nativeDetour =
+             Il2CppInteropRuntime.Instance.DetourProvider.Create(originalNativeMethodInfo.MethodPointer, unmanagedDelegate);
+         nativeDetour.Apply();
++        if (watch && (before1 != *(ulong*)(originalNativeMethodInfo.MethodPointer + 4) || before2 != *(uint*)(originalNativeMethodInfo.MethodPointer + 12)))
++            Logger.Instance.LogWarning("Hook on {Method} needed 16 bytes; if that method is shorter, the one after it is damaged",
++                Original.DeclaringType?.Name + "." + Original.Name);
+         modifiedNativeMethodInfo.MethodPointer = nativeDetour.OriginalTrampoline;
+ 
+         var detour = new Detour(Original, managedHookedMethod);
+@@ -279,7 +291,7 @@ internal unsafe class Il2CppDetourMethodPatcher : MethodPatcher
+ 
+         if (!Original.IsStatic)
+         {
+-            EmitConvertArgumentToManaged(il, paramStartIndex - 1, Original.DeclaringType, out _);
++            EmitConvertArgumentToManaged(il, paramStartIndex - 1, Original.DeclaringType, out _, true);
+         }
+ 
+         for (var i = 0; i < managedParams.Length; ++i)
+@@ -372,7 +384,8 @@ internal unsafe class Il2CppDetourMethodPatcher : MethodPatcher
+     private static void EmitConvertArgumentToManaged(ILGenerator il,
+         int argIndex,
+         Type managedParamType,
+-        out LocalBuilder variable)
++        out LocalBuilder variable,
++        bool isThis = false)
+     {
+         variable = null;
+ 
+@@ -429,6 +442,14 @@ internal unsafe class Il2CppDetourMethodPatcher : MethodPatcher
+ 
+         void EmitCreateIl2CppObject(Type originalType)
+         {
++            if (isThis)
++            {
++                // Warpforge Revival change: even a zero 'this' goes through the check (see ArgumentGuard)
++                il.Emit(OpCodes.Ldc_I4, 1);
++                il.Emit(OpCodes.Call, AccessTools.Method(typeof(ArgumentGuard), nameof(ArgumentGuard.Get)).MakeGenericMethod(originalType));
++                return;
++            }
++
+             var endLabel = il.DefineLabel();
+             var notNullLabel = il.DefineLabel();
+ 
+@@ -440,7 +461,9 @@ internal unsafe class Il2CppDetourMethodPatcher : MethodPatcher
+             il.Emit(OpCodes.Br_S, endLabel);
+ 
+             il.MarkLabel(notNullLabel);
+-            il.Emit(OpCodes.Call, AccessTools.Method(typeof(Il2CppObjectPool), nameof(Il2CppObjectPool.Get)).MakeGenericMethod(originalType));
++            // Warpforge Revival change: checked conversion, see ArgumentGuard
++            il.Emit(OpCodes.Ldc_I4, isThis ? 1 : 0);
++            il.Emit(OpCodes.Call, AccessTools.Method(typeof(ArgumentGuard), nameof(ArgumentGuard.Get)).MakeGenericMethod(originalType));
+ 
+             il.MarkLabel(endLabel);
+         }
+@@ -449,7 +472,7 @@ internal unsafe class Il2CppDetourMethodPatcher : MethodPatcher
+         {
+             if (originalType == typeof(string))
+             {
+-                il.Emit(OpCodes.Call, IL2CPPToManagedStringMethodInfo);
++                il.Emit(OpCodes.Call, AccessTools.Method(typeof(ArgumentGuard), nameof(ArgumentGuard.GetString)));
+             }
+             else if (originalType.IsSubclassOf(typeof(Il2CppObjectBase)))
+             {
+diff --git a/Il2CppInterop.Runtime/IL2CPP.cs b/Il2CppInterop.Runtime/IL2CPP.cs
+index f97d006..2431a49 100644
+--- a/Il2CppInterop.Runtime/IL2CPP.cs
++++ b/Il2CppInterop.Runtime/IL2CPP.cs
+@@ -512,13 +512,17 @@ public static unsafe class IL2CPP
+     public static extern IntPtr il2cpp_class_get_method_from_name(IntPtr klass,
+         [MarshalAs(UnmanagedType.LPUTF8Str)] string name, int argsCount);
+ 
+-    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+-    [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+-    public static extern string il2cpp_class_get_name(IntPtr klass);
++    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "il2cpp_class_get_name")]
++    private static extern IntPtr il2cpp_class_get_name_ptr(IntPtr klass);
+ 
+-    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+-    [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+-    public static extern string il2cpp_class_get_namespace(IntPtr klass);
++    // Warpforge Revival change: the text belongs to the game, so it must be read, not freed.
++    public static string il2cpp_class_get_name(IntPtr klass) => Marshal.PtrToStringUTF8(il2cpp_class_get_name_ptr(klass));
++
++    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "il2cpp_class_get_namespace")]
++    private static extern IntPtr il2cpp_class_get_namespace_ptr(IntPtr klass);
++
++    // Warpforge Revival change: the text belongs to the game, so it must be read, not freed.
++    public static string il2cpp_class_get_namespace(IntPtr klass) => Marshal.PtrToStringUTF8(il2cpp_class_get_namespace_ptr(klass));
+ 
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern IntPtr il2cpp_class_get_parent(IntPtr klass);
+@@ -581,9 +585,11 @@ public static unsafe class IL2CPP
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern IntPtr il2cpp_class_get_image(IntPtr klass);
+ 
+-    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+-    [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+-    public static extern string il2cpp_class_get_assemblyname(IntPtr klass);
++    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "il2cpp_class_get_assemblyname")]
++    private static extern IntPtr il2cpp_class_get_assemblyname_ptr(IntPtr klass);
++
++    // Warpforge Revival change: the text belongs to the game, so it must be read, not freed.
++    public static string il2cpp_class_get_assemblyname(IntPtr klass) => Marshal.PtrToStringUTF8(il2cpp_class_get_assemblyname_ptr(klass));
+ 
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern int il2cpp_class_get_rank(IntPtr klass);
+@@ -628,9 +634,11 @@ public static unsafe class IL2CPP
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern int il2cpp_field_get_flags(IntPtr field);
+ 
+-    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+-    [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+-    public static extern string il2cpp_field_get_name(IntPtr field);
++    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "il2cpp_field_get_name")]
++    private static extern IntPtr il2cpp_field_get_name_ptr(IntPtr field);
++
++    // Warpforge Revival change: the text belongs to the game, so it must be read, not freed.
++    public static string il2cpp_field_get_name(IntPtr field) => Marshal.PtrToStringUTF8(il2cpp_field_get_name_ptr(field));
+ 
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern IntPtr il2cpp_field_get_parent(IntPtr field);
+@@ -720,9 +728,11 @@ public static unsafe class IL2CPP
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern IntPtr il2cpp_method_get_declaring_type(IntPtr method);
+ 
+-    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+-    [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+-    public static extern string il2cpp_method_get_name(IntPtr method);
++    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "il2cpp_method_get_name")]
++    private static extern IntPtr il2cpp_method_get_name_ptr(IntPtr method);
++
++    // Warpforge Revival change: the text belongs to the game, so it must be read, not freed.
++    public static string il2cpp_method_get_name(IntPtr method) => Marshal.PtrToStringUTF8(il2cpp_method_get_name_ptr(method));
+ 
+     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+     public static IntPtr il2cpp_method_get_from_reflection(IntPtr method)
+@@ -769,9 +779,11 @@ public static unsafe class IL2CPP
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern uint il2cpp_method_get_token(IntPtr method);
+ 
+-    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+-    [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+-    public static extern string il2cpp_method_get_param_name(IntPtr method, uint index);
++    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "il2cpp_method_get_param_name")]
++    private static extern IntPtr il2cpp_method_get_param_name_ptr(IntPtr method, uint index);
++
++    // Warpforge Revival change: the text belongs to the game, so it must be read, not freed.
++    public static string il2cpp_method_get_param_name(IntPtr method, uint index) => Marshal.PtrToStringUTF8(il2cpp_method_get_param_name_ptr(method, index));
+ 
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern void il2cpp_profiler_install(IntPtr prof, IntPtr shutdown_callback);
+@@ -802,9 +814,11 @@ public static unsafe class IL2CPP
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern IntPtr il2cpp_property_get_set_method(IntPtr prop);
+ 
+-    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+-    [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+-    public static extern string il2cpp_property_get_name(IntPtr prop);
++    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "il2cpp_property_get_name")]
++    private static extern IntPtr il2cpp_property_get_name_ptr(IntPtr prop);
++
++    // Warpforge Revival change: the text belongs to the game, so it must be read, not freed.
++    public static string il2cpp_property_get_name(IntPtr prop) => Marshal.PtrToStringUTF8(il2cpp_property_get_name_ptr(prop));
+ 
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern IntPtr il2cpp_property_get_parent(IntPtr prop);
+@@ -946,9 +960,11 @@ public static unsafe class IL2CPP
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern IntPtr il2cpp_type_get_class_or_element_class(IntPtr type);
+ 
+-    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+-    [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+-    public static extern string il2cpp_type_get_name(IntPtr type);
++    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "il2cpp_type_get_name")]
++    private static extern IntPtr il2cpp_type_get_name_ptr(IntPtr type);
++
++    // Warpforge Revival change: the text belongs to the game, so it must be read, not freed.
++    public static string il2cpp_type_get_name(IntPtr type) => Marshal.PtrToStringUTF8(il2cpp_type_get_name_ptr(type));
+ 
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     [return: MarshalAs(UnmanagedType.I1)]
+@@ -967,13 +983,17 @@ public static unsafe class IL2CPP
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern IntPtr il2cpp_image_get_assembly(IntPtr image);
+ 
+-    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+-    [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+-    public static extern string il2cpp_image_get_name(IntPtr image);
++    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "il2cpp_image_get_name")]
++    private static extern IntPtr il2cpp_image_get_name_ptr(IntPtr image);
+ 
+-    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+-    [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+-    public static extern string il2cpp_image_get_filename(IntPtr image);
++    // Warpforge Revival change: the text belongs to the game, so it must be read, not freed.
++    public static string il2cpp_image_get_name(IntPtr image) => Marshal.PtrToStringUTF8(il2cpp_image_get_name_ptr(image));
++
++    [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "il2cpp_image_get_filename")]
++    private static extern IntPtr il2cpp_image_get_filename_ptr(IntPtr image);
++
++    // Warpforge Revival change: the text belongs to the game, so it must be read, not freed.
++    public static string il2cpp_image_get_filename(IntPtr image) => Marshal.PtrToStringUTF8(il2cpp_image_get_filename_ptr(image));
+ 
+     [DllImport("libil2cpp.so", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public static extern IntPtr il2cpp_image_get_entry_point(IntPtr image);
+diff --git a/Il2CppInterop.Runtime/Injection/ClassInjector.cs b/Il2CppInterop.Runtime/Injection/ClassInjector.cs
+index befdab6..ce22f47 100644
+--- a/Il2CppInterop.Runtime/Injection/ClassInjector.cs
++++ b/Il2CppInterop.Runtime/Injection/ClassInjector.cs
+@@ -59,9 +59,9 @@ public class RegisterTypeOptions
+ {
+     public static readonly RegisterTypeOptions Default = new();
+ 
+-    public bool LogSuccess { get; init; } = true;
+-    public Func<Type, Type[]>? InterfacesResolver { get; init; } = null;
+-    public Il2CppInterfaceCollection? Interfaces { get; init; } = null;
++    public bool LogSuccess { get; set; } = true;
++    public Func<Type, Type[]>? InterfacesResolver { get; set; } = null;
++    public Il2CppInterfaceCollection? Interfaces { get; set; } = null;
+ }
+ 
+ public static unsafe partial class ClassInjector
+diff --git a/Il2CppInterop.Runtime/Injection/FastPath.cs b/Il2CppInterop.Runtime/Injection/FastPath.cs
+new file mode 100644
+index 0000000..0615387
+--- /dev/null
++++ b/Il2CppInterop.Runtime/Injection/FastPath.cs
+@@ -0,0 +1,92 @@
++using System;
++using System.Reflection;
++using System.Runtime.InteropServices;
++using Il2CppInterop.Common;
++using Microsoft.Extensions.Logging;
++
++namespace Il2CppInterop.Runtime.Injection
++{
++    // Warpforge Revival change.
++    // Two of the loader's hooks sit on engine functions the game calls tens of millions of times
++    // while it loads (measured: 54 million calls while unpacking one inventory). Each call used to
++    // leave the game's native code for the loader's managed code and come back, which on a phone
++    // costs over a microsecond a time - more than a minute in total. Almost none of those calls
++    // concern a class added by a mod, and that can be told from one bit of the argument.
++    // So a few machine instructions are placed in front of the managed hook: the ordinary case goes
++    // straight back to the game's own function, and only the rare case goes on to managed code.
++    internal static unsafe class FastPath
++    {
++        /// <summary>The first argument points at a value; managed code is only needed when that value is negative.</summary>
++        internal const int NegativeValueBehindPointer = 1;
++        /// <summary>The first argument is a 32-bit number; managed code is only needed when it is negative.</summary>
++        internal const int NegativeNumber = 2;
++
++        [DllImport("libc", SetLastError = true)] private static extern nint mmap(nint addr, nuint length, int prot, int flags, int fd, nint offset);
++        [DllImport("libc", SetLastError = true)] private static extern int mprotect(nint addr, nuint length, int prot);
++
++        private static readonly uint[] ViaPointer =
++        {
++            0xF9400010, // ldr  x16, [x0]
++            0xB7F80090, // tbnz x16, #63, slow
++            0x580000D1, // ldr  x17, slots
++            0xF9400631, // ldr  x17, [x17, #8]   the game's own function
++            0xD61F0220, // br   x17
++            0x58000071, // slow: ldr x17, slots
++            0xF9400231, // ldr  x17, [x17]       the managed hook
++            0xD61F0220, // br   x17
++        };
++
++        private static readonly uint[] ViaNumber =
++        {
++            0x37F80080, // tbnz w0, #31, slow
++            0x580000F1, // ldr  x17, slots
++            0xF9400631, // ldr  x17, [x17, #8]
++            0xD61F0220, // br   x17
++            0x58000091, // slow: ldr x17, slots
++            0xF9400231, // ldr  x17, [x17]
++            0xD61F0220, // br   x17
++            0xD503201F, // nop
++        };
++
++        internal static bool TryApply<T>(IntPtr target, T detour, int kind, string name, Action<T> setOriginal) where T : Delegate
++        {
++            try
++            {
++                if (kind == 0 || RuntimeInformation.ProcessArchitecture != Architecture.Arm64) return false;
++                var attach = Type.GetType("MelonLoader.InternalUtils.BootstrapInterop, MelonLoader")
++                    ?.GetMethod("NativeHookAttachDirect", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
++                if (attach == null) return false;
++
++                const int ReadWrite = 3, ReadExecute = 5, PrivateAnonymous = 0x22;
++                nint slots = mmap(0, 4096, ReadWrite, PrivateAnonymous, -1, 0);
++                nint code = mmap(0, 4096, ReadWrite, PrivateAnonymous, -1, 0);
++                if (slots == -1 || code == -1 || slots == 0 || code == 0) return false;
++
++                nint managed = Marshal.GetFunctionPointerForDelegate(detour);
++                var slot = (nint*)slots;
++                slot[0] = managed;
++                slot[1] = managed; // until the game's own function is known, everything takes the long way
++
++                var words = kind == NegativeValueBehindPointer ? ViaPointer : ViaNumber;
++                var w = (uint*)code;
++                for (int i = 0; i < words.Length; i++) w[i] = words[i];
++                *(nint*)(code + words.Length * 4) = slots;
++                if (mprotect(code, 4096, ReadExecute) != 0) return false;
++
++                nint address = target;
++                attach.Invoke(null, new object[] { (IntPtr)(&address), (IntPtr)code });
++                if (address == target || address == 0) return false;
++
++                setOriginal(Marshal.GetDelegateForFunctionPointer<T>(address));
++                slot[1] = address;
++                Logger.Instance.LogInformation("{Name}: short cut in place (most calls no longer leave the game's own code)", name);
++                return true;
++            }
++            catch (Exception e)
++            {
++                Logger.Instance.LogWarning("{Name}: short cut not possible ({Error}); using the ordinary hook", name, e.Message);
++                return false;
++            }
++        }
++    }
++}
+diff --git a/Il2CppInterop.Runtime/Injection/Hook.cs b/Il2CppInterop.Runtime/Injection/Hook.cs
+index 24bb7bd..58e3a92 100644
+--- a/Il2CppInterop.Runtime/Injection/Hook.cs
++++ b/Il2CppInterop.Runtime/Injection/Hook.cs
+@@ -18,6 +18,9 @@ namespace Il2CppInterop.Runtime.Injection
+         public abstract T GetDetour();
+         public abstract IntPtr FindTargetMethod();
+ 
++        /// <summary>Which quick test, if any, tells that a call does not concern a mod-added class (see FastPath).</summary>
++        public virtual int FastPathKind => 0;
++
+         public virtual void TargetMethodNotFound()
+         {
+             throw new Exception($"Required target method {TargetMethodName} not found");
+@@ -27,7 +30,8 @@ namespace Il2CppInterop.Runtime.Injection
+         {
+             if (_isApplied) return;
+ 
+-            var methodPtr = FindTargetMethod();
++            var methodPtr = KnownTargets.TryGet(TargetMethodName);
++            if (methodPtr == IntPtr.Zero) methodPtr = FindTargetMethod();
+ 
+             if (methodPtr == IntPtr.Zero)
+             {
+@@ -38,7 +42,9 @@ namespace Il2CppInterop.Runtime.Injection
+             Logger.Instance.LogTrace("{MethodName} found: 0x{MethodPtr}", TargetMethodName, methodPtr.ToInt64().ToString("X2"));
+ 
+             _detour = GetDetour();
+-            Detour.Apply(methodPtr, _detour, out _original);
++            // Warpforge Revival change: see FastPath
++            if (!FastPath.TryApply(methodPtr, _detour, FastPathKind, TargetMethodName, o => _original = o))
++                Detour.Apply(methodPtr, _detour, out _original);
+             _method = Marshal.GetDelegateForFunctionPointer<T>(methodPtr);
+             _isApplied = true;
+         }
+diff --git a/Il2CppInterop.Runtime/Injection/HookStats.cs b/Il2CppInterop.Runtime/Injection/HookStats.cs
+new file mode 100644
+index 0000000..d9022b7
+--- /dev/null
++++ b/Il2CppInterop.Runtime/Injection/HookStats.cs
+@@ -0,0 +1,14 @@
++namespace Il2CppInterop.Runtime.Injection
++{
++    // Warpforge Revival change: counts how often the game's engine lands in each of the loader's
++    // hooks, to find out where start-up time goes on a phone. Plain counters; an occasional lost
++    // count from two threads at once does not matter here.
++    public static class HookStats
++    {
++        public static long FromIl2CppType, FromName, GetFieldDefaultValue, GetTypeInfo, GetMethod, PatchedCalls, PatchedArguments;
++
++        public static string Snapshot() =>
++            $"type-from-signature {FromIl2CppType}, type-by-name {FromName}, field-default {GetFieldDefaultValue}, " +
++            $"type-by-index {GetTypeInfo}, generic-method {GetMethod}, patched-method calls {PatchedCalls}, checked arguments {PatchedArguments}";
++    }
++}
+diff --git a/Il2CppInterop.Runtime/Injection/Hooks/Class_FromIl2CppType_Hook.cs b/Il2CppInterop.Runtime/Injection/Hooks/Class_FromIl2CppType_Hook.cs
+index f9cf15e..b3eb2cc 100644
+--- a/Il2CppInterop.Runtime/Injection/Hooks/Class_FromIl2CppType_Hook.cs
++++ b/Il2CppInterop.Runtime/Injection/Hooks/Class_FromIl2CppType_Hook.cs
+@@ -12,6 +12,7 @@ namespace Il2CppInterop.Runtime.Injection.Hooks
+     {
+         public override string TargetMethodName => "Class::FromIl2CppType";
+         public override MethodDelegate GetDetour() => Hook;
++        public override int FastPathKind => FastPath.NegativeValueBehindPointer;
+ 
+         /// Common version of the Il2CppType, the only thing that changed between unity version are the bitfields values that we don't use
+         internal readonly struct Il2CppType
+@@ -27,6 +28,7 @@ namespace Il2CppInterop.Runtime.Injection.Hooks
+ 
+         private Il2CppClass* Hook(Il2CppType* type, bool throwOnError)
+         {
++            HookStats.FromIl2CppType++;
+             if ((nint)type->data < 0 && (type->type == Il2CppTypeEnum.IL2CPP_TYPE_CLASS || type->type == Il2CppTypeEnum.IL2CPP_TYPE_VALUETYPE))
+             {
+                 InjectorHelpers.s_InjectedClasses.TryGetValue((nint)type->data, out var classPointer);
+diff --git a/Il2CppInterop.Runtime/Injection/Hooks/Class_FromName_Hook.cs b/Il2CppInterop.Runtime/Injection/Hooks/Class_FromName_Hook.cs
+index 0e49dab..abac399 100644
+--- a/Il2CppInterop.Runtime/Injection/Hooks/Class_FromName_Hook.cs
++++ b/Il2CppInterop.Runtime/Injection/Hooks/Class_FromName_Hook.cs
+@@ -18,6 +18,7 @@ namespace Il2CppInterop.Runtime.Injection.Hooks
+ 
+         private Il2CppClass* Hook(Il2CppImage* image, IntPtr _namespace, IntPtr name)
+         {
++            HookStats.FromName++;
+             Il2CppClass* classPtr = Original(image, _namespace, name);
+ 
+             if (classPtr == null)
+diff --git a/Il2CppInterop.Runtime/Injection/Hooks/Class_GetFieldDefaultValue_Hook.cs b/Il2CppInterop.Runtime/Injection/Hooks/Class_GetFieldDefaultValue_Hook.cs
+index 6108daa..71378c1 100644
+--- a/Il2CppInterop.Runtime/Injection/Hooks/Class_GetFieldDefaultValue_Hook.cs
++++ b/Il2CppInterop.Runtime/Injection/Hooks/Class_GetFieldDefaultValue_Hook.cs
+@@ -22,6 +22,7 @@ namespace Il2CppInterop.Runtime.Injection.Hooks
+ 
+         private byte* Hook(Il2CppFieldInfo* field, out Il2CppTypeStruct* type)
+         {
++            HookStats.GetFieldDefaultValue++;
+             if (EnumInjector.GetDefaultValueOverride(field, out IntPtr newDefaultPtr))
+             {
+                 INativeFieldInfoStruct wrappedField = UnityVersionHandler.Wrap(field);
+diff --git a/Il2CppInterop.Runtime/Injection/Hooks/GenericMethod_GetMethod_Hook.cs b/Il2CppInterop.Runtime/Injection/Hooks/GenericMethod_GetMethod_Hook.cs
+index 8480f01..bf7dd0b 100644
+--- a/Il2CppInterop.Runtime/Injection/Hooks/GenericMethod_GetMethod_Hook.cs
++++ b/Il2CppInterop.Runtime/Injection/Hooks/GenericMethod_GetMethod_Hook.cs
+@@ -19,6 +19,7 @@ namespace Il2CppInterop.Runtime.Injection.Hooks
+ 
+         private Il2CppMethodInfo* Hook(Il2CppGenericMethod* gmethod, bool copyMethodPtr)
+         {
++            HookStats.GetMethod++;
+             if (ClassInjector.InflatedMethodFromContextDictionary.TryGetValue((IntPtr)gmethod->methodDefinition, out var methods))
+             {
+                 var instancePointer = gmethod->context.method_inst;
+diff --git a/Il2CppInterop.Runtime/Injection/Hooks/MetadataCache_GetTypeInfoFromTypeDefinitionIndex_Hook.cs b/Il2CppInterop.Runtime/Injection/Hooks/MetadataCache_GetTypeInfoFromTypeDefinitionIndex_Hook.cs
+index 943a9ad..d27b7cd 100644
+--- a/Il2CppInterop.Runtime/Injection/Hooks/MetadataCache_GetTypeInfoFromTypeDefinitionIndex_Hook.cs
++++ b/Il2CppInterop.Runtime/Injection/Hooks/MetadataCache_GetTypeInfoFromTypeDefinitionIndex_Hook.cs
+@@ -14,12 +14,14 @@ namespace Il2CppInterop.Runtime.Injection.Hooks
+     {
+         public override string TargetMethodName => "MetadataCache::GetTypeInfoFromTypeDefinitionIndex";
+         public override MethodDelegate GetDetour() => Hook;
++        public override int FastPathKind => FastPath.NegativeNumber;
+ 
+         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+         internal delegate Il2CppClass* MethodDelegate(int index);
+ 
+         private Il2CppClass* Hook(int index)
+         {
++            HookStats.GetTypeInfo++;
+             if (InjectorHelpers.s_InjectedClasses.TryGetValue(index, out IntPtr classPtr))
+                 return (Il2CppClass*)classPtr;
+ 
+diff --git a/Il2CppInterop.Runtime/Injection/InjectorHelpers.cs b/Il2CppInterop.Runtime/Injection/InjectorHelpers.cs
+index 940b485..d619d5d 100644
+--- a/Il2CppInterop.Runtime/Injection/InjectorHelpers.cs
++++ b/Il2CppInterop.Runtime/Injection/InjectorHelpers.cs
+@@ -194,6 +194,12 @@ namespace Il2CppInterop.Runtime.Injection
+                 Logger.Instance.LogTrace("GameAssembly.dll: 0x{Il2CppModuleAddress}", Il2CppModule.BaseAddress.ToInt64().ToString("X2"));
+                 throw new NotSupportedException("Failed to use signature for Class::Init and a substitute cannot be found, please create an issue and report your unity version & game");
+             }
++            nint known = KnownTargets.TryGet("Class::Init");
++            if (known != 0)
++            {
++                Logger.Instance.LogTrace("Class::Init: 0x{PClassInitAddress}", known.ToString("X2"));
++                return Marshal.GetDelegateForFunctionPointer<d_ClassInit>(known);
++            }
+             nint pClassInit = s_ClassInitSignatures
+                 .Select(s => MemoryUtils.FindSignatureInModule(Il2CppModule, s))
+                 .FirstOrDefault(p => p != 0);
+diff --git a/Il2CppInterop.Runtime/Injection/KnownTargets.cs b/Il2CppInterop.Runtime/Injection/KnownTargets.cs
+new file mode 100644
+index 0000000..a8b8efc
+--- /dev/null
++++ b/Il2CppInterop.Runtime/Injection/KnownTargets.cs
+@@ -0,0 +1,67 @@
++using System;
++using System.Collections.Generic;
++using System.Runtime.InteropServices;
++using Il2CppInterop.Common;
++using Microsoft.Extensions.Logging;
++
++namespace Il2CppInterop.Runtime.Injection
++{
++    // Warpforge Revival change.
++    // The generic searches for the game's internal functions were written for x64 code and pick the
++    // wrong functions in this ARM64 build. The game will never be updated again, so for the one known
++    // build (Warhammer 40,000: Warpforge 1.35.0, Android arm64) the functions are listed here by their
++    // position in libil2cpp.so. Every entry is checked against the code actually found there, and
++    // anything that does not match falls back to the generic search.
++    internal static unsafe class KnownTargets
++    {
++        private const long AnchorOffset = 0x2D32014; // il2cpp_image_get_class
++
++        private static readonly Dictionary<string, (long offset, uint first, uint second)> s_Warpforge135 = new()
++        {
++            { "GenericMethod::GetMethod", (0x2D4A2D0, 0xD100C3FF, 0xF9000BFE) },
++            { "MetadataCache::GetTypeInfoFromTypeDefinitionIndex", (0x2D7A86C, 0xF81A0FFE, 0xA9016FFC) },
++            { "Class::GetDefaultFieldValue", (0x2D7A214, 0xD10103FF, 0xA9015FFE) },
++            { "Class::FromIl2CppType", (0x2D8D4D8, 0xA9BE57FE, 0xA9014FF4) },
++            { "Class::FromName", (0x2D83EE0, 0xD10243FF, 0xF90033FE) },
++            { "Class::Init", (0x2D8D9B0, 0xD10083FF, 0xA9014FFE) },
++        };
++
++        private static bool s_Checked;
++        private static long s_Base;
++
++        private static long GetBase()
++        {
++            if (s_Checked) return s_Base;
++            s_Checked = true;
++            try
++            {
++                if (RuntimeInformation.ProcessArchitecture != Architecture.Arm64) return 0;
++                if (!InjectorHelpers.TryGetIl2CppExport("il2cpp_image_get_class", out var anchor)) return 0;
++                var candidate = (long)anchor - AnchorOffset;
++                // two more exported functions must sit where this build has them
++                if (!InjectorHelpers.TryGetIl2CppExport("il2cpp_class_from_name", out var a) || (long)a - candidate != 0x2D31458) return 0;
++                if (!InjectorHelpers.TryGetIl2CppExport("il2cpp_field_static_get_value", out var b) || (long)b - candidate != 0x2D31B10) return 0;
++                s_Base = candidate;
++                Logger.Instance.LogInformation("Known game build recognised; using its listed function positions");
++            }
++            catch (Exception e)
++            {
++                Logger.Instance.LogWarning("Known-build check failed: {Error}", e.Message);
++            }
++            return s_Base;
++        }
++
++        internal static IntPtr TryGet(string name)
++        {
++            var b = GetBase();
++            if (b == 0 || !s_Warpforge135.TryGetValue(name, out var entry)) return IntPtr.Zero;
++            var p = (uint*)(b + entry.offset);
++            if (p[0] != entry.first || p[1] != entry.second)
++            {
++                Logger.Instance.LogWarning("{Name}: listed position does not hold the expected code, searching instead", name);
++                return IntPtr.Zero;
++            }
++            return (IntPtr)p;
++        }
++    }
++}

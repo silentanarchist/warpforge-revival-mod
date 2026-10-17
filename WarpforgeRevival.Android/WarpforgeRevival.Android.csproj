@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Android build of the mod: the shared source in ..\WarpforgeRevival, compiled with ANDROID_PORT (Windows-only parts are left out by #if, not by leaving files out). -->
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>WarpforgeRevival.Android</AssemblyName>
+    <RootNamespace>WarpforgeRevival</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <DebugType>embedded</DebugType>
+    <NoWarn>CA1416</NoWarn>
+    <DefineConstants>$(DefineConstants);ANDROID_PORT</DefineConstants>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RefsDir Condition="'$(RefsDir)' == ''">$(MSBuildThisFileDirectory)..\..\refs</RefsDir>
+    <AndroidRefs Condition="'$(AndroidRefs)' == ''">$(MSBuildThisFileDirectory)..\..\refs-android</AndroidRefs>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\WarpforgeRevival\*.cs" />
+    <Reference Include="$(RefsDir)\net6\*.dll" Private="false" />
+    <Reference Include="$(AndroidRefs)\ml\*.dll" Private="false" />
+    <Reference Include="$(AndroidRefs)\il2cpp\*.dll" Private="false" />
+  </ItemGroup>
+</Project>

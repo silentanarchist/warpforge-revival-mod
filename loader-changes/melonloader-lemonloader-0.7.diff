@@ -1,0 +1,1105 @@
+diff --git a/Dependencies/Il2CppAssemblyGenerator/Core.cs b/Dependencies/Il2CppAssemblyGenerator/Core.cs
+index dabb6054..0d055b38 100644
+--- a/Dependencies/Il2CppAssemblyGenerator/Core.cs
++++ b/Dependencies/Il2CppAssemblyGenerator/Core.cs
+@@ -1,4 +1,4 @@
+-﻿using System.IO;
++using System.IO;
+ using System.Net.Http;
+ using MelonLoader.Il2CppAssemblyGenerator.Packages;
+ using MelonLoader.Il2CppAssemblyGenerator.Packages.Models;
+@@ -55,6 +55,18 @@ namespace MelonLoader.Il2CppAssemblyGenerator
+ 
+         private static int Run()
+         {
++#if ANDROID
++            // Reading the game's code needs tools that do not run on a phone, so this build ships the
++            // result ready-made (made on a PC from the same game files).
++            string shipped = Path.Combine(MelonEnvironment.Il2CppAssembliesDirectory, "Assembly-CSharp.dll");
++            if (File.Exists(shipped))
++            {
++                Logger.Msg("Using the pre-generated assemblies shipped with this build. No Generation Needed.");
++                return 0;
++            }
++            Logger.Error("Pre-generated assemblies not found at: " + shipped);
++            return 1;
++#endif
+             Config.Initialize();
+ 
+             if (!LoaderConfig.Current.UnityEngine.ForceOfflineGeneration)
+diff --git a/Directory.Build.props b/Directory.Build.props
+index ce3ec743..1386984c 100644
+--- a/Directory.Build.props
++++ b/Directory.Build.props
+@@ -1,7 +1,7 @@
+ <Project>
+     <PropertyGroup>
+         <Version>0.7.1</Version>
+-        <Il2CppInteropVersion>1.4.6-ci.579</Il2CppInteropVersion>
++        <Il2CppInteropVersion>1.5.0-arm64c</Il2CppInteropVersion>
+ 
+         <Authors>Lava Gang</Authors>
+         <Company>discord.gg/2Wn3N2P</Company>
+@@ -15,7 +15,7 @@
+         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+     </PropertyGroup>
+ 
+-    <PropertyGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">
++    <PropertyGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true' And '$(RuntimeIdentifier.StartsWith(`linux-bionic`))' != 'true'">
+         <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+         <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+         <PlatformTarget>x64</PlatformTarget>
+diff --git a/MelonLoader.Bootstrap/Core.cs b/MelonLoader.Bootstrap/Core.cs
+index 7840db33..9946f3fb 100644
+--- a/MelonLoader.Bootstrap/Core.cs
++++ b/MelonLoader.Bootstrap/Core.cs
+@@ -164,6 +164,10 @@ public static class Core
+         // Override configs defined by launch options, without overriding the file
+ 
+         LoaderConfig.Current.Loader.BaseDirectory = baseDir;
++#if ANDROID
++        // Warpforge Revival test build: always log in detail, there is no other way to see what happened.
++        LoaderConfig.Current.Loader.DebugMode = true;
++#endif
+ 
+         if (ArgParser.IsDefined("melonloader.debug"))
+             LoaderConfig.Current.Loader.DebugMode = true;
+diff --git a/MelonLoader.Bootstrap/Deps/faultprobe/build.sh b/MelonLoader.Bootstrap/Deps/faultprobe/build.sh
+new file mode 100755
+index 00000000..0d40c78f
+--- /dev/null
++++ b/MelonLoader.Bootstrap/Deps/faultprobe/build.sh
+@@ -0,0 +1,6 @@
++#!/bin/sh
++# Rebuilds faultprobe.o with the Android NDK (set ANDROID_NDK_ROOT). Output goes next to libdobby.a.
++set -e
++cd "$(dirname "$0")"
++CLANG="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
++"$CLANG" --target=aarch64-linux-android21 -O2 -fPIC -mno-outline-atomics -Wall -Wextra -c faultprobe.c -o ../linux-bionic-arm64/faultprobe.o
+diff --git a/MelonLoader.Bootstrap/Deps/faultprobe/faultprobe.c b/MelonLoader.Bootstrap/Deps/faultprobe/faultprobe.c
+new file mode 100644
+index 00000000..1bf0cf35
+--- /dev/null
++++ b/MelonLoader.Bootstrap/Deps/faultprobe/faultprobe.c
+@@ -0,0 +1,182 @@
++/*
++ * Warpforge Revival change: a first look at memory faults (SIGSEGV, SIGBUS) on Android.
++ *
++ * The loader's .NET runtime (Mono) handles these signals itself: in managed code a fault is how a
++ * NullReferenceException starts, so those must reach Mono. For a fault in native code Mono prints a
++ * crash report instead, and on a Pixel 6 Pro that report kept crashing and restarting (hundreds of
++ * thousands of lines), froze the game, and never said which address faulted. This handler sits in
++ * front of Mono's:
++ *   - fault in managed (JIT) code  -> passed straight to Mono's handler, as before;
++ *   - fault in native code         -> one line to the log with the signal, the faulting address, the
++ *                                     program counter and the memory mappings around both, then
++ *                                     Android's own handler is put back and the fault re-runs, so
++ *                                     Android writes its full crash report and ends the game at once.
++ * Everything in here is written to be safe inside a signal handler: no allocation, no locks, plain
++ * system calls only. The one Mono call made (is this address JIT code?) is the same one Mono's own
++ * handler makes.
++ */
++#define _GNU_SOURCE
++#include <signal.h>
++#include <string.h>
++#include <unistd.h>
++#include <fcntl.h>
++#include <stdint.h>
++#include <sys/syscall.h>
++#include <sys/ucontext.h>
++#include <dlfcn.h>
++#include <stdlib.h>
++
++typedef void *(*domain_get_fn)(void);
++typedef void *(*jit_find_fn)(void *, void *);
++
++static domain_get_fn mono_domain_get_p;
++static jit_find_fn mono_jit_info_table_find_p;
++static struct sigaction prev_segv, prev_bus;          /* Mono's handlers, installed before this one */
++static struct sigaction android_abort;                /* Android's SIGABRT handler, saved before any runtime started */
++static int have_android_abort;
++static volatile int reported;
++static void (*log_write)(int, const char *, const char *);   /* liblog, looked up at install time */
++
++static void out(const char *s)
++{
++    if (log_write) log_write(6 /* error */, "MelonLoader", s);
++    write(2, s, strlen(s));
++    write(2, "\n", 1);
++}
++
++static char *put(char *p, const char *s) { while (*s) *p++ = *s++; return p; }
++static char *put_hex(char *p, uint64_t v)
++{
++    char tmp[17]; int n = 0;
++    do { int d = v & 15; tmp[n++] = (char)(d < 10 ? '0' + d : 'a' + d - 10); v >>= 4; } while (v);
++    *p++ = '0'; *p++ = 'x';
++    while (n) *p++ = tmp[--n];
++    return p;
++}
++static char *put_dec(char *p, int64_t v)
++{
++    char tmp[21]; int n = 0; uint64_t u = v < 0 ? (uint64_t)(-v) : (uint64_t)v;
++    if (v < 0) *p++ = '-';
++    do { tmp[n++] = (char)('0' + u % 10); u /= 10; } while (u);
++    while (n) *p++ = tmp[--n];
++    return p;
++}
++
++static uint64_t parse_hex(const char **pp)
++{
++    const char *p = *pp; uint64_t v = 0;
++    for (;;) {
++        char c = *p;
++        if (c >= '0' && c <= '9') v = v * 16 + (c - '0');
++        else if (c >= 'a' && c <= 'f') v = v * 16 + (c - 'a' + 10);
++        else break;
++        p++;
++    }
++    *pp = p;
++    return v;
++}
++
++/* Logs the /proc/self/maps lines that hold `addr` and `pc`, and the lines just below and above `addr`. */
++static void show_maps(uint64_t addr, uint64_t pc)
++{
++    int fd = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
++    if (fd < 0) { out("[fault] /proc/self/maps could not be opened"); return; }
++    static char buf[8192], line[512], prev[512], msg[640];
++    int lpos = 0, found_addr = 0, prev_valid = 0, shown = 0;
++    for (;;) {
++        int n = read(fd, buf, sizeof buf);
++        if (n <= 0) break;
++        for (int i = 0; i < n; i++) {
++            char c = buf[i];
++            if (c != '\n') { if (lpos < (int)sizeof line - 1) line[lpos++] = c; continue; }
++            line[lpos] = 0;
++            const char *p = line;
++            uint64_t start = parse_hex(&p);
++            uint64_t end = (*p == '-') ? (p++, parse_hex(&p)) : 0;
++            int holds_addr = start <= addr && addr < end, holds_pc = start <= pc && pc < end;
++            const char *why = 0;
++            if (holds_addr && holds_pc) why = "fault address and code";
++            else if (holds_addr) why = "fault address";
++            else if (holds_pc) why = "code";
++            else if (!found_addr && start > addr) why = "first mapping above the fault address";
++            if (holds_addr) found_addr = 1;
++            if (why && shown < 8) {
++                if (why[0] == 'f' && why[1] == 'i' && prev_valid) {      /* the gap: show the mapping below too */
++                    char *m = put(msg, "[fault]   below the fault address: "); m = put(m, prev); *m = 0; out(msg); shown++;
++                }
++                char *m = put(msg, "[fault]   "); m = put(m, why); m = put(m, ": "); m = put(m, line); *m = 0; out(msg); shown++;
++                if (why[0] == 'f' && why[1] == 'i') found_addr = 1;      /* reported the gap; do not repeat */
++            }
++            memcpy(prev, line, lpos + 1); prev_valid = 1;
++            lpos = 0;
++        }
++    }
++    close(fd);
++    if (!found_addr) out("[fault]   the fault address is above every mapping");
++}
++
++static int in_managed_code(void *pc)
++{
++    if (!mono_domain_get_p || !mono_jit_info_table_find_p) return 0;
++    void *domain = mono_domain_get_p();
++    if (!domain) return 0;
++    return mono_jit_info_table_find_p(domain, pc) != 0;
++}
++
++static void chain(const struct sigaction *prev, int sig, siginfo_t *si, void *ctx)
++{
++    if (prev->sa_flags & SA_SIGINFO) { if (prev->sa_sigaction) prev->sa_sigaction(sig, si, ctx); }
++    else if (prev->sa_handler != SIG_DFL && prev->sa_handler != SIG_IGN) prev->sa_handler(sig);
++}
++
++static void handler(int sig, siginfo_t *si, void *ctx)
++{
++    ucontext_t *uc = (ucontext_t *)ctx;
++    uint64_t pc = uc->uc_mcontext.pc, sp = uc->uc_mcontext.sp, lr = uc->uc_mcontext.regs[30];
++    uint64_t addr = (uint64_t)(uintptr_t)si->si_addr;
++
++    if (in_managed_code((void *)(uintptr_t)pc)) {
++        chain(sig == SIGSEGV ? &prev_segv : &prev_bus, sig, si, ctx);
++        return;
++    }
++
++    if (__sync_lock_test_and_set(&reported, 1) == 0) {
++        static char msg[256];
++        char *m = put(msg, "[fault] ");
++        m = put(m, sig == SIGSEGV ? "SIGSEGV" : "SIGBUS");
++        m = put(m, " (code "); m = put_dec(m, si->si_code); m = put(m, ") at address "); m = put_hex(m, addr);
++        m = put(m, ", code at "); m = put_hex(m, pc); m = put(m, ", lr "); m = put_hex(m, lr); m = put(m, ", sp "); m = put_hex(m, sp);
++        m = put(m, ", thread "); m = put_dec(m, (int64_t)syscall(SYS_gettid));
++        *m = 0; out(msg);
++        show_maps(addr, pc);
++        out("[fault] ending the game through Android's crash report (abort on this thread)");
++    }
++
++    /* Android's own crash report comes from an abort on this very thread: its report then shows this
++       thread's stack, and the unwinder walks through the signal frame down to the faulting code and
++       its callers. (Putting the saved SIGSEGV action back and returning only ended the game silently:
++       what the loader had saved for SIGSEGV was the plain default.) */
++    if (have_android_abort) sigaction(SIGABRT, &android_abort, 0);
++    abort();
++}
++
++/* android_* are the struct sigaction bytes saved at start-up (may be null); runtime is a dlopen handle of libcoreclr.so. */
++int wf_faultprobe_install(const void *android_abort_bytes, void *runtime)
++{
++    void *liblog = dlopen("liblog.so", RTLD_NOW);
++    if (liblog) log_write = (void (*)(int, const char *, const char *))dlsym(liblog, "__android_log_write");
++    if (runtime) {
++        mono_domain_get_p = (domain_get_fn)dlsym(runtime, "mono_domain_get");
++        mono_jit_info_table_find_p = (jit_find_fn)dlsym(runtime, "mono_jit_info_table_find");
++    }
++    if (!mono_domain_get_p || !mono_jit_info_table_find_p) return -1;     /* cannot tell managed from native: stay out */
++    if (android_abort_bytes) { memcpy(&android_abort, android_abort_bytes, sizeof android_abort); have_android_abort = 1; }
++
++    struct sigaction sa; memset(&sa, 0, sizeof sa);
++    sa.sa_sigaction = handler;
++    sa.sa_flags = SA_SIGINFO | SA_ONSTACK | SA_NODEFER;
++    sigemptyset(&sa.sa_mask);
++    if (sigaction(SIGSEGV, &sa, &prev_segv) != 0) return -2;
++    if (sigaction(SIGBUS, &sa, &prev_bus) != 0) { sigaction(SIGSEGV, &prev_segv, 0); return -3; }
++    return 0;
++}
+diff --git a/MelonLoader.Bootstrap/MelonLoader.Bootstrap.csproj b/MelonLoader.Bootstrap/MelonLoader.Bootstrap.csproj
+index 86cc553c..2f1ab4b8 100644
+--- a/MelonLoader.Bootstrap/MelonLoader.Bootstrap.csproj
++++ b/MelonLoader.Bootstrap/MelonLoader.Bootstrap.csproj
+@@ -93,6 +93,11 @@
+         <NativeLibrary Include="Deps/$(RuntimeIdentifier)/$(LibPrefix)plthook$(LibExt)" />
+     </ItemGroup>
+ 
++    <!-- Warpforge Revival change: a first look at memory faults on Android (Deps/faultprobe/faultprobe.c, built by its build.sh) -->
++    <ItemGroup Condition="'$(RuntimeIdentifier.StartsWith(`linux-bionic-`))' == 'true'">
++        <NativeLibrary Include="Deps/$(RuntimeIdentifier)/faultprobe.o" />
++    </ItemGroup>
++
+     <!-- For some reasons, the linux export file .NET auto generate after compilation contains a
+     hardcoded
+          version being "V1.0". This is bad for us because it means every symbols we export will have
+diff --git a/MelonLoader.Bootstrap/PltHook.cs b/MelonLoader.Bootstrap/PltHook.cs
+index 98870934..e75942dd 100644
+--- a/MelonLoader.Bootstrap/PltHook.cs
++++ b/MelonLoader.Bootstrap/PltHook.cs
+@@ -64,6 +64,21 @@ internal static partial class PltHook
+         {
+             pltHookOpened = PlthookOpen(ref pltHook, PlayerFileName) == 0;
+         }
++#elif ANDROID
++        // Warpforge Revival change: on Android the library cannot be opened by name or handle (that
++        // route looks for symbols libunity.so does not export), so open it by an address inside it.
++        pltHookOpened = false;
++        if (NativeLibrary.TryLoad("libunity.so", out nint unityLib)
++            && NativeLibrary.TryGetExport(unityLib, "JNI_OnLoad", out nint insideUnity))
++        {
++            pltHookOpened = PlthookOpenByAddress(ref pltHook, insideUnity) == 0;
++            if (!pltHookOpened)
++                MelonLogger.LogError($"plthook_open_by_address error: {Marshal.PtrToStringAuto(PlthookError())}");
++        }
++        else
++            MelonLogger.LogError("libunity.so or its JNI_OnLoad was not found; cannot hook it");
++        if (!pltHookOpened)
++            pltHookOpened = PlthookOpen(ref pltHook, PlayerFileName) == 0;
+ #else
+         pltHookOpened = PlthookOpen(ref pltHook, PlayerFileName) == 0;
+ #endif
+@@ -78,12 +93,12 @@ internal static partial class PltHook
+         {
+             if (PlthookReplace(pltHook, hook.functionName, hook.hookFunctionPtr, IntPtr.Zero) != 0)
+             {
+-                MelonDebug.Log($"plthook_replace error when hooking {hook.functionName}: " +
++                MelonLogger.LogError($"plthook_replace error when hooking {hook.functionName}: " +
+                                $"{Marshal.PtrToStringAuto(PlthookError())}");
+                 continue;
+             }
+ 
+-            MelonDebug.Log($"Plt hooked {hook.functionName} successfully");
++            MelonLogger.Log(MelonLoader.Logging.ColorARGB.Gray, $"Plt hooked {hook.functionName} successfully");
+         }
+         
+         PlthookClose(pltHook);
+diff --git a/MelonLoader.Bootstrap/Proxy/Android/AndroidBootstrap.cs b/MelonLoader.Bootstrap/Proxy/Android/AndroidBootstrap.cs
+index be422c61..98b65388 100644
+--- a/MelonLoader.Bootstrap/Proxy/Android/AndroidBootstrap.cs
++++ b/MelonLoader.Bootstrap/Proxy/Android/AndroidBootstrap.cs
+@@ -1,4 +1,4 @@
+-#if ANDROID
++﻿#if ANDROID
+ using System.Diagnostics.CodeAnalysis;
+ using System.Runtime.InteropServices;
+ using System.Text;
+@@ -15,6 +15,9 @@ public static class AndroidBootstrap
+     [RequiresDynamicCode("Calls Init then InitConfig ")]
+     public static unsafe int LoadBootstrap()
+     {
++        // Warpforge Revival change: keep Android's crash handler before anything else replaces it (see CrashWatch)
++        CrashWatch.SaveAndroidHandler();
++
+         // linux-bionic .NET logs everything to stdout/err, this allows us to see these logs in logcat with our logs
+         StdRedirect.RedirectStdOut();
+         StdRedirect.RedirectStdErr();
+@@ -99,35 +102,57 @@ public static class AndroidBootstrap
+         return default;
+     }
+     
++    // Warpforge Revival change.
++    // The copy used to be skipped only when the target folder's "last changed" time was newer than the
++    // patch date. A folder's time only changes when something is added or removed directly in it, and
++    // the copy overwrites files in sub-folders that already exist - so after the first re-patch the
++    // check failed for ever and everything (about 50 MB) was copied again on every start.
++    // Now a small marker file records which patch the folder was copied from.
++    private static bool AlreadyCopied(string folder, string stamp)
++    {
++        try
++        {
++            var marker = Path.Combine(folder, ".copied-from-patch");
++            return Directory.Exists(folder) && File.Exists(marker) && File.ReadAllText(marker).Trim() == stamp;
++        }
++        catch { return false; }
++    }
++
++    private static void MarkCopied(string folder, string stamp)
++    {
++        try { File.WriteAllText(Path.Combine(folder, ".copied-from-patch"), stamp); }
++        catch (Exception e) { MelonDebug.Log("Could not write the copy marker in " + folder + ": " + e.Message); }
++    }
++
+     public static void CopyMelonLoaderData(DateTimeOffset date)
+     {
+         var baseDataDir = Core.DataDir;
+         var melonloaderFolder = Path.Combine(Core.DataDir, "MelonLoader");
+         var baseInternalFolder = $"/data/data/{PackageName}/";
+         var dotnetFolder = $"/data/data/{PackageName}/dotnet";
++        // an unreadable patch date never matches, so the files are then copied as before
++        string stamp = date == default ? "" : date.UtcDateTime.ToString("O");
++        var clock = System.Diagnostics.Stopwatch.StartNew();
+ 
+-        if (Directory.Exists(melonloaderFolder))
+-        {
+-            var fileModTime = Directory.GetLastWriteTimeUtc(melonloaderFolder);
+-            if (fileModTime > date)
+-                MelonDebug.Log("MelonLoader folder is already up-to-date");
+-            else
+-                APKAssetManager.SaveItemToDirectory("MelonLoader", baseDataDir, true);
+-        }
++        if (stamp.Length > 0 && AlreadyCopied(melonloaderFolder, stamp))
++            AndroidProxy.Log("MelonLoader folder is already up-to-date");
+         else
+-            APKAssetManager.SaveItemToDirectory("MelonLoader", baseDataDir, true);
+-
+-        if (Directory.Exists(dotnetFolder))
+         {
+-            var fileModTime = Directory.GetLastWriteTimeUtc(dotnetFolder);
+-            if (fileModTime > date)
+-                MelonDebug.Log("Dotnet folder is already up-to-date");
+-            else
+-                APKAssetManager.SaveItemToDirectory("dotnet", baseInternalFolder, true);
++            APKAssetManager.SaveItemToDirectory("MelonLoader", baseDataDir, true);
++            if (stamp.Length > 0) MarkCopied(melonloaderFolder, stamp);
++            AndroidProxy.Log($"MelonLoader folder copied from the app ({clock.ElapsedMilliseconds} ms)");
+         }
++
++        clock.Restart();
++        if (stamp.Length > 0 && AlreadyCopied(dotnetFolder, stamp))
++            AndroidProxy.Log("Dotnet folder is already up-to-date");
+         else
++        {
+             APKAssetManager.SaveItemToDirectory("dotnet", baseInternalFolder, true);
+-    
++            if (stamp.Length > 0) MarkCopied(dotnetFolder, stamp);
++            AndroidProxy.Log($"Dotnet folder copied from the app ({clock.ElapsedMilliseconds} ms)");
++        }
++
+         DotnetDir = Path.Combine(dotnetFolder);
+     }
+ }
+diff --git a/MelonLoader.Bootstrap/Proxy/Android/StdRedirect.cs b/MelonLoader.Bootstrap/Proxy/Android/StdRedirect.cs
+index ea956fb0..85985785 100644
+--- a/MelonLoader.Bootstrap/Proxy/Android/StdRedirect.cs
++++ b/MelonLoader.Bootstrap/Proxy/Android/StdRedirect.cs
+@@ -1,9 +1,176 @@
+ ﻿#if ANDROID
+ using System.Runtime.InteropServices;
++using System.Collections.Generic;
+ using System.Text;
+ 
+ namespace MelonLoader.Bootstrap.Proxy.Android;
+ 
++/// <summary>
++/// Warpforge Revival change. When the runtime hits a native crash it prints a crash report and should then
++/// pass the crash on to Android. On a Pixel 6 Pro the report itself kept crashing and starting over, for
++/// minutes: the game froze on its loading screen and the phone's log filled with hundreds of megabytes of
++/// the same report. Now the first crash line starts a short timer; the report gets a few seconds to be
++/// written (it says where the crash happened), only the first part of it is kept, and then the game is
++/// closed. A closed game can simply be started again.
++/// </summary>
++internal static partial class CrashWatch
++{
++    [DllImport("libc.so")] private static extern int getpid();
++    [DllImport("libc.so")] private static extern int kill(int pid, int sig);
++    [DllImport("libc.so")] private static extern int sigaction(int sig, IntPtr act, IntPtr oldact);
++    [DllImport("libc.so")] private static extern void abort();
++    [DllImport("libc.so")] private static extern int tgkill(int tgid, int tid, int sig);
++    [DllImport("libc.so")] private static extern int gettid();
++
++    // The thread that crashed keeps re-running the runtime's broken crash report, so it is the busiest
++    // thread: the one whose CPU time grows most over a second. Android's report is made from the thread
++    // that receives the abort, so the abort is sent to that one.
++    private static (int tid, string name) BusiestThread(int skip1, int skip2)
++    {
++        static Dictionary<int, long> Times()
++        {
++            var d = new Dictionary<int, long>();
++            foreach (var dir in Directory.GetDirectories("/proc/self/task"))
++            {
++                try
++                {
++                    int tid = int.Parse(Path.GetFileName(dir));
++                    string stat = File.ReadAllText(Path.Combine(dir, "stat"));
++                    var f = stat.Substring(stat.LastIndexOf(')') + 2).Split(' ');
++                    d[tid] = long.Parse(f[11]) + long.Parse(f[12]);       // utime + stime
++                }
++                catch { }
++            }
++            return d;
++        }
++        try
++        {
++            var a = Times();
++            Thread.Sleep(1000);
++            var b = Times();
++            int best = 0; long most = -1;
++            foreach (var kv in b)
++            {
++                if (kv.Key == skip1 || kv.Key == skip2 || !a.TryGetValue(kv.Key, out long was)) continue;
++                if (kv.Value - was > most) { most = kv.Value - was; best = kv.Key; }
++            }
++            string name = "";
++            try { name = File.ReadAllText($"/proc/self/task/{best}/comm").Trim(); } catch { }
++            return (best, name);
++        }
++        catch { return (0, ""); }
++    }
++
++    private static int watcherTid;
++    [DllImport("liblog.so")] private static extern int __android_log_write(int prio, string tag, string text);
++
++    private const int SIGKILL = 9, SIGABRT = 6;
++
++    // Android's own crash handler for SIGABRT, saved before the game's runtimes put theirs in place.
++    // Closing the game through it makes Android write its full crash report ("tombstone": every
++    // thread's call stack, including the thread that crashed), which the log script collects from
++    // the phone's crash reports. The bytes are kept as they are (no need to know the struct's layout).
++    private static IntPtr androidAbortHandler, androidSegvHandler, androidBusHandler;
++    internal static IntPtr AndroidSegvHandler => androidSegvHandler;
++    internal static IntPtr AndroidBusHandler => androidBusHandler;
++    private const int SIGBUS = 7, SIGSEGV = 11;
++
++    private static IntPtr SaveHandler(int sig)
++    {
++        IntPtr buf = Marshal.AllocHGlobal(256);
++        for (int i = 0; i < 256; i += 8) Marshal.WriteInt64(buf, i, 0);
++        if (sigaction(sig, IntPtr.Zero, buf) == 0) return buf;
++        Marshal.FreeHGlobal(buf);
++        return IntPtr.Zero;
++    }
++
++    // Deps/faultprobe/faultprobe.c, linked into libmain: looks at every memory fault before the runtime does.
++    // Faults in managed code go on to the runtime (that is how a NullReferenceException starts); a fault in
++    // native code is logged with its address and the memory mappings around it ("[fault]" lines), then the
++    // thread aborts through Android's own abort handler, which writes the full report and ends the game at once.
++    [System.Runtime.InteropServices.LibraryImport("*", EntryPoint = "wf_faultprobe_install")]
++    [System.Runtime.InteropServices.UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
++    private static partial int FaultProbeInstall(IntPtr androidAbort, IntPtr runtime);
++
++    /// <summary>Called once the runtime has its own fault handlers in place; `runtime` is libcoreclr's handle.</summary>
++    public static void InstallFaultProbe(IntPtr runtime)
++    {
++        try
++        {
++            int rc = FaultProbeInstall(androidAbortHandler, runtime);
++            if (rc == 0) Core.Logger.Msg("Fault probe in place: a crash in native code is logged with its address and goes to Android's crash report");
++            else Core.Logger.Warning($"Fault probe not installed ({rc}); crashes are reported the old way");
++        }
++        catch (Exception e) { Core.Logger.Warning("Fault probe not installed: " + e.Message); }
++    }
++
++    /// <summary>Called first thing at start-up, before IL2CPP and .NET install their own handlers.</summary>
++    public static void SaveAndroidHandler()
++    {
++        try
++        {
++            androidAbortHandler = SaveHandler(SIGABRT);
++            androidSegvHandler = SaveHandler(SIGSEGV);
++            androidBusHandler = SaveHandler(SIGBUS);
++        }
++        catch { }
++    }
++    private const int KeepLines = 400;
++    private const int CloseAfterMs = 4000;
++    private static int crashed, lines;
++
++    private static readonly string[] Markers =
++    {
++        "Got a SIGSEGV", "Got a SIGBUS", "Got a SIGILL", "Got a SIGFPE", "Got a SIGABRT",
++        "a fatal error in the mono runtime", "* Assertion:",
++    };
++
++    /// <summary>True when the line should still go to the log.</summary>
++    public static bool Line(string text)
++    {
++        if (Volatile.Read(ref crashed) != 0)
++            return Interlocked.Increment(ref lines) <= KeepLines;
++        foreach (var m in Markers)
++        {
++            if (!text.Contains(m, StringComparison.Ordinal)) continue;
++            if (Interlocked.Exchange(ref crashed, 1) != 0) break;
++            __android_log_write(6, "MelonLoader", "[crash watch] the loader's .NET crashed (" + m.Trim('*', ' ', ':') + "); the game will be closed in a few seconds");
++            int logTid = 0;
++            try { logTid = gettid(); } catch { }
++            var closer = new Thread(() =>
++            {
++                int me = 0;
++                try { me = gettid(); } catch { }
++                var (crashedTid, crashedName) = BusiestThread(me, logTid);
++                Thread.Sleep(Math.Max(0, CloseAfterMs - 1000));
++                __android_log_write(6, "MelonLoader", $"[crash watch] closing the game now ({Volatile.Read(ref lines)} crash report lines, the first {KeepLines} kept)");
++                // through Android's crash handler, so it writes its full crash report; killed outright if that
++                // does not end the game within 5 seconds
++                var fallback = new Thread(() => { Thread.Sleep(5000); kill(getpid(), SIGKILL); }) { IsBackground = true };
++                fallback.Start();
++                if (androidAbortHandler != IntPtr.Zero)
++                {
++                    // The crashed thread keeps re-running the runtime's broken crash report, faulting again on every
++                    // round. With Android's own handlers for memory faults put back, its next fault goes to Android,
++                    // which writes its full report with that thread's stack: the crash itself is further down it.
++                    // (Sending the thread an abort instead ended the game at once with no report, 21:25.)
++                    __android_log_write(6, "MelonLoader", $"[crash watch] the crashed thread looks like {crashedTid} ({crashedName}); Android's fault handlers put back so its next fault writes Android's crash report");
++                    if (androidSegvHandler != IntPtr.Zero) sigaction(SIGSEGV, androidSegvHandler, IntPtr.Zero);
++                    if (androidBusHandler != IntPtr.Zero) sigaction(SIGBUS, androidBusHandler, IntPtr.Zero);
++                    sigaction(SIGABRT, androidAbortHandler, IntPtr.Zero);
++                    Thread.Sleep(3000);
++                    __android_log_write(6, "MelonLoader", "[crash watch] no fault came; closing from here instead");
++                    abort();
++                }
++                kill(getpid(), SIGKILL);
++            }) { IsBackground = true };
++            closer.Start();
++            break;
++        }
++        return true;
++    }
++}
++
+ internal static class StdRedirect
+ {
+     private const int STDERR_FILENO = 2;
+@@ -61,8 +228,11 @@ internal static class StdRedirect
+                 if (result == IntPtr.Zero)
+                     break;
+ 
+-                string logMsg = Encoding.UTF8.GetString(buffer).TrimEnd('\0', '\n', '\r');
+-                __android_log_write(3, tag, logMsg); // debug
++                // only up to the line's end: the buffer still holds the rest of any longer line before it
++                int len = Array.IndexOf(buffer, (byte)0);
++                string logMsg = Encoding.UTF8.GetString(buffer, 0, len < 0 ? buffer.Length : len).TrimEnd('\n', '\r');
++                if (CrashWatch.Line(logMsg))
++                    __android_log_write(3, tag, logMsg); // debug
+             }
+         });
+ 
+diff --git a/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/ClrMonoLib.cs b/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/ClrMonoLib.cs
+index 75afae3c..8af07e81 100644
+--- a/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/ClrMonoLib.cs
++++ b/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/ClrMonoLib.cs
+@@ -15,6 +15,9 @@ internal class ClrMonoLib
+     public required PrintUnhandledExceptionDelegate PrintUnhandledException { get; init; }
+     public required SetStringDelegate SetLevelString { get; init; }
+     public required SetStringDelegate SetMaskString { get; init; }
++    // Warpforge Revival change: optional, used to turn a native crash into a normal Android crash report.
++    public SetBoolDelegate? SetCrashChaining { get; init; }
++    public SetBoolDelegate? SetSignalChaining { get; init; }
+ 
+     public static ClrMonoLib? TryLoad()
+     {
+@@ -29,8 +32,13 @@ internal class ClrMonoLib
+             || !NativeFunc.GetExport<SetStringDelegate>(hRuntime, "mono_trace_set_mask_string", out var setMaskString))
+             return null;
+ 
++        NativeFunc.GetExport<SetBoolDelegate>(hRuntime, "mono_set_crash_chaining", out var setCrashChaining);
++        NativeFunc.GetExport<SetBoolDelegate>(hRuntime, "mono_set_signal_chaining", out var setSignalChaining);
++
+         return new()
+         {
++            SetCrashChaining = setCrashChaining,
++            SetSignalChaining = setSignalChaining,
+             Handle = hRuntime,
+             SetThreadChecker = setThreadChecker,
+             ThreadSuspendReload = threadSuspendReload,
+@@ -54,5 +62,7 @@ internal class ClrMonoLib
+     public delegate void PrintUnhandledExceptionDelegate(IntPtr exc);
+     [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+     public delegate void SetStringDelegate(string str);
++    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
++    public delegate void SetBoolDelegate(int value);
+ }
+ #endif
+\ No newline at end of file
+diff --git a/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/Il2CppHandler.cs b/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/Il2CppHandler.cs
+index 4bd697fc..7c16d301 100644
+--- a/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/Il2CppHandler.cs
++++ b/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/Il2CppHandler.cs
+@@ -59,8 +59,69 @@ internal static class Il2CppHandler
+         return domain;
+     }
+ 
++#if ANDROID
++    [DllImport("libc.so", EntryPoint = "setenv")]
++    private static extern int SetEnv(string name, string value, int overwrite);
++
++    // Warpforge Revival change: settings for the loader's .NET memory, read before the runtime starts.
++    // On a Pixel 6 Pro the runtime crashed now and then while allocating during start-up. The settings
++    // come from UserData/runtime-gc.txt, which the mod writes, so a new setting can be tried with a
++    // mod update instead of patching the game again; it takes effect at the next start. Only three
++    // runtime variables are read from it (MONO_GC_PARAMS and MONO_GC_DEBUG), each line
++    // "NAME=value" with a short plain value; anything else in the file is ignored. Without the
++    // file the first memory area ("nursery") is made 64 MB instead of 4 MB, so the runtime has to
++    // clean up far less often while the mod starts. A variable that is already set is kept.
++    private const string DefaultGcParams = "nursery-size=64m";
++    private static readonly System.Text.RegularExpressions.Regex SafeValue = new(@"^[A-Za-z0-9=,.\-]{1,200}$");
++
++    private static void SetRuntimeMemory()
++    {
++        var wanted = new Dictionary<string, string> { ["MONO_GC_PARAMS"] = DefaultGcParams };
++        string source = "built-in";
++        try
++        {
++            string file = Path.Combine(LoaderConfig.Current.Loader.BaseDirectory, "UserData", "runtime-gc.txt");
++            if (File.Exists(file) && new FileInfo(file).Length < 4096)
++            {
++                source = "UserData/runtime-gc.txt";
++                wanted.Clear();
++                foreach (string raw in File.ReadAllLines(file))
++                {
++                    string line = raw.Trim();
++                    int eq = line.IndexOf('=');
++                    if (line.Length == 0 || line.StartsWith('#') || eq <= 0) continue;
++                    string name = line.Substring(0, eq).Trim(), value = line.Substring(eq + 1).Trim();
++                    // MONO_THREADS_SUSPEND: how the runtime stops threads for its garbage collector. On Android it
++                    // uses the signals SIGPWR and SIGXCPU for that, the same two the game's own collector uses;
++                    // "coop" makes it use none (threads stop at safe points instead), which ends that clash.
++                    bool known = name == "MONO_GC_PARAMS" || name == "MONO_GC_DEBUG" ||
++                                 (name == "MONO_THREADS_SUSPEND" && (value == "coop" || value == "hybrid" || value == "preemptive"));
++                    if (known && SafeValue.IsMatch(value)) wanted[name] = value;
++                    else Core.Logger.Msg($"Runtime memory settings: ignored line '{line}'");
++                }
++            }
++        }
++        catch (Exception e) { Core.Logger.Error("Could not read the runtime memory settings: " + e.Message); }
++
++        foreach (var kv in wanted)
++        {
++            try
++            {
++                string? had = Environment.GetEnvironmentVariable(kv.Key);
++                if (string.IsNullOrEmpty(had)) SetEnv(kv.Key, kv.Value, 0);
++                Core.Logger.Msg($"Runtime memory settings ({source}): {kv.Key}={(string.IsNullOrEmpty(had) ? kv.Value : had + " (already set)")}");
++            }
++            catch (Exception e) { Core.Logger.Error("Could not set " + kv.Key + ": " + e.Message); }
++        }
++        if (wanted.Count == 0) Core.Logger.Msg($"Runtime memory settings ({source}): runtime defaults");
++    }
++#endif
++
+     private static void InitializeManaged()
+     {
++#if ANDROID
++        SetRuntimeMemory();
++#endif
+         var managedDir = Path.Combine(LoaderConfig.Current.Loader.BaseDirectory, "MelonLoader", DOTNET_VERSION);
+         var runtimeConfigPath = Path.Combine(managedDir, "MelonLoader.runtimeconfig.json");
+         var nativeHostPath = Path.Combine(managedDir, "MelonLoader.NativeHost.dll");
+@@ -189,6 +250,16 @@ internal static class Il2CppHandler
+         mono.SetThreadChecker(MonoCheckThread);
+ 
+         MelonDebug.Log("Installed thread checker");
++
++        // Warpforge Revival change: without this the runtime answers a native crash by calling exit(),
++        // which hangs the app with no report. With it, the crash is passed on to Android's own
++        // crash reporter, so the app closes and leaves a report saying where it crashed.
++        mono.SetSignalChaining?.Invoke(1);
++        mono.SetCrashChaining?.Invoke(1);
++        MelonDebug.Log($"Crash chaining {(mono.SetCrashChaining != null ? "enabled" : "not available")}");
++
++        // Warpforge Revival change: see CrashWatch.InstallFaultProbe. After the runtime's handlers, so it runs first.
++        MelonLoader.Bootstrap.Proxy.Android.CrashWatch.InstallFaultProbe(mono.Handle);
+     }
+ 
+     private static void MonoUnhandledExceptionHandler(IntPtr exc, IntPtr userData)
+@@ -201,6 +272,11 @@ internal static class Il2CppHandler
+ 
+     private static bool MonoCheckThread(ulong threadId)
+     {
++        // Warpforge Revival change: this is always asked about the thread it is called on, so
++        // "is this thread attached to IL2CPP" can be answered directly when the list is not exported.
++        if (il2cpp.GetAllAttachedThreads == null)
++            return il2cpp.ThreadCurrent!() == 0;
++
+         UIntPtr size = 0;
+ 
+         IntPtr threads = il2cpp.GetAllAttachedThreads(ref size);
+diff --git a/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/Il2CppLib.cs b/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/Il2CppLib.cs
+index 5b01af4d..007873f4 100644
+--- a/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/Il2CppLib.cs
++++ b/MelonLoader.Bootstrap/RuntimeHandlers/Il2Cpp/Il2CppLib.cs
+@@ -9,23 +9,31 @@ internal class Il2CppLib(Il2CppLib.MethodGetNameFn methodGetName)
+ 
+     public required InitFn Init { get; init; }
+     public required RuntimeInvokeFn RuntimeInvoke { get; init; }
+-    public required GetAllAttachedThreadsDelegate GetAllAttachedThreads { get; init; }
++    // Warpforge Revival change: some games do not export il2cpp_thread_get_all_attached_threads
++    // (Warpforge for Android is one), so it is optional and il2cpp_thread_current is used instead.
++    public GetAllAttachedThreadsDelegate? GetAllAttachedThreads { get; init; }
++    public ThreadCurrentFn? ThreadCurrent { get; init; }
+ 
+     public static Il2CppLib? TryLoad(nint hRuntime)
+     {
+         if (!NativeFunc.GetExport<InitFn>(hRuntime, "il2cpp_init", out var init)
+             || !NativeFunc.GetExport<RuntimeInvokeFn>(hRuntime, "il2cpp_runtime_invoke", out var runtimeInvoke)
+             || !NativeFunc.GetExport<MethodGetNameFn>(hRuntime, "il2cpp_method_get_name", out var methodGetName)
+-            || !NativeFunc.GetExport<GetAllAttachedThreadsDelegate>(hRuntime, "il2cpp_thread_get_all_attached_threads", out var getAllAttached)
+             )
+             return null;
+ 
++        var getAllAttached = NativeFunc.GetExport<GetAllAttachedThreadsDelegate>(hRuntime, "il2cpp_thread_get_all_attached_threads");
++        var threadCurrent = NativeFunc.GetExport<ThreadCurrentFn>(hRuntime, "il2cpp_thread_current");
++        if (getAllAttached == null && threadCurrent == null)
++            return null;
++
+         return new(methodGetName)
+         {
+             Handle = hRuntime,
+             Init = init,
+             RuntimeInvoke = runtimeInvoke,
+-            GetAllAttachedThreads = getAllAttached
++            GetAllAttachedThreads = getAllAttached,
++            ThreadCurrent = threadCurrent
+         };
+     }
+ 
+@@ -42,6 +50,8 @@ internal class Il2CppLib(Il2CppLib.MethodGetNameFn methodGetName)
+     public delegate nint MethodGetNameFn(nint method);
+     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+     public delegate IntPtr GetAllAttachedThreadsDelegate(ref UIntPtr size);
++    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
++    public delegate nint ThreadCurrentFn();
+ }
+ 
+ [StructLayout(LayoutKind.Sequential)]
+diff --git a/MelonLoader.Bootstrap/Utils/Dobby.cs b/MelonLoader.Bootstrap/Utils/Dobby.cs
+index f9f16298..d7f9f50c 100644
+--- a/MelonLoader.Bootstrap/Utils/Dobby.cs
++++ b/MelonLoader.Bootstrap/Utils/Dobby.cs
+@@ -13,8 +13,63 @@ public static partial class Dobby
+     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+     private static partial int Destroy(nint target);
+ 
++#if ANDROID
++    // Warpforge Revival change. By default a hook overwrites the first 16 bytes of the function it
++    // is placed on. Some game methods on ARM64 are shorter than that (a single jump to the next
++    // method, 4 bytes), so the hook spilled over into the following method and broke it. With this
++    // switched on a hook only overwrites 4 bytes: a short jump to a small relay placed close by.
++    [LibraryImport("*", EntryPoint = "dobby_enable_near_branch_trampoline")]
++    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
++    private static partial void EnableNearBranchTrampoline();
++
++    [LibraryImport("*", EntryPoint = "dobby_disable_near_branch_trampoline")]
++    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
++    private static partial void DisableNearBranchTrampoline();
++
++    // Warpforge Revival change (2). The 4-byte kind of hook needs its relay within reach of a short
++    // jump. When no free memory is that close, the hooking library writes the relay into a run of
++    // zero bytes inside the game's own code area instead - and some of those zeros are in use, so
++    // the game then failed in random ways at start-up (missing methods, crashes), differently on
++    // each launch. So the 4-byte kind is now used only for the few functions that really are too
++    // short for a normal hook; everything else gets the normal 16-byte hook, which needs no relay.
++    private static int nearState = -1;      // -1 not set yet, 0 off, 1 on
++    private static int shortHooks, normalHooks;
++
++    /// <summary>True when the function ends (returns or jumps away) within its first three instructions.</summary>
++    private static unsafe bool IsShortFunction(nint target)
++    {
++        try
++        {
++            uint* code = (uint*)target;
++            // Warpforge Revival change (3): a function that already carries a hook starts with the hook's own
++            // stub (ldr x17, #8 / br x17); that br is not the function's end. Seen when a 16-byte hook on a
++            // 4-byte function had spilled into the next one. Hooking it again gets the normal kind.
++            if (code[0] == 0x58000051 && code[1] == 0xD61F0220) return false;
++            for (int i = 0; i < 3; i++)
++            {
++                uint insn = code[i];
++                if (insn == 0xD65F03C0) return true;                      // ret
++                if ((insn & 0xFC000000) == 0x14000000) return true;       // b <somewhere> (a jump to the very next
++                                                                          // address can be a tail call into the next
++                                                                          // function - AlliancesTab.ToFocus is exactly
++                                                                          // that - so it counts as the end too)
++                if ((insn & 0xFFFFFC1F) == 0xD61F0000) return true;       // br xN
++            }
++        }
++        catch { }
++        return false;
++    }
++#endif
++
+     public static nint HookAttach(nint target, nint detour)
+     {
++#if ANDROID
++        bool wantNear = IsShortFunction(target);
++        if (wantNear && nearState != 1) { EnableNearBranchTrampoline(); nearState = 1; }
++        else if (!wantNear && nearState != 0) { DisableNearBranchTrampoline(); nearState = 0; }
++        if (wantNear) { shortHooks++; MelonDebug.Log($"Short (4-byte) hook used for the function at {target:X} ({shortHooks} so far, {normalHooks} normal)"); }
++        else normalHooks++;
++#endif
+         nint original = 0;
+         if (Hook(target, detour, ref original) != 0)
+         {
+diff --git a/MelonLoader/Fixes/Il2CppInteropFixes.cs b/MelonLoader/Fixes/Il2CppInteropFixes.cs
+index 4c8d8189..6134a0b5 100644
+--- a/MelonLoader/Fixes/Il2CppInteropFixes.cs
++++ b/MelonLoader/Fixes/Il2CppInteropFixes.cs
+@@ -1,4 +1,4 @@
+-﻿#if NET6_0_OR_GREATER
++#if NET6_0_OR_GREATER
+ using System;
+ using System.Collections.Generic;
+ using System.Linq;
+@@ -405,19 +405,22 @@ namespace MelonLoader.Fixes
+             return true;
+         }
+ 
++        private static string NStr(string value) => value;
++        private static string NStr(IntPtr value) => value == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(value);
++
+         private static bool RewriteGlobalContext_TryGetNewTypeForOriginal_Prefix(RewriteGlobalContext __instance,
+             TypeDefinition __0,
+             ref TypeRewriteContext? __result)
+         {
+             if ((__instance == null)
+                 || (__0 == null)
+-                || (__0.Module == null)
+-                || (__0.Module.Assembly == null)
++                || (__0.DeclaringModule == null)
++                || (__0.DeclaringModule.Assembly == null)
+                 || !_assemblyLookup.TryGetValue(__instance, out Dictionary<string, AssemblyRewriteContext> contexts)
+                 || (contexts == null))
+                 return true;
+ 
+-            string assemblyName = __0.Module.Assembly.Name;
++            string assemblyName = __0.DeclaringModule.Assembly.Name;
+             if (string.IsNullOrEmpty(assemblyName)) 
+                 return false;
+ 
+@@ -462,27 +465,29 @@ namespace MelonLoader.Fixes
+             if (klass == IntPtr.Zero)
+                 return true;
+ 
+-            IntPtr klassNamespace = IL2CPP.il2cpp_class_get_namespace(klass);
+-            if (klassNamespace == IntPtr.Zero)
++            // Warpforge Revival change: written to compile against both forms of these calls
++            // (they return a string in the ARM64 Il2CppInterop, a pointer in newer ones).
++            var klassNamespace = IL2CPP.il2cpp_class_get_namespace(klass);
++            if (NStr(klassNamespace) == null)
+                 return true;
+ 
+-            IntPtr klassName = IL2CPP.il2cpp_class_get_name(klass);
+-            if (klassName == IntPtr.Zero)
++            var klassName = IL2CPP.il2cpp_class_get_name(klass);
++            if (NStr(klassName) == null)
+                 return true;
+ 
+-            string klassNameStr = Marshal.PtrToStringAnsi(klassName);
++            string klassNameStr = NStr(klassName);
+             if (string.IsNullOrEmpty(klassNameStr))
+                 return true;
+ 
+             string fullTypeName = klassNameStr;
+-            if (klassNamespace != IntPtr.Zero)
++            if (NStr(klassNamespace) != null)
+             {
+-                string klassNamespaceStr = Marshal.PtrToStringAnsi(klassNamespace);
++                string klassNamespaceStr = NStr(klassNamespace);
+                 if (!string.IsNullOrEmpty(klassNamespaceStr))
+                     fullTypeName = $"{klassNamespaceStr}.{klassNameStr}";
+             }
+ 
+-            var assemblyName = "Il2Cpp" + Marshal.PtrToStringAnsi(IL2CPP.il2cpp_class_get_assemblyname(klass));
++            var assemblyName = "Il2Cpp" + NStr(IL2CPP.il2cpp_class_get_assemblyname(klass));
+ 
+             Assembly asm;
+             try
+@@ -616,7 +621,7 @@ namespace MelonLoader.Fixes
+                             var parameterInfo = UnityVersionHandler.Wrap(baseMethod.Parameters, i);
+                             var otherParameterInfo = UnityVersionHandler.Wrap(m.Parameters, i);
+ 
+-                            if (Marshal.PtrToStringAnsi(parameterName) != Marshal.PtrToStringAnsi(otherParameterName))
++                            if (NStr(parameterName) != NStr(otherParameterName))
+                                 return false;
+ 
+                             string parameterTypeName = (string)_getIl2CppTypeFullName.Invoke(null, [(IntPtr)parameterInfo.ParameterType]);
+diff --git a/MelonLoader/InternalUtils/UnityInformationHandler.cs b/MelonLoader/InternalUtils/UnityInformationHandler.cs
+index 4331a08a..9ad17075 100644
+--- a/MelonLoader/InternalUtils/UnityInformationHandler.cs
++++ b/MelonLoader/InternalUtils/UnityInformationHandler.cs
+@@ -1,4 +1,4 @@
+-﻿using System;
++using System;
+ using System.Collections.Generic;
+ using System.Diagnostics;
+ using System.IO;
+@@ -45,9 +45,41 @@ namespace MelonLoader.InternalUtils
+             if (!string.IsNullOrEmpty(LoaderConfig.Current.UnityEngine.VersionOverride))
+                 EngineVersion = TryParse(LoaderConfig.Current.UnityEngine.VersionOverride);
+ 
++#if ANDROID
++            // Warpforge Revival change: reading this out of the APK means loading the game's whole
++            // data file (hundreds of MB) and can take minutes on a phone. The patch folder ships the
++            // answers in MelonLoader/game-info.txt (name, developer, game version, Unity version).
++            bool shipped = false;
++            try
++            {
++                string infoFile = Path.Combine(MelonEnvironment.MelonLoaderDirectory, "game-info.txt");
++                if (File.Exists(infoFile))
++                {
++                    string[] info = File.ReadAllLines(infoFile);
++                    if (info.Length >= 4)
++                    {
++                        GameName = info[0].Trim();
++                        GameDeveloper = info[1].Trim();
++                        GameVersion = info[2].Trim();
++                        if (EngineVersion == UnityVersion.MinVersion)
++                            EngineVersion = TryParse(info[3].Trim());
++                        shipped = EngineVersion != UnityVersion.MinVersion;
++                    }
++                }
++            }
++            catch (Exception ex) { MelonLogger.Warning("game-info.txt: " + ex.Message); }
++
++            if (!shipped)
++            {
++                AssetsManager assetsManagerA = new AssetsManager();
++                ReadGameInfo(assetsManagerA, gameDataPath);
++                assetsManagerA.UnloadAll();
++            }
++#else
+             AssetsManager assetsManager = new AssetsManager();
+             ReadGameInfo(assetsManager, gameDataPath);
+             assetsManager.UnloadAll();
++#endif
+ 
+ #if !ANDROID
+             if (string.IsNullOrEmpty(GameDeveloper)
+diff --git a/MelonLoader/JNI/JObject.cs b/MelonLoader/JNI/JObject.cs
+index 6d8a07a4..a87e1116 100644
+--- a/MelonLoader/JNI/JObject.cs
++++ b/MelonLoader/JNI/JObject.cs
+@@ -1,4 +1,4 @@
+-﻿#if ANDROID
++#if ANDROID
+ using System;
+ 
+ namespace MelonLoader.Java;
+@@ -30,6 +30,16 @@ public class JObject : IDisposable
+         if (Disposed || this.Handle == IntPtr.Zero)
+             return;
+ 
++        // Warpforge Revival change: when the garbage collector cleans this up it runs on its own
++        // thread, which has no Java environment; releasing the reference from there threw and took
++        // the whole game down at start-up. A reference that was not released by hand is simply
++        // left to the Java side.
++        if (!disposing)
++        {
++            Disposed = true;
++            return;
++        }
++
+         switch (this.ReferenceType)
+         {
+             case JNI.ReferenceType.Local:
+diff --git a/MelonLoader/MelonLoader.csproj b/MelonLoader/MelonLoader.csproj
+index 9879cee8..b56ad81d 100644
+--- a/MelonLoader/MelonLoader.csproj
++++ b/MelonLoader/MelonLoader.csproj
+@@ -1,4 +1,4 @@
+-﻿<Project Sdk="Microsoft.NET.Sdk">
++<Project Sdk="Microsoft.NET.Sdk">
+     <PropertyGroup>
+         <TargetFrameworks>net35;net6</TargetFrameworks>
+         <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+@@ -45,7 +45,7 @@
+         <PackageReference Include="Mono.Cecil" Version="0.10.4" />
+     </ItemGroup>
+     <ItemGroup Condition="'$(TargetFramework)' == 'net6'">
+-        <PackageReference Include="AsmResolver.DotNet" Version="6.0.0-beta.1" />
++        <PackageReference Include="AsmResolver.DotNet" Version="6.0.0-beta.5" />
+         <PackageReference Include="Microsoft.Diagnostics.Runtime" Version="3.1.512801" />
+         <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.1" />
+         <PackageReference Include="System.Runtime.InteropServices.RuntimeInformation" Version="4.3.0" />
+diff --git a/MelonLoader/MelonUtils.cs b/MelonLoader/MelonUtils.cs
+index 434a1283..53eee300 100644
+--- a/MelonLoader/MelonUtils.cs
++++ b/MelonLoader/MelonUtils.cs
+@@ -1,4 +1,4 @@
+-﻿using System;
++using System;
+ using System.Collections.Generic;
+ using System.Diagnostics;
+ using System.IO;
+@@ -515,14 +515,20 @@ namespace MelonLoader
+ 
+ 
+         public static unsafe bool IsGame32Bit() =>
+-#if X64
++#if X64 || ANDROID
+             false;
+ #else
+             true;
+ #endif
+ 
+ 
++#if ANDROID
++        // Warpforge Revival change: on Android the game's data sits inside the APK, where a folder
++        // check cannot see it. Android support here is IL2CPP only.
++        public static bool IsGameIl2Cpp() => true;
++#else
+         public static bool IsGameIl2Cpp() => Directory.Exists(MelonEnvironment.Il2CppDataDirectory);
++#endif
+ 
+         public static bool IsOldMono()
+         {
+diff --git a/MelonLoader/Resolver/MelonAssemblyResolver.cs b/MelonLoader/Resolver/MelonAssemblyResolver.cs
+index fd1301b7..c6ca0e81 100644
+--- a/MelonLoader/Resolver/MelonAssemblyResolver.cs
++++ b/MelonLoader/Resolver/MelonAssemblyResolver.cs
+@@ -1,4 +1,4 @@
+-﻿using System;
++using System;
+ using System.IO;
+ using System.Reflection;
+ using MelonLoader.Utils;
+@@ -20,6 +20,12 @@ public class MelonAssemblyResolver
+ 
+         // Setup Search Directories
+         AddSearchDirectory(MelonEnvironment.OurRuntimeDirectory);
++#if ANDROID
++        // Warpforge Revival change: the game's generated assemblies must be findable from the very
++        // start. On Android's Mono-based runtime a reference that fails to resolve once is remembered
++        // as missing for good, and the loader's early fixes touch code that needs Il2Cppmscorlib.
++        AddSearchDirectory(MelonEnvironment.Il2CppAssembliesDirectory);
++#endif
+ 
+         // Setup Redirections
+         OverrideBaseAssembly();

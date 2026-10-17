@@ -1,5 +1,6 @@
-# Changelog
+# Changelog: Windows mod
 
+The Windows build of the mod (versions ending in `-w`); the Android build has [CHANGELOG-android.md](CHANGELOG-android.md).
 Newest first. Each release page on GitHub carries its own section from this file.
 Changes made on the server take effect for everyone at once; the ones listed here are those players notice.
 

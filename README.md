@@ -3,10 +3,13 @@
 A [MelonLoader](https://melonwiki.xyz/) mod that lets *Warhammer 40,000: Warpforge* run against a
 community-hosted server now that the game's own servers are closed.
 
-This repository is the complete source of `WarpforgeRevival.dll`, the Windows build. The same
-source also builds the Android mod (the parts marked `ANDROID_PORT`); the Android project, the
-patcher that puts the mod loader into the Android game, and the instructions for phones are in
-[warpforge-revival-mod-android](https://github.com/silentanarchist/warpforge-revival-mod-android).
+This repository is the complete source of both builds of the mod: `WarpforgeRevival.dll` for
+Windows and `WarpforgeRevival.Android.dll` for Android (the same source; the parts marked
+`ANDROID_PORT` are the Android differences). It also holds the PC patcher that puts the mod loader
+into the Android game, and the changes made to that loader. **Playing on a phone? See
+[docs/android.md](docs/android.md).** (Until 2026-10-17 the Android parts were in their own repository,
+[warpforge-revival-mod-android](https://github.com/silentanarchist/warpforge-revival-mod-android), which
+stays up for the Warpforge Patcher app.)
 Versions are numbered `x.y.z.f-w` for Windows and `x.y.z.f-a` for Android: `x.y.z` is the shared code
 and always the same on both; `f` counts fixes made for one of them only, is left off while it is 0
 (`0.12.1-w`), and starts again with every new `x.y.z`. The server it talks to is in
@@ -55,7 +58,10 @@ Each file starts with a comment saying what it is for and why.
 
 ## Download
 
-The latest build is [releases/WarpforgeRevival-0.13.26-w.zip](releases/WarpforgeRevival-0.13.26-w.zip)
+Every build is also on the [Releases](https://github.com/silentanarchist/warpforge-revival-mod/releases) page:
+"Warpforge Revival mod for PC" for Windows, "Warpforge Revival mod for Android" for phones.
+
+The latest Windows build is [releases/WarpforgeRevival-0.13.26-w.zip](releases/WarpforgeRevival-0.13.26-w.zip)
 (open it and press "Download raw file"). It is built from the source in this repository and
 holds the mod, the `manifest.json` it needs, and a README with the steps below.
 
@@ -109,9 +115,14 @@ dotnet build WarpforgeRevival/WarpforgeRevival.csproj -c Release -p:RefsDir=<pat
 
 The result is `WarpforgeRevival/bin/Release/net6.0/WarpforgeRevival.dll`.
 
+The Android build (`WarpforgeRevival.Android/WarpforgeRevival.Android.csproj`) needs the loader's own
+reference libraries; see [docs/android.md](docs/android.md) under "Building".
+
 Built for game version 1.35.0. The mod hooks specific game functions, so another game version
 would need those checked again.
 
 ## Licence
 
-MIT - see [LICENSE](LICENSE). The licence covers this mod's code only, not the game.
+MIT - see [LICENSE](LICENSE). The licence covers this project's own work only, not the game.
+The Android patcher and mod loader are other people's software, changed by this project, under
+their own licences: see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

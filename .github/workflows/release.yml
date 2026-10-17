@@ -1,7 +1,12 @@
 # Publishes a Release for every build zip committed under releases/.
-# Adding releases/WarpforgeRevival-<version>.zip to main is all it takes: this creates the
+# One workflow for both platforms since the Android repository was merged in (2026-10-17):
+#   releases/WarpforgeRevival-<version>.zip          -> "Warpforge Revival mod for PC <version>" (notes from CHANGELOG.md)
+#   releases/WarpforgeRevival.Android-<version>.zip  -> "Warpforge Revival mod for Android <version>" (notes from
+#                                                       CHANGELOG-android.md; never marked Latest, so the
+#                                                       "latest release" link keeps pointing at the PC mod)
+# Adding the zip to main is all it takes: this creates the
 # tag v<version> and a Release with that zip attached, its notes being the install steps and
-# the version's section of CHANGELOG.md. Builds that already have a Release are left alone.
+# the version's section of its changelog. Builds that already have a Release are left alone.
 #
 # Each new Release is also posted to Discord (title, link and the changelog section) when the
 # repository has a secret named DISCORD_WEBHOOK_URL holding a Discord channel webhook link.
@@ -17,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       announce:
-        description: "Post this version to Discord again (for example 0.12.34-w). Leave empty for a normal run."
+        description: "Post this version to Discord again (for example 0.12.34-w or 0.12.34-a). Leave empty for a normal run."
         required: false
         default: ""
 
@@ -35,13 +40,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           ANNOUNCE: ${{ inputs.announce }}
-          TITLE: "Warpforge Revival mod for PC"
         run: |
           shopt -s nullglob
 
-          # a version's section of CHANGELOG.md ("## <version> - date" up to the next "## ")
+          # which platform a version is for: "-a" versions are Android builds
+          title_of() { case "$1" in *-a) echo "Warpforge Revival mod for Android" ;; *) echo "Warpforge Revival mod for PC" ;; esac; }
+          changelog_of() { case "$1" in *-a) echo "CHANGELOG-android.md" ;; *) echo "CHANGELOG.md" ;; esac; }
+
+          # a version's section of its changelog ("## <version> - date" up to the next "## ")
           changelog_section() {
-            awk -v v="$1" '/^## /{ if (found) exit; if (index($0, "## " v " ") == 1 || $0 == "## " v) { found = 1; next } } found' CHANGELOG.md
+            awk -v v="$1" '/^## /{ if (found) exit; if (index($0, "## " v " ") == 1 || $0 == "## " v) { found = 1; next } } found' "$(changelog_of "$1")"
           }
 
           # Posts a version to Discord: title, link to its Release, and its changelog section.
@@ -57,7 +65,7 @@ jobs:
             if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
               body="See the release page for what changed."
             fi
-            jq -n --arg title "$TITLE $version" \
+            jq -n --arg title "$(title_of "$version") $version" \
                   --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" \
                   --arg body "$body" '
               { allowed_mentions: { parse: [] },
@@ -81,31 +89,51 @@ jobs:
             fi
           }
 
-          for zip in releases/WarpforgeRevival-*.zip; do
+          for zip in releases/WarpforgeRevival-*.zip releases/WarpforgeRevival.Android-*.zip; do
             version="$(basename "$zip" .zip)"
+            version="${version#WarpforgeRevival.Android-}"
             version="${version#WarpforgeRevival-}"
             tag="v${version}"
             if gh release view "$tag" >/dev/null 2>&1; then
               echo "$tag already published"
               continue
             fi
-            {
-              echo "Build for game version 1.35.0."
-              echo
-              echo "**Install**"
-              echo "1. Install MelonLoader 0.7.3 into the game folder and start the game once."
-              echo "2. Unzip, and copy the \`WarpforgeRevival\` folder into the game's \`Mods\` folder. Keep \`manifest.json\` next to the DLL."
-              echo "3. Start the game."
-              echo
-              echo "The zip's README.txt has the full steps. The source for this build is the code at this tag."
-            } > notes.md
+            latest=""
+            case "$zip" in
+              *WarpforgeRevival.Android-*)
+                latest="--latest=false"
+                {
+                  echo "Android build for game version 1.35.0."
+                  echo
+                  echo "This is the mod only. The game on the phone has to be patched with the mod loader first:"
+                  echo "use the Warpforge Patcher app, or follow docs/android.md of this repository."
+                  echo
+                  echo "**Install**"
+                  echo "1. Unzip. Copy \`WarpforgeRevival.Android.dll\` into the patcher's \`mods\` folder and run \`3 - put mod on phone.bat\`,"
+                  echo "   or copy it on the phone into \`MelonLoader/com.Everguild.WarhammerWarpforge/Mods/\`."
+                  echo "2. Start the game."
+                  echo
+                  echo "The source for this build is the code at this tag."
+                } > notes.md ;;
+              *)
+                {
+                  echo "Build for game version 1.35.0."
+                  echo
+                  echo "**Install**"
+                  echo "1. Install MelonLoader 0.7.3 into the game folder and start the game once."
+                  echo "2. Unzip, and copy the \`WarpforgeRevival\` folder into the game's \`Mods\` folder. Keep \`manifest.json\` next to the DLL."
+                  echo "3. Start the game."
+                  echo
+                  echo "The zip's README.txt has the full steps. The source for this build is the code at this tag."
+                } > notes.md ;;
+            esac
             section="$(changelog_section "$version" | sed 's/^### /#### /')"
             if [ -n "$(printf '%s' "$section" | tr -d '[:space:]')" ]; then
               { echo; echo "## What's new"; echo; printf '%s\n' "$section"; } >> notes.md
             else
-              echo "no CHANGELOG.md section for $version"
+              echo "no $(changelog_of "$version") section for $version"
             fi
-            gh release create "$tag" "$zip" --target "$GITHUB_SHA" --title "Warpforge Revival mod for PC ${version}" --notes-file notes.md
+            gh release create "$tag" "$zip" --target "$GITHUB_SHA" --title "$(title_of "$version") ${version}" --notes-file notes.md $latest
             echo "published $tag"
             announce "$version"
           done
