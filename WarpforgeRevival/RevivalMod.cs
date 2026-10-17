@@ -20,9 +20,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.13.77-a";
+        public const string Version = "0.13.78-a";
 #else
-        public const string Version = "0.13.77-w";
+        public const string Version = "0.13.78-w";
 #endif
 
         /// <summary>
@@ -245,6 +245,7 @@ namespace WarpforgeRevival
             FriendsLive.Tick();
             GlobalChat.Tick();
             AllianceInvite.Tick();
+            FriendRequests.Tick();
             AlternateArts.Tick();
 
             // Dev helper: creating UserData/WarpforgeRevival/quit closes the game cleanly

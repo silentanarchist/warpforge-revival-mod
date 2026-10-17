@@ -7,8 +7,9 @@ namespace WarpforgeRevival
 {
     /// <summary>
     /// Keeps the friend list current without restarting: when Social > Friends is opened, and every
-    /// 15 seconds while it stays open, the list is fetched from the server again (someone who added
-    /// you shows up without a relog).
+    /// 15 seconds while it stays open, the list is fetched from the server again (someone who accepted
+    /// your friend request shows up without a relog). Also fetched at once when the server's list of
+    /// friends online names someone the game's copy lacks (GlobalChat).
     /// </summary>
     internal static class FriendsLive
     {
@@ -45,7 +46,7 @@ namespace WarpforgeRevival
                     shown = key;
                     RevivalMod.Log.Msg($"[friends] list updated: {(list == null ? 0 : list.Count)} friend(s)");
                     var tab = open;
-                    if ((object)tab != null && tab.Pointer != IntPtr.Zero && tab.m_CachedPtr != IntPtr.Zero) tab.FillInFriendsContainer();
+                    if ((object)tab != null && tab.Pointer != IntPtr.Zero && tab.m_CachedPtr != IntPtr.Zero && !FriendRequests.ShowingRequests) tab.FillInFriendsContainer();
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[friends] " + e.Message); }
             };
@@ -65,9 +66,17 @@ namespace WarpforgeRevival
             try
             {
                 var tab = open;
-                if ((object)tab != null && tab.Pointer != IntPtr.Zero && tab.m_CachedPtr != IntPtr.Zero) tab.FillInFriendsContainer();
+                if ((object)tab != null && tab.Pointer != IntPtr.Zero && tab.m_CachedPtr != IntPtr.Zero && !FriendRequests.ShowingRequests) tab.FillInFriendsContainer();
             }
             catch (Exception e) { RevivalMod.Log.Warning("[friends] " + e.Message); }
+        }
+
+        /// <summary>Fetches the friend list from the server now (a request was accepted, a friend removed): the game's
+        /// own copy and an open list are updated when it changed.</summary>
+        internal static void RefreshNow()
+        {
+            busy = false;
+            Refresh();
         }
 
         /// <summary>Called every frame from the mod's update loop.</summary>
@@ -93,6 +102,7 @@ namespace WarpforgeRevival
             {
                 open = __instance;
                 SocialPage.DressFriendsTab(__instance);
+                FriendRequests.Opened(__instance);
                 try { shown = Key(PlayerDataManager.singletonManager?.friendsData?.friendList); } catch { shown = ""; }
                 next = UnityEngine.Time.realtimeSinceStartup + 15f;
                 Refresh();

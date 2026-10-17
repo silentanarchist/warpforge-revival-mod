@@ -261,7 +261,15 @@ namespace WarpforgeRevival
                     if (!changed && (!before.TryGetValue(kv.Key, out var old) || old != kv.Value)) changed = true;
                     table[kv.Key] = status;
                 }
-                if (changed) FriendsLive.Redraw();
+                if (changed)
+                {
+                    FriendsLive.Redraw();
+                    // a friend the game does not list yet (they accepted your request): fetch the list
+                    var list = PlayerDataManager.singletonManager?.friendsData;
+                    if ((object)list != null)
+                        foreach (var id in now.Keys)
+                            if (!list.IsFriend(id)) { FriendsLive.RefreshNow(); break; }
+                }
             }
             catch (Exception e) { if (!statusNoted) { statusNoted = true; RevivalMod.Log.Warning("[friends] online status: " + e.Message); } }
         }
@@ -396,6 +404,8 @@ namespace WarpforgeRevival
                             if (f.Value.ValueKind == JsonValueKind.String) seen[f.Name] = f.Value.GetString();
                         if (!Same(seen, friendStatus)) friendStatus = seen;       // M-13: the game's table is rewritten only on a change
                     }
+                    if (data.TryGetProperty("friendRequests", out var fq) && fq.ValueKind == JsonValueKind.Number && fq.TryGetInt32(out var waiting))
+                        FriendRequests.Waiting = waiting;
                     TakePrivate(data);
                     if (!pollNoted) { pollNoted = true; RevivalMod.Log.Msg($"[chat] connected to the server chat ({n} earlier message(s))"); }
                     failNoted = false;
