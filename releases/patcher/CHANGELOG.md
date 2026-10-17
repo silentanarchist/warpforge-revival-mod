@@ -3,6 +3,16 @@
 The Android app that patches the game on the device itself. Write "device", not "phone", unless something only applies to phones. Newest first. A heading ending in
 "(test build)" is published as a pre-release.
 
+## 0.3.0 - 2026-10-17
+
+Required update
+
+### New
+- **Supports signed mod releases** (mod 0.14.0 and newer). Every mod build the app downloads must carry the Warpforge Revival project's signature.
+
+### Security
+- A build that's unsigned, signed with the wrong key or modified after signing is refused, and so is one older than the mod already on your device. This is the same check the mod's own updater uses from 0.14.0.
+
 ## 0.2.8 - 2026-10-17
 
 ### Changes
