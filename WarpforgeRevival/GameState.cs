@@ -1,6 +1,5 @@
 using System;
 using Il2Cpp;
-using Il2CppInterop.Runtime;
 
 namespace WarpforgeRevival
 {
@@ -15,38 +14,23 @@ namespace WarpforgeRevival
     internal static class GameState
     {
         private static string scene;
-        private static bool sceneHooked;
+        private static int sceneFrame = -1;
 
-        /// <summary>The active scene's name ("?" when Unity cannot say).</summary>
+        /// <summary>The active scene's name ("?" when Unity cannot say). Asked of Unity at most once a frame.
+        /// (0.13.73-0.13.76 followed Unity's "active scene changed" event instead, but this game's build does not
+        /// contain that event's add method, so hooking it failed - "Method unstripping failed" - and was retried,
+        /// with a warning, on every read: the log spam of 2026-10-17. One name lookup a frame costs nothing.)</summary>
         internal static string Scene
         {
             get
             {
-                if (!sceneHooked) HookScene();
+                int f = UnityEngine.Time.frameCount;
+                if (f != sceneFrame || scene == null)
+                {
+                    sceneFrame = f;
+                    try { scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name; } catch { scene = null; }
+                }
                 return scene ?? "?";
-            }
-        }
-
-        private static void HookScene()
-        {
-            sceneHooked = true;
-            try { scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name; } catch { scene = "?"; }
-            try
-            {
-                UnityEngine.SceneManagement.SceneManager.add_activeSceneChanged(
-                    DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<UnityEngine.SceneManagement.Scene, UnityEngine.SceneManagement.Scene>>(
-                        new Action<UnityEngine.SceneManagement.Scene, UnityEngine.SceneManagement.Scene>((_, now) =>
-                        {
-                            try { scene = now.name; } catch { scene = "?"; }
-                        })));
-            }
-            catch (Exception e)
-            {
-                // without the event, fall back to asking each time (the old way)
-                sceneHooked = false;
-                scene = null;
-                RevivalMod.Log.Warning("[state] scene changes cannot be followed: " + e.Message);
-                try { scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name; } catch { }
             }
         }
 
