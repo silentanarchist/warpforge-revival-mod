@@ -102,6 +102,7 @@ namespace WarpforgeRevival
                     {
                         if ((object)tab == null || tab.m_CachedPtr == IntPtr.Zero) return;
                         lastState = null;          // opening always refreshes (see ShouldRefresh)
+                        if ((object)group == null) FreshJoinLists(manager);
                         tab.Refresh();
                         if (!openedLogged)
                         {
@@ -117,6 +118,27 @@ namespace WarpforgeRevival
                 catch { asking = false; throw; }
             }
             catch (Exception e) { asking = false; RevivalMod.Log.Warning("[alliances] opening the tab: " + e.Message); }
+        }
+
+        /// <summary>
+        /// The Join page's lists (0.13.65). The game keeps the open-alliance list and the invitations for 5 minutes,
+        /// and once it has a list it shows that copy and never redraws with the fresh one (the "list updated" event
+        /// it raises has no listener), so a new alliance did not appear on another device until the game was
+        /// restarted. Opening Alliances outside an alliance now empties both and marks them due, so the page the tab
+        /// then opens asks the server and shows what it answers.
+        /// </summary>
+        private static void FreshJoinLists(AlliancesManager manager)
+        {
+            try
+            {
+                var c = manager.controller;
+                if ((object)c == null) return;
+                if ((object)c.groupListCache != null) c.groupListCache.Clear();
+                c.lastGroupListFetch = Il2CppSystem.DateTime.MinValue;
+                if ((object)c.groupInvitationsCache != null) c.groupInvitationsCache.Clear();
+                c.lastGroupInvitationsFetch = Il2CppSystem.DateTime.MinValue;
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[alliances] fresh alliance list: " + e.Message); }
         }
 
         // ---------------------------------------------------------------- the refresh loop (0.13.60)
