@@ -58,12 +58,14 @@ Each file starts with a comment saying what it is for and why.
 
 ## Download
 
-Every build is also on the [Releases](https://github.com/silentanarchist/warpforge-revival-mod/releases) page:
-"Warpforge Revival mod for PC" for Windows, "Warpforge Revival mod for Android" for phones.
+Every version is on the [Releases](https://github.com/silentanarchist/warpforge-revival-mod/releases) page: since
+0.14.0 one release, "Warpforge Revival <version>", holds both the Windows and the Android build.
 
-The latest Windows build is [releases/WarpforgeRevival-0.13.26-w.zip](releases/WarpforgeRevival-0.13.26-w.zip)
-(open it and press "Download raw file"). It is built from the source in this repository and
-holds the mod, the `manifest.json` it needs, and a README with the steps below.
+The latest builds are [releases/WarpforgeRevival-0.14.0-w.zip](releases/WarpforgeRevival-0.14.0-w.zip) (Windows) and
+[releases/WarpforgeRevival.Android-0.14.0-a.zip](releases/WarpforgeRevival.Android-0.14.0-a.zip) (Android; see
+[docs/android.md](docs/android.md)); open one and press "Download raw file". They are built from the source in this
+repository and signed by the project owner (the mod installs only signed updates). The Windows zip holds the mod, the
+`manifest.json` it needs, and a README with the steps below.
 
 ## Installing
 
