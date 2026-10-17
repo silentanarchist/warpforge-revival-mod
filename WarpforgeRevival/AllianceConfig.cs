@@ -12,9 +12,35 @@ namespace WarpforgeRevival
     /// language and privacy lists, the layout's placeholder price). Right after the game unpacks its configs at
     /// sign-in, a price without a currency gets the mod's stand-in for "free" (Currencies), keeping the config's
     /// amount (0 on the revival server, so creating an alliance costs nothing).
+    ///
+    /// Also (0.13.57): Social > Alliances > Join could show the layout's placeholder invitations ("Alliance Name Bla
+    /// Bla", 17/20). JoinAllianceMenu keeps one "loading" flag for both of its lists; FillGroupInvitations returns at
+    /// once while it is set (before it clears the placeholder rows and asks the server), and the open-alliance list
+    /// sets it too. The flag is cleared just before the invitation list is filled, so it always runs.
     /// </summary>
     internal static class AllianceConfig
     {
+        private static bool invitationsLogged;
+
+        [HarmonyPatch(typeof(JoinAllianceMenu), nameof(JoinAllianceMenu.FillGroupInvitations))]
+        private static class Invitations
+        {
+            private static void Prefix(JoinAllianceMenu __instance)
+            {
+                try
+                {
+                    if ((object)__instance == null || !__instance.loading) return;
+                    __instance.loading = false;
+                    if (!invitationsLogged)
+                    {
+                        invitationsLogged = true;
+                        RevivalMod.Log.Msg("[alliances] invitations: the Join page's loading flag was still set; cleared so the list is filled");
+                    }
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[alliances] invitations: " + e.Message); }
+            }
+        }
+
         [HarmonyPatch(typeof(ConfigManager), nameof(ConfigManager.Unpack))]
         private static class AfterUnpack
         {
