@@ -18,6 +18,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 
 ### Changed
 - **Social > Challenge is a tab of its own:** it opens straight away like the game's other tabs, instead of the Alliances tab being swapped for it after the click; picking a friend, a mode or a rule updates the page at once. The game's Alliances tab is kept for when alliances return (hidden until then). Not yet confirmed in play.
+- **Testers button and Testers window:** the Testers button on the menu bar now appears with the rest of the bar, picture included, and the Testers window's PLAY tab opens straight away like the other tabs, instead of being swapped in after a moment. Not yet confirmed in play.
 - **Menu ribbons drawn once:** the Social window's CHALLENGE tab and the Testers window's PLAY / DECKS / CARDS tabs are now set up as each window is built, before it appears, instead of being changed after it opens; the buttons no longer change in front of you. Not yet confirmed in play.
 - **Android:** the game no longer asks for permission to send phone notifications, and no longer shows its own "Please enable notifications" popup (a revival server never sends any).
 - **More robust start-up:** the mod's changes to the game are applied one at a time, so if one cannot be applied (for example after a game update) only that one is left out and everything else still works.

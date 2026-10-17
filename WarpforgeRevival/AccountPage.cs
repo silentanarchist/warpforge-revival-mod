@@ -188,7 +188,11 @@ namespace WarpforgeRevival
                         tester = isTester;
                         ok = true;
                         message = linked.Length > 0 ? "Linked to " + linked + (isTester ? " (in-game tester)." : ".") : "Not linked to a site account.";
-                        if (changed) RevivalMod.Log.Msg("[account] " + message);
+                        if (changed)
+                        {
+                            RevivalMod.Log.Msg("[account] " + message);
+                            PlayFabTransport.OnMainThread(TestersTab.RoleChanged);      // the Testers button follows the role
+                        }
                     }
                     else
                     {

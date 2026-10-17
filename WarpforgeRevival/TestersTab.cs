@@ -11,7 +11,13 @@ namespace WarpforgeRevival
     /// A "Testers" button in the bottom bar of the main menu, right after Social, shown only to
     /// players whose linked site account has the in-game tester role (People tab on the site;
     /// admins count as testers). The button is a copy of the Social button with Social's own
-    /// behaviour taken off it. It opens the Testers page (TestersPage).
+    /// behaviour taken off it. It opens the Testers window (TestersCollection).
+    ///
+    /// 0.13.54: built once, when the game builds the menu bar (NavigationPanelController Awake /
+    /// OnInitializationComplete, the moments MenuCleanup already uses), with its picture already loaded, so it
+    /// appears complete with the rest of the bar. Shown or hidden when the server says whether this player is a
+    /// tester (AccountPage, right after sign-in). Before, a check once a second added it, and its picture
+    /// arrived later still.
     /// </summary>
     internal static class TestersTab
     {
@@ -23,42 +29,57 @@ namespace WarpforgeRevival
         private const string IconAsset = "89b680029c9624e6e905db2fc0a47a9d";
         private static AsyncOperationHandle<Sprite> iconLoad;
         private static bool iconAsked, iconDone;
-        private static float nextCheck;
+        private static NavigationPanelController nav;
         private static bool shownLogged, hierarchyLogged;
 
         private static bool Alive(GameObject g) => (object)g != null && g.Pointer != IntPtr.Zero && g.m_CachedPtr != IntPtr.Zero;
 
-        /// <summary>Called every frame from the mod's update loop.</summary>
-        internal static void Tick()
+        private static bool AliveNav(NavigationPanelController n) => (object)n != null && n.Pointer != IntPtr.Zero && n.m_CachedPtr != IntPtr.Zero;
+
+        // The menu bar is built (a new one after every match): the button goes in with it.
+        [HarmonyLib.HarmonyPatch(typeof(NavigationPanelController), nameof(NavigationPanelController.Awake))]
+        private static class BarBuilt { private static void Postfix(NavigationPanelController __instance) => Ensure(__instance); }
+
+        [HarmonyLib.HarmonyPatch(typeof(NavigationPanelController), nameof(NavigationPanelController.OnInitializationComplete))]
+        private static class BarReady { private static void Postfix(NavigationPanelController __instance) => Ensure(__instance); }
+
+        /// <summary>The server has said (or changed) whether this player is a tester; called on the main thread.</summary>
+        internal static void RoleChanged()
         {
-            float now = Time.realtimeSinceStartup;
-            // the picture: asked for early, put on the button the frame it is ready
-            if (!iconDone && AccountPage.IsTester) { try { Icon(); } catch { } }
-            if (now < nextCheck) return;
-            nextCheck = now + 1f;
             try
             {
+                if (AccountPage.IsTester) StartIcon();
+                if (!AliveNav(nav)) nav = UnityEngine.Object.FindObjectOfType<NavigationPanelController>();
+                Ensure(nav);
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }
+        }
+
+        /// <summary>The button there and shown for a tester; hidden (and the Testers windows closed) otherwise.</summary>
+        private static void Ensure(NavigationPanelController bar)
+        {
+            try
+            {
+                if (AliveNav(bar)) nav = bar;
                 bool want = AccountPage.IsTester;
-                if (!want && TestersPage.IsOpen) TestersPage.Close();
-                if (!want) TestersCollection.Close();
-                if (Alive(button))
+                if (!want)
                 {
-                    if (button.activeSelf != want) button.SetActive(want);
+                    if (TestersPage.IsOpen) TestersPage.Close();
+                    TestersCollection.Close();
+                    if (Alive(button) && button.activeSelf) button.SetActive(false);
                     return;
                 }
-                if (!want) return;
-                var nav = UnityEngine.Object.FindObjectOfType<NavigationPanelController>();
-                if ((object)nav == null) return;
+                if (Alive(button) && AliveNav(nav) && button.transform.parent != null && button.transform.IsChildOf(nav.transform))
+                {
+                    if (!button.activeSelf) button.SetActive(true);
+                    return;
+                }
+                if (!AliveNav(nav)) return;
                 var social = nav.GetToggle(NavigationPanelToggleType.Social);
                 if ((object)social == null) return;
                 button = Build(social.gameObject);
-                iconDone = false;                        // a new copy of the button needs the picture again
             }
-            catch (Exception e)
-            {
-                nextCheck = now + 30f;
-                RevivalMod.Log.Warning("[testers] " + e.Message);
-            }
+            catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }
         }
 
         private static GameObject Build(GameObject social)
@@ -87,10 +108,12 @@ namespace WarpforgeRevival
                     new Action<bool>(on => { if (on) { toggle.SetIsOnWithoutNotify(false); Open(); } })));
             }
 
-            // Social's picture stays hidden until the Testers picture is on (it is loaded from the game's files)
+            // the picture, before the button is ever shown (loaded from the game's files; waited for here if the
+            // load started at sign-in has not finished, which only happens during loading)
             var pic = copy.transform.Find("Image");
             var picImage = (object)pic == null ? null : pic.GetComponent<UnityEngine.UI.Image>();
-            if ((object)picImage != null && !(iconLoad.IsValid() && iconLoad.IsDone && (object)iconLoad.Result != null)) picImage.enabled = false;
+            var sprite = Icon();
+            if ((object)picImage != null && (object)sprite != null) picImage.sprite = sprite;
             copy.transform.SetParent(parent, false);
             copy.transform.SetSiblingIndex(social.transform.GetSiblingIndex() + 1);
             UnityEngine.Object.Destroy(holder);
@@ -98,32 +121,36 @@ namespace WarpforgeRevival
             return copy;
         }
 
-        private static void Icon()
+        /// <summary>Starts loading the button's picture (once).</summary>
+        private static void StartIcon()
+        {
+            if (iconAsked) return;
+            iconAsked = true;
+            try { iconLoad = new AssetReference(IconAsset).LoadAssetAsync<Sprite>(); }
+            catch (Exception e) { RevivalMod.Log.Warning("[testers] icon: " + e.Message); }
+        }
+
+        /// <summary>The button's picture, waiting for the load if needed; null if it cannot be had (Social's stays).</summary>
+        private static Sprite Icon()
         {
             try
             {
-                if (!iconAsked)
-                {
-                    iconAsked = true;
-                    iconLoad = new AssetReference(IconAsset).LoadAssetAsync<Sprite>();
-                    return;
-                }
-                if (!iconLoad.IsDone || !Alive(button)) return;
-                iconDone = true;
+                StartIcon();
+                if (!iconLoad.IsValid()) return null;
+                if (!iconLoad.IsDone) iconLoad.WaitForCompletion();
                 var sprite = iconLoad.Result;
-                var img = button.transform.Find("Image");
-                var image = (object)img == null ? null : img.GetComponent<UnityEngine.UI.Image>();
-                if ((object)image == null) { RevivalMod.Log.Warning("[testers] no picture slot on the button"); return; }
-                image.enabled = true;
-                if ((object)sprite == null) { RevivalMod.Log.Warning("[testers] icon not found in the game's files; the Social picture stays"); return; }
-                image.sprite = sprite;
-                RevivalMod.Log.Msg("[testers] button picture set");
+                if (!iconDone)
+                {
+                    iconDone = true;
+                    if ((object)sprite == null) RevivalMod.Log.Warning("[testers] icon not found in the game's files; the Social picture stays");
+                    else RevivalMod.Log.Msg("[testers] button picture ready");
+                }
+                return sprite;
             }
             catch (Exception e)
             {
-                iconDone = true;
-                RevivalMod.Log.Warning("[testers] icon: " + e.Message);
-                try { var img = button.transform.Find("Image"); if ((object)img != null) img.GetComponent<UnityEngine.UI.Image>().enabled = true; } catch { }
+                if (!iconDone) { iconDone = true; RevivalMod.Log.Warning("[testers] icon: " + e.Message); }
+                return null;
             }
         }
 

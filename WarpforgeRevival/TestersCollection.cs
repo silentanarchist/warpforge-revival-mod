@@ -65,6 +65,7 @@ namespace WarpforgeRevival
                 if ((object)wm == null) { RevivalMod.Log.Warning("[testers] window manager not ready"); return false; }
                 if (window.IsOpen()) return true;
                 wm.OpenWindow(window, DecksContext(), true, null);
+                Highlight();                    // the menu bar lights Testers in the same frame, not at the next check
                 RevivalMod.Log.Msg("[testers] Testers window opened");
                 return true;
             }
@@ -136,36 +137,58 @@ namespace WarpforgeRevival
             return null;
         }
 
-        /// <summary>Called every frame: menu-bar highlight, our tab labels, and the Play tab's tiles.</summary>
+        /// <summary>Called every frame: four times a second, the menu-bar highlight and removing the window once closed.
+        /// (The Play tab is set up once as the window is built, see PlayTab; 0.13.53 and earlier swapped it in here.)</summary>
         internal static void Tick()
         {
             try
             {
                 float now = Time.realtimeSinceStartup;
-                bool slow = now >= nextDress;
-                if (slow) { nextDress = now + 0.25f; Highlight(); DropWhenClosed(now); }
-                if (!Alive(copy) || !copy.isActiveAndEnabled) return;
-                var tab = copy.CurrentTab;
-                bool onPlay = (object)tab != null && (object)tab.TryCast<CardbackCollectionTab>() != null;
-                var panel = copy.transform.Find(PanelName);
-                if ((object)panel != null && panel.gameObject.activeSelf != onPlay) panel.gameObject.SetActive(onPlay);
-                if (!onPlay) return;
-                var t = tab.transform;
-                for (int i = 0; i < t.childCount; i++)
-                {
-                    var child = t.GetChild(i);
-                    if (child.gameObject.activeSelf) child.gameObject.SetActive(false);
-                }
-                // the cosmetics list and its "owned" switch, wherever the window keeps them
-                var cardbacks = tab.TryCast<CardbackCollectionTab>();
-                var display = cardbacks.display;
-                if ((object)display != null && display.gameObject.activeSelf) display.gameObject.SetActive(false);
-                var owned = cardbacks.ownedToggle;
-                if ((object)owned != null && owned.gameObject.activeSelf) owned.gameObject.SetActive(false);
-                if ((object)panel == null) BuildPlay(copy.transform);
-                else if (slow) { PlacePanel(panel.GetComponent<RectTransform>()); FitTiles(panel); }
+                if (now < nextDress) return;
+                nextDress = now + 0.25f;
+                Highlight();
+                DropWhenClosed(now);
             }
-            catch (Exception e) { RevivalMod.Log.Warning("[testers] play tab: " + e.Message); }
+            catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }
+        }
+
+        // ---------------------------------------------------------------- the Play tab, built once
+
+        /// <summary>
+        /// As the Testers window is built (GameWindowWithTabs.SetupTabs, before it is shown): the Styles tab
+        /// (CardbackCollectionTab) becomes the Play tab. Its own contents, the cosmetics list and its "owned"
+        /// switch, are moved under a switched-off holder, so whatever the game turns on in there when the tab opens
+        /// stays out of sight (its open code is shared by all collection tabs and too short to hook on Android).
+        /// The mode tiles are built inside the tab, so the game shows and hides them with it.
+        /// </summary>
+        [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.SetupTabs))]
+        private static class PlayTab
+        {
+            private static void Postfix(GameWindowWithTabs __instance)
+            {
+                try
+                {
+                    if (!IsCopy(__instance)) return;
+                    var tab = __instance.GetComponentInChildren<CardbackCollectionTab>(true);
+                    if ((object)tab == null) { RevivalMod.Log.Warning("[testers] no Styles tab to turn into the Play tab"); return; }
+                    var hidden = new GameObject("RevivalHidden");
+                    var hiddenRt = hidden.AddComponent<RectTransform>();
+                    hiddenRt.SetParent(tab.transform, false);
+                    hidden.SetActive(false);
+                    var move = new List<Transform>();
+                    for (int i = 0; i < tab.transform.childCount; i++)
+                    {
+                        var child = tab.transform.GetChild(i);
+                        if (child.Pointer != hiddenRt.Pointer) move.Add(child);
+                    }
+                    foreach (var extra in new Component[] { tab.display, tab.ownedToggle })
+                        if ((object)extra != null && !extra.transform.IsChildOf(tab.transform)) move.Add(extra.transform);
+                    foreach (var t in move) t.SetParent(hiddenRt, false);
+                    BuildPlay(tab.transform);
+                    RevivalMod.Log.Msg($"[testers] Play tab set up as the window was built ({move.Count} Styles part(s) put away)");
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[testers] Play tab: " + e.Message); }
+            }
         }
 
         /// <summary>
@@ -243,7 +266,8 @@ namespace WarpforgeRevival
         /// <summary>Where the Play screen puts its tiles: right of the inner ribbon, same top and bottom as the Play screen's tiles.</summary>
         private static void PlacePanel(RectTransform panel)
         {
-            var parent = panel.parent.TryCast<RectTransform>();
+            // worked out in the window's space, then set wherever the tiles sit (inside the Play tab)
+            var parent = (object)copy == null ? null : copy.GetComponent<RectTransform>();
             if ((object)parent == null) return;
             var pr = parent.rect;
             float left = pr.xMin + 200, right = pr.xMax - 40, top = pr.yMax - pr.height * 0.17f, bottom = pr.yMin + pr.height * 0.045f;
@@ -279,14 +303,13 @@ namespace WarpforgeRevival
             }
             catch { }
             panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
+            float scale = 1f;
+            var host = panel.parent;
+            if ((object)host != null && host.lossyScale.x > 0.0001f && parent.lossyScale.x > 0.0001f) scale = parent.lossyScale.x / host.lossyScale.x;
             var size = new Vector2(Mathf.Max(10, right - left), Mathf.Max(10, top - bottom));
-            var centre = new Vector2((left + right) / 2, (top + bottom) / 2) - pr.center;
-            if ((panel.sizeDelta - size).sqrMagnitude > 1 || (panel.anchoredPosition - centre).sqrMagnitude > 1)
-            {
-                panel.sizeDelta = size;
-                panel.anchoredPosition = centre;
-                if (!placedLogged) { placedLogged = true; RevivalMod.Log.Msg($"[testers] Play tab area {size.x:0}x{size.y:0}"); }
-            }
+            panel.sizeDelta = size * scale;
+            panel.position = parent.TransformPoint(new Vector3((left + right) / 2, (top + bottom) / 2, 0));
+            if (!placedLogged) { placedLogged = true; RevivalMod.Log.Msg($"[testers] Play tab area {size.x:0}x{size.y:0}"); }
         }
 
         /// <summary>The Play tab: each tester mode's own Play-screen tile, made the way the Play screen makes them.</summary>
@@ -294,7 +317,7 @@ namespace WarpforgeRevival
         {
             var panel = new GameObject(PanelName);
             var rt = panel.AddComponent<RectTransform>();
-            rt.SetParent(tab, false);           // the window itself, over its tabs
+            rt.SetParent(tab, false);           // inside the Play tab: shown and hidden with it
             rt.SetAsLastSibling();
             PlacePanel(rt);
 
@@ -334,6 +357,12 @@ namespace WarpforgeRevival
             }
             if (shown == 0)
                 TestersPage.Text(panel.transform, "Empty", "No tester modes are set up on this server right now.", 26, TextAlignmentOptions.Left, TestersPage.Dim, 0.05f, 0.6f, 0.9f, 0.75f);
+            else
+            {
+                // lay the row out now (not at the next frame) so it can be fitted before the window is shown
+                UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(rowRt);
+                FitTiles(panel.transform);
+            }
             RevivalMod.Log.Msg($"[testers] Play tab: {shown} mode(s)");
         }
 
