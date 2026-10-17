@@ -354,10 +354,14 @@ namespace WarpforgeRevival
         /// The game's popup sizes its text to fit, so the rules came out small: once it is on screen, its
         /// text is allowed to be larger (and the box taller where the popup lets it grow).
         /// </summary>
+        private static float nextPopupLook;
+
         private static void EnlargePopup()
         {
             if (biggerPopup < 0) return;
             if (Time.realtimeSinceStartup - biggerPopup > 3f) { biggerPopup = -1f; return; }
+            if (Time.realtimeSinceStartup < nextPopupLook) return;             // M-11: 10 times a second, not every frame
+            nextPopupLook = Time.realtimeSinceStartup + 0.1f;
             try
             {
                 var popup = WindowsManager.Instance?.PopupWindow;
@@ -619,7 +623,7 @@ namespace WarpforgeRevival
             nextCheck = now + 1f;
             try
             {
-                bool inBattle = (object)UnityEngine.Object.FindObjectOfType<BattleManager>() != null;
+                bool inBattle = GameState.InBattle;
                 if (inBattle) battleSeen = true;
                 else if (battleSeen || now - activeAt > 300f) Restore();
             }

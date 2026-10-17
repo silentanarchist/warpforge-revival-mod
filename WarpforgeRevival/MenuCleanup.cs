@@ -55,13 +55,13 @@ namespace WarpforgeRevival
         {
             private static void Postfix()
             {
-                try { Apply(UnityEngine.Object.FindObjectOfType<NavigationPanelController>()); }
+                try { Apply(GameState.FindNav()); }
                 catch (Exception e) { RevivalMod.Log.Warning("[menu] " + e.Message); }
             }
         }
 
         [HarmonyPatch(typeof(NavigationPanelController), nameof(NavigationPanelController.Awake))]
-        private static class OnAwake { private static void Postfix(NavigationPanelController __instance) => Apply(__instance); }
+        private static class OnAwake { private static void Postfix(NavigationPanelController __instance) { GameState.SawNav(__instance); Apply(__instance); } }
 
         [HarmonyPatch(typeof(NavigationPanelController), nameof(NavigationPanelController.OnInitializationComplete))]
         private static class OnReady

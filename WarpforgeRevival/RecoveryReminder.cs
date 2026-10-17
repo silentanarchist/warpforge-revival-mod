@@ -26,6 +26,7 @@ namespace WarpforgeRevival
         private static bool asked;
         private static float readySince = -1f, openSince = -1f;
         private static bool opener;
+        private static float nextLook;
 
         internal static void Tick()
         {
@@ -33,6 +34,9 @@ namespace WarpforgeRevival
             {
                 if (openSince >= 0f) { FinishOpen(); return; }
                 if (asked) return;
+                float now = Time.realtimeSinceStartup;           // M-11: checked 4 times a second, not every frame
+                if (now < nextLook) return;
+                nextLook = now + 0.25f;
                 if (!AccountPage.StatusKnown || AccountPage.LinkedAccount.Length == 0 || AccountPage.HasRecovery != false) { readySince = -1f; return; }
                 if (!AtMainMenu()) { readySince = -1f; return; }
                 if (readySince < 0f) { readySince = Time.realtimeSinceStartup; return; }
@@ -52,7 +56,7 @@ namespace WarpforgeRevival
             if ((object)menu == null || (object)menu.TryCast<MainMenuWindow>() == null || !menu.isActiveAndEnabled) return false;
             var popup = wm.PopupWindow;
             if ((object)popup != null && popup.isActiveAndEnabled) return false;                     // another popup is up
-            if ((object)UnityEngine.Object.FindObjectOfType<BattleManager>() != null) return false;  // a match (or a replay)
+            if (GameState.InBattle) return false;                                                     // a match (or a replay)
             return true;
         }
 

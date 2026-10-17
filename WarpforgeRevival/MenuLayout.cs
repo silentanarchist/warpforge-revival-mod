@@ -328,7 +328,7 @@ namespace WarpforgeRevival
             if (Alive(playIcon)) return playIcon;
             try
             {
-                var nav = UnityEngine.Object.FindObjectOfType<NavigationPanelController>();
+                var nav = GameState.FindNav();
                 var play = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Main);
                 var img = (object)play == null ? null : play.transform.Find("Image");
                 var image = (object)img == null ? null : img.GetComponent<Image>();

@@ -441,6 +441,7 @@ namespace WarpforgeRevival
         // ---------------------------------------------------------------- when the tab comes into view
         private static AccountTab seen;
         private static int seenFrames;
+        private static float seenNext;
         private static bool seenReported;
 
         /// <summary>Told about the tab as soon as the Settings window is built (see SupportPage).</summary>
@@ -463,6 +464,11 @@ namespace WarpforgeRevival
         internal static void Tick()
         {
             if ((object)seen == null) return;
+            // M-11: while the tab is shut or already set up, looked at 4 times a second instead of every frame
+            // (the 3-frame settle after it opens still runs frame by frame)
+            float now = Time.realtimeSinceStartup;
+            if (seenFrames <= 0 && now < seenNext) return;
+            seenNext = now + 0.25f;
             try
             {
                 if (!Usable(seen)) { seen = null; return; }

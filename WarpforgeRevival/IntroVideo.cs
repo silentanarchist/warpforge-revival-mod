@@ -199,7 +199,7 @@ namespace WarpforgeRevival
             nextLook = now + 0.25f;
             try
             {
-                string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+                string scene = GameState.Scene;
                 if (scene != lastScene) lastScene = scene;
                 if (scene != "Intro") { swapped = false; return; }
                 if (swapped) return;

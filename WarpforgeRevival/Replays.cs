@@ -163,6 +163,9 @@ namespace WarpforgeRevival
         private static bool cardsFromReplay;
 
         /// <summary>From the update loop: notes the match's cards (each card's in-match number, card id and side).</summary>
+        private static BattleCardManager cardManager;
+        private static bool Live(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
+
         internal static void NoteCards()
         {
             float now = UnityEngine.Time.realtimeSinceStartup;
@@ -174,7 +177,8 @@ namespace WarpforgeRevival
                 if ((object)battle == null || battle.Pointer == IntPtr.Zero || battle.m_CachedPtr == IntPtr.Zero) return;
                 if (IsReplay(battle)) { cardsFromReplay = true; return; }
                 if (cardsFromReplay) { seenCards.Clear(); cardsFromReplay = false; }
-                var manager = UnityEngine.Object.FindObjectOfType<BattleCardManager>();
+                if (!Live(cardManager)) cardManager = UnityEngine.Object.FindObjectOfType<BattleCardManager>();   // once a match (M-11)
+                var manager = cardManager;
                 var all = (object)manager == null ? null : manager.GetAllCardsInGame();
                 if (all == null) return;
                 if (all.Count > 0 && seenCards.Count > 0 && !seenCards.ContainsKey(all[0].uniqueInGameID)) seenCards.Clear();    // a new match
@@ -182,6 +186,7 @@ namespace WarpforgeRevival
                 {
                     var c = all[i];
                     if ((object)c == null) continue;
+                    if (seenCards.ContainsKey(c.uniqueInGameID)) continue;       // M-11: each card read once a match
                     string id = c.rawCardData?.uniqueId;
                     if (string.IsNullOrEmpty(id) || id.Length > 64) continue;
                     seenCards[c.uniqueInGameID] = (id, c.isPlayer);

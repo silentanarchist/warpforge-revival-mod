@@ -50,6 +50,7 @@ namespace WarpforgeRevival
             forcedChannel = false;
             toldConnected = false;
             since = -1;                               // a new sign-in starts from the history again
+            friendShown = null;                       // the new chat manager's status table is filled again
         }
 
         /// <summary>Sends a chat request as the signed-in player (the server refuses chat without a session).</summary>
@@ -237,6 +238,13 @@ namespace WarpforgeRevival
             return now != null && id != null && now.TryGetValue(id, out var s) ? s : null;
         }
 
+        private static bool Same(Dictionary<string, string> a, Dictionary<string, string> b)
+        {
+            if (a == null || b == null || a.Count != b.Count) return false;
+            foreach (var kv in a) if (!b.TryGetValue(kv.Key, out var v) || v != kv.Value) return false;
+            return true;
+        }
+
         private static void ShowFriendStatus(ChatGlobalManager m)
         {
             var now = friendStatus;
@@ -387,7 +395,7 @@ namespace WarpforgeRevival
                         var seen = new Dictionary<string, string>();
                         foreach (var f in fr.EnumerateObject())
                             if (f.Value.ValueKind == JsonValueKind.String) seen[f.Name] = f.Value.GetString();
-                        friendStatus = seen;
+                        if (!Same(seen, friendStatus)) friendStatus = seen;       // M-13: the game's table is rewritten only on a change
                     }
                     TakePrivate(data);
                     if (!pollNoted) { pollNoted = true; RevivalMod.Log.Msg($"[chat] connected to the server chat ({n} earlier message(s))"); }

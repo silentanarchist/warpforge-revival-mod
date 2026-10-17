@@ -186,7 +186,7 @@ namespace WarpforgeRevival
             HookUnity();
             try
             {
-                scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name ?? "";
+                scene = GameState.Scene;
                 if (!menuReached && scene.IndexOf("MainMenu", StringComparison.OrdinalIgnoreCase) >= 0) menuReached = true;
                 float now = Time.realtimeSinceStartup;
                 if (scene != lastScene || now >= nextContext)

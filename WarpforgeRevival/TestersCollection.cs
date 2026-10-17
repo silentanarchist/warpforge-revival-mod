@@ -91,7 +91,7 @@ namespace WarpforgeRevival
         {
             if (Alive(copy)) return copy;
             copy = null;
-            var nav = UnityEngine.Object.FindObjectOfType<NavigationPanelController>();
+            var nav = GameState.FindNav();
             var toggle = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Collection);
             if ((object)toggle == null) { RevivalMod.Log.Warning("[testers] menu bar Collection button not found"); return null; }
             var opener = toggle.GetComponentInChildren<OpenWindowButton>(true);
@@ -234,7 +234,7 @@ namespace WarpforgeRevival
                 var wm = WindowsManager.Instance;
                 var current = (object)wm == null ? null : wm.CurrentWindow;
                 showing = Alive(copy) && copy.isActiveAndEnabled && (object)current != null && current.Pointer == copy.Pointer;
-                var nav = UnityEngine.Object.FindObjectOfType<NavigationPanelController>();
+                var nav = GameState.Nav;               // kept, not searched for 4 times a second (M-11)
                 var col = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Collection);
                 var toggle = (object)col == null ? null : col.toggle;
                 var group = (object)toggle == null ? null : toggle.group;

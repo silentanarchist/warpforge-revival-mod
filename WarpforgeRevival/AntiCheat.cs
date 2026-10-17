@@ -25,8 +25,14 @@ namespace WarpforgeRevival
         private static float startedAt;
         private static readonly HashSet<string> sent = new HashSet<string>();
 
+        private static float nextLook;
+
         internal static void Tick()
         {
+            // a match starts and ends twice an hour at most: looked at twice a second, not every frame (M-11)
+            float now = Time.realtimeSinceStartup;
+            if (now < nextLook) return;
+            nextLook = now + 0.5f;
             try
             {
                 var battle = BattleManager.Instance;

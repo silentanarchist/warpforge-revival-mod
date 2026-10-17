@@ -76,7 +76,7 @@ namespace WarpforgeRevival
 
         private static string Scene()
         {
-            try { return UnityEngine.SceneManagement.SceneManager.GetActiveScene().name; } catch { return "?"; }
+            return GameState.Scene;
         }
 
         // ---------------------------------------------------------------- black picture: find the cause

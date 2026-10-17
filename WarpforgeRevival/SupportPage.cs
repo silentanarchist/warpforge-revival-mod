@@ -518,6 +518,7 @@ namespace WarpforgeRevival
         private static SupportTab page;
         private static Transform pageRoot, pageButton, pageIntro;
         private static int settledFrames;
+        private static float pageNext;
         private static bool tickReported;
 
         /// <summary>
@@ -531,6 +532,9 @@ namespace WarpforgeRevival
             if (resetAt > 0f && Time.realtimeSinceStartup >= resetAt) { resetAt = 0f; checking = false; Label(CheckText); }
             if (watchResetAt > 0f && Time.realtimeSinceStartup >= watchResetAt) { watchResetAt = 0f; WatchLabel(WatchText); }
             if ((object)page == null) return;
+            // M-11: while the tab is shut or already set up, looked at 4 times a second instead of every frame
+            if (settledFrames <= 0 && Time.realtimeSinceStartup < pageNext) return;
+            pageNext = Time.realtimeSinceStartup + 0.25f;
             try
             {
                 if (page.Pointer == IntPtr.Zero || page.m_CachedPtr == IntPtr.Zero) { page = null; return; }   // the window was closed for good

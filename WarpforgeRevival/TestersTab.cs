@@ -49,7 +49,7 @@ namespace WarpforgeRevival
             try
             {
                 if (AccountPage.IsTester) StartIcon();
-                if (!AliveNav(nav)) nav = UnityEngine.Object.FindObjectOfType<NavigationPanelController>();
+                if (!AliveNav(nav)) nav = GameState.FindNav();
                 Ensure(nav);
             }
             catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }

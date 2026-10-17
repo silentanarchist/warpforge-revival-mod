@@ -19,7 +19,7 @@ namespace WarpforgeRevival
 
         private static string Scene()
         {
-            try { return UnityEngine.SceneManagement.SceneManager.GetActiveScene().name; } catch { return "?"; }
+            return GameState.Scene;
         }
 
         /// <summary>Called every frame from the mod's update loop.</summary>
