@@ -170,6 +170,8 @@ namespace WarpforgeRevival
                     if ((object)__instance == null) return;
                     string key = WindowKey(__instance);
                     if (key == null) return;
+                    // the window's own pages, set up once as it is built (no hooks of their own)
+                    if (key == "Social") AllianceConfig.SocialBuilt(__instance);
                     var current = layout;
                     if (!current.TryGetValue(key, out var buttons) || buttons.Count == 0) return;
                     Apply(__instance, key, buttons);

@@ -13,32 +13,57 @@ namespace WarpforgeRevival
     /// sign-in, a price without a currency gets the mod's stand-in for "free" (Currencies), keeping the config's
     /// amount (0 on the revival server, so creating an alliance costs nothing).
     ///
-    /// Also (0.13.57): Social > Alliances > Join could show the layout's placeholder invitations ("Alliance Name Bla
-    /// Bla", 17/20). JoinAllianceMenu keeps one "loading" flag for both of its lists; FillGroupInvitations returns at
-    /// once while it is set (before it clears the placeholder rows and asks the server), and the open-alliance list
-    /// sets it too. The flag is cleared just before the invitation list is filled, so it always runs.
+    /// Also (0.13.58): Social > Alliances showed the layout's placeholder invitations ("Alliance Name Bla Bla",
+    /// 17/20; Dismiss on one threw a NullReferenceException). Opening the tab only fills the open-alliance list; the
+    /// invitation list was filled (and its placeholder rows deleted) only when Join was clicked. Now, the build-once
+    /// way: when the Social window is built (MenuLayout's SetupTabs postfix) the placeholder rows are deleted and the
+    /// empty section hidden, and the window's own "tab changed" event fills the invitation list when Alliances is
+    /// opened (the game's JoinAllianceMenu.FillGroupInvitations, called, not hooked; its shared "loading" flag is
+    /// cleared first, since the open-alliance list sets it). (0.13.57 hooked FillGroupInvitations instead.)
     /// </summary>
     internal static class AllianceConfig
     {
-        private static bool invitationsLogged;
+        private static bool builtLogged;
 
-        [HarmonyPatch(typeof(JoinAllianceMenu), nameof(JoinAllianceMenu.FillGroupInvitations))]
-        private static class Invitations
+        /// <summary>The Social window has just been built (before it is shown): the Join page's placeholder invitations
+        /// go, and opening Alliances fills the real invitation list.</summary>
+        internal static void SocialBuilt(GameWindowWithTabs window)
         {
-            private static void Prefix(JoinAllianceMenu __instance)
+            try
             {
-                try
-                {
-                    if ((object)__instance == null || !__instance.loading) return;
-                    __instance.loading = false;
-                    if (!invitationsLogged)
+                JoinAllianceMenu join = null;
+                foreach (var j in window.GetComponentsInChildren<JoinAllianceMenu>(true))
+                    if ((object)j != null && !ChallengeMenu.IsChallengeTab(j.GetComponentInParent<AlliancesTab>(true))) { join = j; break; }
+                if ((object)join == null) return;
+                int removed = 0;
+                var holder = join.invitationHolder;
+                if ((object)holder != null)
+                    for (int i = holder.childCount - 1; i >= 0; i--)
                     {
-                        invitationsLogged = true;
-                        RevivalMod.Log.Msg("[alliances] invitations: the Join page's loading flag was still set; cleared so the list is filled");
+                        var row = holder.GetChild(i).gameObject;
+                        row.SetActive(false);
+                        UnityEngine.Object.Destroy(row);
+                        removed++;
                     }
-                }
-                catch (Exception e) { RevivalMod.Log.Warning("[alliances] invitations: " + e.Message); }
+                if ((object)join.invitationList != null) join.invitationList.SetActive(false);   // shown again when there are real ones
+                var menu = join;
+                var onChange = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<WindowTabBase>>(new Action<WindowTabBase>(to =>
+                {
+                    try
+                    {
+                        if ((object)to == null || (object)to.TryCast<AlliancesTab>() == null || ChallengeMenu.IsChallengeTab(to)) return;
+                        if ((object)menu == null || menu.m_CachedPtr == IntPtr.Zero) return;
+                        menu.loading = false;            // shared with the open-alliance list, which the tab fills as it opens
+                        menu.FillGroupInvitations();
+                    }
+                    catch (Exception e) { RevivalMod.Log.Warning("[alliances] invitations: " + e.Message); }
+                }));
+                window.OnTabChanged = window.OnTabChanged == null
+                    ? onChange
+                    : Il2CppSystem.Delegate.Combine(window.OnTabChanged, onChange).Cast<Il2CppSystem.Action<WindowTabBase>>();
+                if (!builtLogged) { builtLogged = true; RevivalMod.Log.Msg($"[alliances] Join page set up as the Social window was built: {removed} placeholder invitation(s) removed"); }
             }
+            catch (Exception e) { RevivalMod.Log.Warning("[alliances] Join page: " + e.Message); }
         }
 
         [HarmonyPatch(typeof(ConfigManager), nameof(ConfigManager.Unpack))]
