@@ -26,9 +26,12 @@ namespace WarpforgeRevival
     {
         internal sealed class Field
         {
-            public string Key, Label;
+            public string Key;
             public int Min, Max, Step;
-            public Field(string key, string label, int min, int max, int step = 1) { Key = key; Label = label; Min = min; Max = max; Step = step; }
+            private readonly Func<string> label;
+            public Field(string key, Func<string> label, int min, int max, int step = 1) { Key = key; this.label = label; Min = min; Max = max; Step = step; }
+            /// <summary>The rule's name in the player's language.</summary>
+            public string Text() => label();
         }
 
         /// <summary>The match rules the menu offers, in its order.</summary>
@@ -36,30 +39,30 @@ namespace WarpforgeRevival
         {
             // in tenths: 10 = x1.0 .. 30 = x3.0, in steps of 0.2 (every warlord's health is a multiple of
             // 5, so the result is always a whole number)
-            new Field("warlordHealthMultiplier", "Warlord health multiplier", 10, 30, 2),
-            new Field("warlordLifeChange", "Warlord health change (added after the multiplier)", -20, 40),
-            new Field("startingHand", "Starting hand (at most the hand limit)", 1, 10),
-            new Field("secondPlayerExtraCards", "Extra cards for the second player", 0, 3),
-            new Field("drawCardsPerTurn", "Cards drawn per turn", 0, 5),
-            new Field("handLimit", "Hand limit", 3, 20),
-            new Field("startingMana", "Starting mana (first player)", 0, 10),
-            new Field("startingManaSecond", "Starting mana (second player)", 0, 10),
-            new Field("manaPerTurn", "Mana gained per turn", 0, 5),
+            new Field("warlordHealthMultiplier", () => Loc.T("challenge.rule.warlordHealthMultiplier", "Warlord health multiplier"), 10, 30, 2),
+            new Field("warlordLifeChange", () => Loc.T("challenge.rule.warlordLifeChange", "Warlord health change (added after the multiplier)"), -20, 40),
+            new Field("startingHand", () => Loc.T("challenge.rule.startingHand", "Starting hand (at most the hand limit)"), 1, 10),
+            new Field("secondPlayerExtraCards", () => Loc.T("challenge.rule.secondPlayerExtraCards", "Extra cards for the second player"), 0, 3),
+            new Field("drawCardsPerTurn", () => Loc.T("challenge.rule.drawCardsPerTurn", "Cards drawn per turn"), 0, 5),
+            new Field("handLimit", () => Loc.T("challenge.rule.handLimit", "Hand limit"), 3, 20),
+            new Field("startingMana", () => Loc.T("challenge.rule.startingMana", "Starting mana (first player)"), 0, 10),
+            new Field("startingManaSecond", () => Loc.T("challenge.rule.startingManaSecond", "Starting mana (second player)"), 0, 10),
+            new Field("manaPerTurn", () => Loc.T("challenge.rule.manaPerTurn", "Mana gained per turn"), 0, 5),
             // 0.13.33: unspent mana carried over to the next turn, at most this much (Skirmish: 1)
-            new Field("manaAccumulation", "Unspent mana carried over (at most)", 0, 5),
-            new Field("overtimeTurn", "Overtime starts on turn", 5, 60),
-            new Field("turnSeconds", "Turn timer (seconds)", 30, 300, 5),
-            new Field("offenseCards", "Offence cards", 0, 1),
+            new Field("manaAccumulation", () => Loc.T("challenge.rule.manaAccumulation", "Unspent mana carried over (at most)"), 0, 5),
+            new Field("overtimeTurn", () => Loc.T("challenge.rule.overtimeTurn", "Overtime starts on turn"), 5, 60),
+            new Field("turnSeconds", () => Loc.T("challenge.rule.turnSeconds", "Turn timer (seconds)"), 30, 300, 5),
+            new Field("offenseCards", () => Loc.T("challenge.rule.offenseCards", "Offence cards"), 0, 1),
             // 0 the game decides (warlord initiative, then a coin toss), 1 the challenger, 2 the friend challenged
-            new Field("firstPlayer", "Goes first", 0, 2),
+            new Field("firstPlayer", () => Loc.T("challenge.rule.firstPlayer", "Goes first"), 0, 2),
         };
 
         /// <summary>A rule's value as the menu shows it ("x1.4", "+5", "4").</summary>
         internal static string Show(string key, int v) =>
             key == "warlordHealthMultiplier" ? "x" + (v / 10.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
             : key == "warlordLifeChange" && v > 0 ? "+" + v
-            : key == "offenseCards" ? (v == 1 ? "On" : "Off")
-            : key == "firstPlayer" ? (v == 1 ? "You" : v == 2 ? "Opponent" : "Random")      // as the challenger sees it
+            : key == "offenseCards" ? (v == 1 ? Loc.Game("MainMenu/Settings/ButtonLabel/Music_On", "On") : Loc.Game("MainMenu/Settings/ButtonLabel/Music_Off", "Off"))
+            : key == "firstPlayer" ? (v == 1 ? Loc.T("challenge.firstYou", "You") : v == 2 ? Loc.T("challenge.firstOpponent", "Opponent") : Loc.Game("MenuDeck/Button/Random", "Random"))      // as the challenger sees it
             : v.ToString();
 
         /// <summary>
@@ -124,12 +127,19 @@ namespace WarpforgeRevival
             {
                 int G(string k) => Get(k) ?? 0;
                 int change = G("warlordLifeChange");
-                return $"Mode: {modeName}\n" +
-                       $"Warlord health: {Show("warlordHealthMultiplier", G("warlordHealthMultiplier"))}, then {(change >= 0 ? "+" : "")}{change}\n" +
-                       $"Starting hand: {G("startingHand")} (+{G("secondPlayerExtraCards")} for the second player) · hand limit {G("handLimit")}\n" +
-                       $"Mana: starts {G("startingMana")} / {G("startingManaSecond")} (first / second player), +{G("manaPerTurn")} per turn, up to {G("manaAccumulation")} unspent carried over\n" +
-                       $"Cards drawn per turn: {G("drawCardsPerTurn")} · overtime from turn {G("overtimeTurn")} · turn timer {G("turnSeconds")} s\n" +
-                       $"Offence cards: {(G("offenseCards") == 1 ? "on" : "off")} · goes first: {(G("firstPlayer") == 1 ? "your challenger" : G("firstPlayer") == 2 ? "you" : "random")}";
+                return Loc.T("challenge.sum.mode", "Mode: {mode}", ("mode", modeName)) + "\n" +
+                       Loc.T("challenge.sum.health", "Warlord health: {multiplier}, then {change}",
+                             ("multiplier", Show("warlordHealthMultiplier", G("warlordHealthMultiplier"))), ("change", (change >= 0 ? "+" : "") + change)) + "\n" +
+                       Loc.T("challenge.sum.hand", "Starting hand: {hand} (+{extra} for the second player) · hand limit {limit}",
+                             ("hand", G("startingHand")), ("extra", G("secondPlayerExtraCards")), ("limit", G("handLimit"))) + "\n" +
+                       Loc.T("challenge.sum.mana", "Mana: starts {first} / {second} (first / second player), +{perTurn} per turn, up to {carried} unspent carried over",
+                             ("first", G("startingMana")), ("second", G("startingManaSecond")), ("perTurn", G("manaPerTurn")), ("carried", G("manaAccumulation"))) + "\n" +
+                       Loc.T("challenge.sum.turns", "Cards drawn per turn: {draw} · overtime from turn {overtime} · turn timer {seconds} s",
+                             ("draw", G("drawCardsPerTurn")), ("overtime", G("overtimeTurn")), ("seconds", G("turnSeconds"))) + "\n" +
+                       Loc.T("challenge.sum.offence", "Offence cards: {offence}", ("offence", Show("offenseCards", G("offenseCards")))) + " · " +
+                       (G("firstPlayer") == 1 ? Loc.T("challenge.sum.firstChallenger", "goes first: your challenger")
+                        : G("firstPlayer") == 2 ? Loc.T("challenge.sum.firstYou", "goes first: you")
+                        : Loc.T("challenge.sum.firstRandom", "goes first: random"));
             }
         }
 
@@ -191,15 +201,15 @@ namespace WarpforgeRevival
             var gv = Variables(ev);
             if ((object)gv == null) return "";
             bool isLong = eventId == ServerSettings.LongGameEvent;
-            string[] names = { "", "Common", "Rare", "Epic", "Legendary" };
-            var parts = new List<string>();
-            for (int rarity = 1; rarity <= 4; rarity++)
-            {
-                int n = isLong && ServerSettings.LongGameCopies(rarity) > 0 ? ServerSettings.LongGameCopies(rarity)
-                      : rarity == 4 ? gv.numberOfCopiesLegendary : gv.numberOfCopiesOtherRarities;
-                parts.Add(rarity == 1 ? $"{n} {(n == 1 ? "copy" : "copies")} of a {names[rarity]}" : $"{n} of {(rarity == 3 ? "an" : "a")} {names[rarity]}");
-            }
-            return $"Decks: {gv.deckSize} cards · " + string.Join(", ", parts);
+            // the rarity names are the game's own; the sentence around them is ours (one text, so translators keep its order)
+            int Copies(int rarity) => isLong && ServerSettings.LongGameCopies(rarity) > 0 ? ServerSettings.LongGameCopies(rarity)
+                                      : rarity == 4 ? gv.numberOfCopiesLegendary : gv.numberOfCopiesOtherRarities;
+            return Loc.T("challenge.deckRules", "Decks: {size} cards · at most {common} of a {commonName}, {rare} of a {rareName}, {epic} of an {epicName}, {legendary} of a {legendaryName}.",
+                         ("size", gv.deckSize),
+                         ("common", Copies(1)), ("commonName", Loc.Game("Card_Rarity/Common", "Common")),
+                         ("rare", Copies(2)), ("rareName", Loc.Game("Card_Rarity/Rare", "Rare")),
+                         ("epic", Copies(3)), ("epicName", Loc.Game("Card_Rarity/Epic", "Epic")),
+                         ("legendary", Copies(4)), ("legendaryName", Loc.Game("Card_Rarity/Legendary", "Legendary")));
         }
 
         /// <summary>The modes a challenge may use (the menu's presets): Classic, Skirmish, and the long-game mode.</summary>
@@ -317,8 +327,8 @@ namespace WarpforgeRevival
             RevivalMod.Log.Warning($"[challenge] challenge from {from} refused: its rules are {why}");
             try
             {
-                WindowsManager.Instance?.ShowPopUp("A challenge arrived with rules this game cannot read, so it cannot be accepted. " +
-                                                   "Both players should update the mod and try again.", false, true, "OK", (Il2CppSystem.Action)null);
+                WindowsManager.Instance?.ShowPopUp(Loc.T("challenge.unreadable", "A challenge arrived with rules this game cannot read, so it cannot be accepted. Both players should update the mod and try again."),
+                                                   false, true, Loc.Game("MainMenu/General/OK", "OK"), (Il2CppSystem.Action)null);
             }
             catch { }
         }

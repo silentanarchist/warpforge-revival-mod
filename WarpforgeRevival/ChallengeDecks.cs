@@ -17,8 +17,7 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class ChallengeDecks
     {
-        private const string Message = "Your deck for this challenge is a Custom Test deck, which cannot be used in a Classic match. " +
-                                       "Open Classic, pick one of your Classic decks, then try the challenge again.";
+        private static string Message => Loc.T("challenge.customTestDeck", "Your deck for this challenge is a Custom Test deck, which cannot be used in a Classic match. Open Classic, pick one of your Classic decks, then try the challenge again.");
 
         /// <summary>False (and a popup) when the deck the game would use for this challenge is a Custom Test deck.</summary>
         internal static bool DeckOk(IPlayEvent ev, string where)
@@ -30,7 +29,7 @@ namespace WarpforgeRevival
                 var deck = ev.GetEventDeck();
                 if ((object)deck == null || !LongGame.IsStoredLong(deck)) return true;
                 RevivalMod.Log.Warning($"[challenge] {where}: the deck for {ev.GetBaseData()?.eventId} is a Custom Test deck (\"{deck.deckName}\"); match not started");
-                try { WindowsManager.Instance?.ShowPopUp(Message, false, true, "OK", (Il2CppSystem.Action)null); } catch { }
+                try { WindowsManager.Instance?.ShowPopUp(Message, false, true, Loc.Game("MainMenu/General/OK", "OK"), (Il2CppSystem.Action)null); } catch { }
                 return false;
             }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] deck check: " + e.Message); return true; }

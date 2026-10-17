@@ -21,6 +21,8 @@ namespace WarpforgeRevival
     /// The language is the game's own (Settings > General > Language, I2's CurrentLanguageCode: en, es, ru, fr, de,
     /// pt-BR, it, ko, zh-CN, ja, pl, cs, tr). A text that has no translation yet is shown in English.
     /// {name} in a text is replaced by the value given for it; translators keep those words as they are.
+    /// Where the game already has the same text (its own translations of "Friends", mode names, rule names...), the
+    /// mod uses that through Loc.Game("Its/Term", "English") instead, so it matches the game and needs no translating.
     /// </summary>
     internal static class Loc
     {
@@ -80,6 +82,20 @@ namespace WarpforgeRevival
             var sb = new StringBuilder(text);
             foreach (var (name, value) in args) sb.Replace("{" + name + "}", value?.ToString() ?? "");
             return sb.ToString();
+        }
+
+        /// <summary>A text the game itself already has in every language (an I2 term such as "SocialMenu/Friends"):
+        /// the game's own translation, or the English given when the game has none. Main thread only (it asks the
+        /// game). These need no translating, so they are not in en.json.</summary>
+        internal static string Game(string term, string english)
+        {
+            try
+            {
+                var t = Il2CppI2.Loc.LocalizationManager.GetTranslation(term, true, 0, true, false, null, null, true);
+                if (!string.IsNullOrEmpty(t)) return t;
+            }
+            catch { }
+            return english;
         }
 
         private static string CachePath(string code) => Path.Combine(cacheDir ?? "", "mod-" + code + ".json");

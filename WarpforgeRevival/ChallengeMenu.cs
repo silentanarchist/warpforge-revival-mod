@@ -191,7 +191,7 @@ namespace WarpforgeRevival
             TestersPage.Box(area, "Back", new Color(0, 0, 0, 0.35f), 0, 0, 1, 1);
 
             // left: friends
-            TestersPage.Text(area, "FriendsTitle", "Challenge a friend", 34, TextAlignmentOptions.Left, Color.white, 0.02f, 0.9f, 0.34f, 0.99f);
+            TestersPage.Text(area, "FriendsTitle", Loc.T("challenge.title", "Challenge a friend"), 34, TextAlignmentOptions.Left, Color.white, 0.02f, 0.9f, 0.34f, 0.99f);
             var friends = Friends();
             int row = 0;
             foreach (var (id, name, state) in friends)
@@ -199,7 +199,7 @@ namespace WarpforgeRevival
                 if (row >= 11) break;
                 float top = 0.88f - row * 0.075f;
                 bool picked = id == friendId;
-                string hint = state == "online" ? "  (online)" : state == "playing" ? "  (in a match)" : "  (offline)";
+                string hint = "  (" + (state == "online" ? Loc.T("challenge.online", "online") : state == "playing" ? Loc.T("challenge.playing", "in a match") : Loc.Game("MainMenu/General/Offline", "Offline")) + ")";
                 var b = TestersPage.Button(area, "Friend_" + id, "", 0.02f, top - 0.065f, 0.34f, top, picked ? new Color(0.35f, 0.25f, 0.08f, 1f) : TestersPage.Tile);
                 TestersPage.Text(b.transform, "Name", name + hint, 24, TextAlignmentOptions.Left, state == "online" ? Color.white : TestersPage.Dim, 0.04f, 0, 0.98f, 1);
                 string fid = id, fname = name;
@@ -207,17 +207,17 @@ namespace WarpforgeRevival
                 row++;
             }
             if (friends.Count == 0)
-                TestersPage.Text(area, "NoFriends", "Add friends in the Friends tab first.", 24, TextAlignmentOptions.Left, TestersPage.Dim, 0.02f, 0.7f, 0.34f, 0.86f);
+                TestersPage.Text(area, "NoFriends", Loc.T("challenge.noFriends", "Add friends in the Friends tab first."), 24, TextAlignmentOptions.Left, TestersPage.Dim, 0.02f, 0.7f, 0.34f, 0.86f);
 
             // right: mode and rules
             float x0 = 0.38f, x1 = 0.98f;
-            TestersPage.Text(area, "ModeTitle", "Mode", 26, TextAlignmentOptions.Left, TestersPage.Dim, x0, 0.92f, 0.5f, 0.99f);
+            TestersPage.Text(area, "ModeTitle", Loc.T("challenge.mode", "Mode"), 26, TextAlignmentOptions.Left, TestersPage.Dim, x0, 0.92f, 0.5f, 0.99f);
             var prev = TestersPage.Button(area, "ModePrev", "<", 0.5f, 0.92f, 0.55f, 0.99f, TestersPage.Tile);
             TestersPage.Text(area, "Mode", ModeName(mode), 30, TextAlignmentOptions.Center, Color.white, 0.55f, 0.92f, 0.85f, 0.99f);
             var next = TestersPage.Button(area, "ModeNext", ">", 0.85f, 0.92f, 0.9f, 0.99f, TestersPage.Tile);
             TestersPage.OnClick(prev, () => { presetIndex = (presetIndex + presets.Count - 1) % presets.Count; values = null; dirty = true; });
             TestersPage.OnClick(next, () => { presetIndex = (presetIndex + 1) % presets.Count; values = null; dirty = true; });
-            TestersPage.Text(area, "DeckRules", ChallengeRules.DeckRules(ev, mode) + ". You play your deck for this mode.", 20, TextAlignmentOptions.Left, TestersPage.Dim, x0, 0.86f, x1, 0.92f);
+            TestersPage.Text(area, "DeckRules", ChallengeRules.DeckRules(ev, mode) + " " + Loc.T("challenge.yourDeck", "You play your deck for this mode."), 20, TextAlignmentOptions.Left, TestersPage.Dim, x0, 0.86f, x1, 0.92f);
 
             var preset = ChallengeRules.Preset(ev, mode);
             int r = 0;
@@ -227,7 +227,7 @@ namespace WarpforgeRevival
                 float top = 0.84f - r * rowH;
                 int v = values.Get(f.Key) ?? f.Min;
                 bool changed = preset.Get(f.Key) != v;
-                TestersPage.Text(area, "L_" + f.Key, f.Label, 21, TextAlignmentOptions.Left, changed ? new Color(1f, 0.85f, 0.45f, 1f) : Color.white, x0, top - rowH, 0.74f, top);
+                TestersPage.Text(area, "L_" + f.Key, f.Text(), 21, TextAlignmentOptions.Left, changed ? new Color(1f, 0.85f, 0.45f, 1f) : Color.white, x0, top - rowH, 0.74f, top);
                 TestersPage.Text(area, "V_" + f.Key, ChallengeRules.Show(f.Key, v), 22, TextAlignmentOptions.Center, Color.white, 0.8f, top - rowH, 0.9f, top);
                 var field = f;
                 // a button that would not change anything (at the lowest or highest value) is left out
@@ -245,9 +245,9 @@ namespace WarpforgeRevival
             }
 
             float by = 0.84f - r * rowH - 0.015f;
-            var reset = TestersPage.Button(area, "Reset", "Mode's own rules", x0, by - 0.075f, 0.62f, by, TestersPage.Tile);
+            var reset = TestersPage.Button(area, "Reset", Loc.T("challenge.reset", "Mode's own rules"), x0, by - 0.075f, 0.62f, by, TestersPage.Tile);
             TestersPage.OnClick(reset, () => { values = null; status = ""; dirty = true; });
-            var send = TestersPage.Button(area, "Send", friendId == null ? "Pick a friend" : "Challenge " + friendName, 0.64f, by - 0.075f, x1, by,
+            var send = TestersPage.Button(area, "Send", friendId == null ? Loc.T("challenge.pickFriend", "Pick a friend") : Loc.T("challenge.send", "Challenge {name}", ("name", friendName)), 0.64f, by - 0.075f, x1, by,
                                           friendId == null ? TestersPage.Tile : new Color(0.45f, 0.12f, 0.08f, 1f));
             TestersPage.OnClick(send, () => Send(mode, ev));
             if (!string.IsNullOrEmpty(status))
@@ -281,9 +281,9 @@ namespace WarpforgeRevival
         {
             try
             {
-                if (friendId == null) { status = "Pick a friend on the left first."; dirty = true; return; }
+                if (friendId == null) { status = Loc.T("challenge.pickFriendFirst", "Pick a friend on the left first."); dirty = true; return; }
                 var manager = UnityEngine.Object.FindObjectOfType<ChallengeManager>();
-                if ((object)manager == null) { status = "Challenges are not available right now."; dirty = true; return; }
+                if ((object)manager == null) { status = Loc.T("challenge.unavailable", "Challenges are not available right now."); dirty = true; return; }
                 var rules = new ChallengeRules.RuleSet { EventId = mode, Values = new Dictionary<string, int>(values.Values) };
                 ChallengeRules.Outgoing(friendId, rules);
                 // who goes first: the rules' choice (1 the challenger, 2 the friend), otherwise a coin toss as before;
@@ -292,10 +292,10 @@ namespace WarpforgeRevival
                 bool first = fp == 1 ? true : fp == 2 ? false : UnityEngine.Random.value < 0.5f;
                 RevivalMod.Log.Msg($"[challenge] challenging {friendId} in {mode}");
                 manager.StartChallengeWithUser(friendName ?? friendId, friendId, first, ev);
-                status = $"Challenge sent to {friendName}. They see your rules when it arrives.";
+                status = Loc.T("challenge.sent", "Challenge sent to {name}. They see your rules when it arrives.", ("name", friendName));
                 dirty = true;
             }
-            catch (Exception e) { status = "Could not send the challenge: " + e.Message; dirty = true; RevivalMod.Log.Warning("[challenge] send: " + e); }
+            catch (Exception e) { status = Loc.T("challenge.sendFailed", "Could not send the challenge: {error}", ("error", e.Message)); dirty = true; RevivalMod.Log.Warning("[challenge] send: " + e); }
         }
 
         private static List<(string id, string name, string state)> Friends()

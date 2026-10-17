@@ -93,7 +93,7 @@ namespace WarpforgeRevival
             // each copy goes where its original sits on the alliance page, measured from that page's corner: both
             // pages fill the same part of the Social window
             var arect = alliances.GetComponent<RectTransform>();
-            friendsButton = Copy(general, arect, hrt, Loc.T("friends.tabFriends", "Friends"));
+            friendsButton = Copy(general, arect, hrt, Loc.Game("SocialMenu/Friends", "Friends"));
             requestsButton = Copy(trophies, arect, hrt, Loc.T("friends.tabRequests", "Requests"));
             requestsLabel = requestsButton.GetComponentInChildren<TMP_Text>(true);
 
