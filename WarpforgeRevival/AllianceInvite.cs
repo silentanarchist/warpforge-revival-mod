@@ -125,7 +125,7 @@ namespace WarpforgeRevival
                 var me = (object)manager != null && manager.IsInGroup ? manager.CurrentPlayerData : null;
                 bool may = (object)me != null && (int)me.role >= 1;           // Moderator and up, as on the profile
                 holder.SetActive(false);
-                if (may) placeIn = 1;
+                if (may) placeIn = 5;
             }
             catch (Exception e) { RevivalMod.Log.Warning("[alliances] invite box: " + e.Message); }
         }
@@ -149,27 +149,42 @@ namespace WarpforgeRevival
                 if (!string.IsNullOrEmpty(s) && s.TrimStart().StartsWith("Members", StringComparison.OrdinalIgnoreCase)) { members = t; break; }
             }
             if ((object)members == null) { RevivalMod.Log.Warning("[alliances] invite box: no \"Members\" line on the alliance page"); return; }
-            holder.SetActive(true);
+            // the box goes on the "Members" line itself (as its child), in that line's own coordinates, to the right of
+            // where its words end; so it moves with the line and is drawn with it
             var mrt = members.rectTransform;
-            float scale = mrt.lossyScale.x == 0 ? 1f : mrt.lossyScale.x;
-            // where the words end (the line's box may be much wider than its text)
-            var b = members.textBounds;
-            var textEnd = mrt.TransformPoint(new Vector3(b.max.x, b.center.y, 0f));
-            var mc = Corners(mrt);
-            float midY = textEnd.y, gap = 40f * scale;
-
-            var boxRt = box.GetComponent<RectTransform>();
-            var btnRt = button.GetComponent<RectTransform>();
-            float h = Math.Max(48f, Math.Min(64f, (mc.top - mc.bottom) / scale + 8f));
-            boxRt.sizeDelta = new Vector2(380f, h);
-            btnRt.sizeDelta = new Vector2(170f, h);
-            PutLeftMid(boxRt, textEnd.x + gap, midY);
-            var bc = Corners(boxRt);
-            PutLeftMid(btnRt, bc.right + 16f * scale, midY);
-            var srt = status.rectTransform;
-            var sc0 = Corners(srt);
-            srt.position += new Vector3((bc.left) - sc0.left, (bc.bottom - 4f * scale) - sc0.top, 0f);
+            if (holder.transform.parent != mrt) holder.transform.SetParent(mrt, false);
+            holder.SetActive(true);
+            var hrt = holder.GetComponent<RectTransform>();
+            hrt.anchorMin = hrt.anchorMax = hrt.pivot = new Vector2(0.5f, 0.5f);
+            hrt.anchoredPosition = Vector2.zero;
+            hrt.localScale = Vector3.one;
+            hrt.localRotation = Quaternion.identity;
+            members.ForceMeshUpdate();
+            var r = mrt.rect;
+            float words = Math.Min(members.preferredWidth, r.width > 0 ? r.width : members.preferredWidth);
+            float end;
+            var align = members.horizontalAlignment;
+            if (align == HorizontalAlignmentOptions.Right) end = r.xMax;
+            else if (align == HorizontalAlignmentOptions.Center) end = r.center.x + words / 2f;
+            else end = r.xMin + words;
+            float x = end - r.center.x + 40f;                 // in the holder's coordinates (the line's centre)
+            float h = Math.Max(48f, Math.Min(64f, r.height + 8f));
+            Lay(box.GetComponent<RectTransform>(), new Vector2(380f, h), new Vector2(0f, 0.5f), new Vector2(x, 0f));
+            Lay(button.GetComponent<RectTransform>(), new Vector2(170f, h), new Vector2(0f, 0.5f), new Vector2(x + 396f, 0f));
+            Lay(status.rectTransform, new Vector2(700f, 34f), new Vector2(0f, 1f), new Vector2(x, -h / 2f - 4f));
+            if (!placedLogged)
+                RevivalMod.Log.Msg($"[alliances] invite box: \"{members.text}\" line {r.width:0}x{r.height:0}, words end at {end:0}, box at x {x:0}");
             if (!placedLogged) { placedLogged = true; RevivalMod.Log.Msg("[alliances] invite-by-friend-code box placed next to the members count"); }
+        }
+
+        private static void Lay(RectTransform rt, Vector2 size, Vector2 pivot, Vector2 at)
+        {
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = pivot;
+            rt.sizeDelta = size;
+            rt.localScale = Vector3.one;
+            rt.localRotation = Quaternion.identity;
+            rt.anchoredPosition = at;
         }
 
         private static void PutLeftMid(RectTransform rt, float left, float midY)
