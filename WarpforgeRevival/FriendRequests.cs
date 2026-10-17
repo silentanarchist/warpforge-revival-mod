@@ -35,7 +35,9 @@ namespace WarpforgeRevival
 
         private static FriendsTab tab;
         private static Toggle friendsButton, requestsButton;
-        private static TMP_Text requestsLabel, status;
+        private static TMP_Text requestsLabel, status, title;
+        private static string titleText;
+        private const float Shift = 100f;          // how far the add-friend box and the list move down for the buttons
         private static bool showingRequests, busy, hierarchyLogged;
         private static readonly List<GameObject> rows = new List<GameObject>();
 
@@ -94,6 +96,30 @@ namespace WarpforgeRevival
             friendsButton = Copy(general, arect, hrt, "Friends");
             requestsButton = Copy(trophies, arect, hrt, "Requests");
             requestsLabel = requestsButton.GetComponentInChildren<TMP_Text>(true);
+
+            // room for the buttons: the add-friend box and the list move down, and a gold line goes under the buttons
+            // (a copy of the list's own line), as on the alliance page
+            var panel = root.Find("Header/Find players panel")?.GetComponent<RectTransform>();
+            if ((object)panel != null) panel.anchoredPosition += new Vector2(0f, -Shift);
+            var list = root.Find("Friends List")?.GetComponent<RectTransform>();
+            if ((object)list != null) list.offsetMax += new Vector2(0f, -Shift);
+            var divisor = (object)list != null ? list.Find("Divisor line") : null;
+            if ((object)divisor != null)
+            {
+                var line = UnityEngine.Object.Instantiate(divisor.gameObject, hrt, false);
+                line.name = "Tabs line";
+                (line.GetComponent<LayoutElement>() ?? line.AddComponent<LayoutElement>()).ignoreLayout = true;
+                var lrt = line.GetComponent<RectTransform>();
+                var brt = friendsButton.GetComponent<RectTransform>();
+                float bottom = brt.anchoredPosition.y - brt.rect.height * brt.pivot.y * brt.localScale.y;
+                lrt.anchorMin = lrt.anchorMax = new Vector2(0.5f, 0.5f);
+                lrt.pivot = new Vector2(0.5f, 1f);
+                lrt.sizeDelta = new Vector2(root.rect.width - 40f, Math.Max(3f, divisor.GetComponent<RectTransform>().rect.height));
+                lrt.anchoredPosition = new Vector2(0f, bottom);
+            }
+            // "Your friends:" becomes "Your requests:" on the Requests page
+            title = (object)list != null ? list.Find("Friends Title")?.GetComponent<TMP_Text>() : null;
+            titleText = (object)title != null ? title.text : null;
             friendsButton.onValueChanged.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<bool>>(new Action<bool>(on => { if (on) ShowFriends(true); })));
             requestsButton.onValueChanged.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<bool>>(new Action<bool>(on => { if (on) ShowRequests(); })));
 
@@ -181,6 +207,7 @@ namespace WarpforgeRevival
         private static void ShowFriends(bool redraw)
         {
             showingRequests = false;
+            if ((object)title != null && Ui.Alive(title) && titleText != null) title.text = titleText;
             if ((object)friendsButton != null) friendsButton.SetIsOnWithoutNotify(true);
             if ((object)requestsButton != null) requestsButton.SetIsOnWithoutNotify(false);
             ClearRows();
@@ -191,6 +218,7 @@ namespace WarpforgeRevival
         private static void ShowRequests()
         {
             showingRequests = true;
+            if ((object)title != null && Ui.Alive(title)) Ui.SetText(title, "Your requests:");
             if ((object)friendsButton != null) friendsButton.SetIsOnWithoutNotify(false);
             if ((object)requestsButton != null) requestsButton.SetIsOnWithoutNotify(true);
             Refresh(friendsButton); Refresh(requestsButton);
