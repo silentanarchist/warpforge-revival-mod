@@ -120,6 +120,7 @@ namespace WarpforgeRevival
                     var buttonGo = UnityEngine.Object.Instantiate(source.toggle.gameObject, holder.transform, false);
                     buttonGo.name = "Challenge Tab Button";
                     foreach (var fc in buttonGo.GetComponents<FeatureChecker>()) UnityEngine.Object.DestroyImmediate(fc);
+                    MenuLayout.StripBadges(buttonGo);            // not the alliance invitations' count
                     buttonGo.SetActive(true);
                     buttonGo.transform.SetParent(source.toggle.transform.parent, false);
                     UnityEngine.Object.Destroy(holder);

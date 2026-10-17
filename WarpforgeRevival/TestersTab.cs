@@ -93,6 +93,7 @@ namespace WarpforgeRevival
             copy.name = Name;
             if (!hierarchyLogged) { hierarchyLogged = true; LogHierarchy(copy.transform, 0); }
 
+            MenuLayout.StripBadges(copy);                // not Social's notification count
             foreach (var c in copy.GetComponentsInChildren<OpenWindowButton>(true)) UnityEngine.Object.DestroyImmediate(c);
             foreach (var c in copy.GetComponentsInChildren<NavigationPanelToggle>(true)) UnityEngine.Object.DestroyImmediate(c);
             foreach (var c in copy.GetComponentsInChildren<Il2CppI2.Loc.Localize>(true)) c.enabled = false;

@@ -34,6 +34,25 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class MenuLayout
     {
+        /// <summary>
+        /// Takes the notification badges (the red count circles, UiBadgeNotification) off a copied button (0.13.70):
+        /// a copy keeps the badge of the button it was copied from and so showed that button's count (the
+        /// Challenge tab showed the alliance invitations; the Testers button showed Social's).
+        /// </summary>
+        internal static int StripBadges(GameObject root)
+        {
+            int n = 0;
+            if ((object)root == null) return 0;
+            foreach (var b in root.GetComponentsInChildren<UiBadgeNotification>(true))
+            {
+                if ((object)b == null) continue;
+                if (b.gameObject.Pointer == root.Pointer) UnityEngine.Object.DestroyImmediate(b);
+                else UnityEngine.Object.DestroyImmediate(b.gameObject);
+                n++;
+            }
+            return n;
+        }
+
         internal sealed class Button
         {
             public string Tab, Label, Icon, After;
