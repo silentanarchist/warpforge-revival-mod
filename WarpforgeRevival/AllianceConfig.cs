@@ -72,6 +72,17 @@ namespace WarpforgeRevival
         /// it also sets the player's member record, which is what IsInGroup checks), then let the tab's own Refresh
         /// open the right page: your alliance, or the real Join page with invitations and open alliances.
         /// </summary>
+        // 0.13.62: the fetch loop of 0.13.59-0.13.61. Every alliance answer that is not served from the game's cache
+        // makes AlliancesManager (its GetCurrentGroup callback) call WindowsManager.RefreshWindow<SocialMenuWindow>,
+        // which raises the window's "tab changed" event for Alliances again; TabOpened then asked again (fresh), and
+        // the next answer refreshed the window again: about 30 requests a second until the server's rate limit
+        // (the blank popup), with the page redrawn each time so Edit never stayed open. Now an opening that arrives
+        // while the mod's own request is still waiting is ignored, and within FreshFor seconds of the last answer the
+        // game's cached alliance is used (a cached answer does not refresh the window).
+        private static bool asking;
+        private static float askedAt = -1000f, answeredAt = -1000f;
+        private const float FreshFor = 30f;
+
         private static void TabOpened(WindowTabBase to)
         {
             try
@@ -79,10 +90,14 @@ namespace WarpforgeRevival
                 if ((object)to == null || ChallengeMenu.IsChallengeTab(to)) return;
                 var tab = to.TryCast<AlliancesTab>();
                 if ((object)tab == null) return;
+                if (asking && UnityEngine.Time.realtimeSinceStartup - askedAt < 10f) return;   // the game's window refresh after the mod's own request (no answer in 10 s: ask again)
                 var manager = SingletonBehaviour<AlliancesManager>.Instance;
                 if ((object)manager == null) { lastState = null; tab.Refresh(); return; }
+                bool fresh = UnityEngine.Time.realtimeSinceStartup - answeredAt > FreshFor;
                 var done = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<Group>>(new Action<Group>(group =>
                 {
+                    asking = false;
+                    if (fresh) answeredAt = UnityEngine.Time.realtimeSinceStartup;
                     try
                     {
                         if ((object)tab == null || tab.m_CachedPtr == IntPtr.Zero) return;
@@ -96,9 +111,12 @@ namespace WarpforgeRevival
                     }
                     catch (Exception e) { RevivalMod.Log.Warning("[alliances] opening the tab: " + e.Message); }
                 }));
-                manager.GetCurrentGroup(done, true);
+                asking = true;
+                askedAt = UnityEngine.Time.realtimeSinceStartup;
+                try { manager.GetCurrentGroup(done, fresh); }
+                catch { asking = false; throw; }
             }
-            catch (Exception e) { RevivalMod.Log.Warning("[alliances] opening the tab: " + e.Message); }
+            catch (Exception e) { asking = false; RevivalMod.Log.Warning("[alliances] opening the tab: " + e.Message); }
         }
 
         // ---------------------------------------------------------------- the refresh loop (0.13.60)
@@ -108,12 +126,9 @@ namespace WarpforgeRevival
 
         /// <summary>
         /// Whether the Alliances tab's Refresh should run (called from the hook ChallengeMenu already has on it, no new
-        /// hook). The game's own chain: the alliance page's set-up asks for the alliance (GetCurrentGroup), storing the
-        /// answer fires the "alliance updated" event, the tab (subscribed in its Start) runs Refresh, which sets the
-        /// page up again and asks again: on the revival server every answer is a fresh copy, so it never settled
-        /// (0.13.59: about 30 refreshes a second; the page was rebuilt before the edit button could be used). A
-        /// Refresh within 5 s of the last one, with nothing about the alliance changed, is skipped; joining, leaving,
-        /// edits and member changes still refresh.
+        /// hook). A Refresh within 5 s of the last one, with nothing about the alliance changed, is skipped; joining,
+        /// leaving, edits and member changes still refresh. (Added in 0.13.60 against the fetch loop; the loop's real
+        /// cause was TabOpened, fixed in 0.13.62, see there. Kept: it saves redrawing an unchanged page.)
         /// </summary>
         internal static bool ShouldRefresh()
         {
