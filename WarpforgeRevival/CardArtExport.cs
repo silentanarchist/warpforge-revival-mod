@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Il2Cpp;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -48,6 +50,15 @@ namespace WarpforgeRevival
         private static AsyncOperation unloading;
         private static readonly List<string> missing = new List<string>();
         private static ZipArchive zip;
+        // M-6 (0.13.74): the pictures are read back on the main thread (only the graphics card read needs it) and
+        // encoded (JPEG/PNG) and written to the zip by one background worker, so the game keeps drawing meanwhile
+        private static readonly object ZipGate = new object();
+        private static Task worker = Task.CompletedTask;
+        private static int pending;                    // pictures handed to the worker, not yet written
+        private static volatile Exception workerError;
+        private const int MaxPending = 4;              // the main thread waits when the worker is this far behind
+        private static Queue<(CardArmy army, CardTypeOptions type, string word, int tier)> frameJobs;
+        private static CardFramesSO frameList;
         private static string zipPath, partPath;
         private static Texture2D readback;
         private static Stopwatch clock;
@@ -75,6 +86,7 @@ namespace WarpforgeRevival
                 todo.Clear(); loading.Clear(); missing.Clear();
                 foreach (var a in cards) todo.Enqueue(a);
                 total = cards.Count; done = written = masks = frames = textTerms = textLanguages = 0;
+                worker = Task.CompletedTask; pending = 0; workerError = null; finishing = false; frameJobs = null;
                 anchor = null; anchorArmy = int.MinValue; unloading = null;
                 clock = Stopwatch.StartNew();
                 running = true;
@@ -118,8 +130,17 @@ namespace WarpforgeRevival
             var frameClock = Stopwatch.StartNew();
             try
             {
+                if (workerError != null) throw new Exception("writing a picture failed", workerError);
                 if ((object)unloading != null) { if (!unloading.isDone) return; unloading = null; }
-                while (frameClock.Elapsed.TotalMilliseconds < FrameBudgetMs)
+                if (finishing)
+                {
+                    // the frames, a few a frame; then, once the worker has written everything, the rest
+                    while (frameJobs != null && frameJobs.Count > 0 && pending < MaxPending && frameClock.Elapsed.TotalMilliseconds < FrameBudgetMs)
+                        FrameStep(frameJobs.Dequeue());
+                    if ((frameJobs == null || frameJobs.Count == 0) && Volatile.Read(ref pending) == 0) { worker.Wait(); Finish(); }
+                    return;
+                }
+                while (frameClock.Elapsed.TotalMilliseconds < FrameBudgetMs && Volatile.Read(ref pending) < MaxPending)
                 {
                     // keep a few pictures loading, one faction at a time (its art bundle stays loaded meanwhile)
                     while (loading.Count < InFlight && todo.Count > 0 && (loading.Count == 0 || todo.Peek().Army == loading[0].art.Army))
@@ -145,7 +166,7 @@ namespace WarpforgeRevival
                     done++;
                     if (done % 25 == 0 || done == total) Say($"Exporting card art... {done} / {total}");
                 }
-                if (loading.Count == 0 && todo.Count == 0) Finish();
+                if (loading.Count == 0 && todo.Count == 0) StartFinish();
             }
             catch (Exception e) { Fail(e); }
         }
@@ -200,32 +221,37 @@ namespace WarpforgeRevival
                 if ((object)anchor == null) anchor = load; else try { Addressables.Release(load); } catch { }
             }
 
-            var rgb = new byte[w * h * 3];
-            for (int i = 0, j = 0; i < rgb.Length; i += 3, j += 4) { rgb[i] = rgba[j]; rgb[i + 1] = rgba[j + 1]; rgb[i + 2] = rgba[j + 2]; }
-            byte[] jpg = ImageEncoders.Jpeg(rgb, w, h, compress ? 85 : 95);
+            bool wantMask = art.Cards.Exists(c => c.type == (int)CardTypeOptions.Minion || c.type == (int)CardTypeOptions.Hero);
+            bool small = compress;
+            Encode(() =>
+            {
+                var rgb = new byte[w * h * 3];
+                for (int i = 0, j = 0; i < rgb.Length; i += 3, j += 4) { rgb[i] = rgba[j]; rgb[i + 1] = rgba[j + 1]; rgb[i + 2] = rgba[j + 2]; }
+                byte[] jpg = ImageEncoders.Jpeg(rgb, w, h, small ? 85 : 95);
 
-            // troops and warlords: the art's see-through parts are drawn over the frame
-            byte[] mask = null;
-            if (art.Cards.Exists(c => c.type == (int)CardTypeOptions.Minion || c.type == (int)CardTypeOptions.Hero))
-            {
-                int mw = w / 2, mh = h / 2;
-                var la = new byte[mw * mh * 2];
-                bool clear = false;
-                for (int y = 0; y < mh; y++)
-                    for (int x = 0; x < mw; x++)
-                    {
-                        int s = ((y * 2) * w + x * 2) * 4 + 3, r = w * 4;
-                        int a = (rgba[s] + rgba[s + 4] + rgba[s + r] + rgba[s + r + 4] + 2) / 4;
-                        if (a < 250) clear = true;
-                        la[(y * mw + x) * 2] = 255; la[(y * mw + x) * 2 + 1] = (byte)a;
-                    }
-                if (clear) mask = ImageEncoders.Png(la, mw, mh, 2);
-            }
-            foreach (var c in art.Cards)
-            {
-                Put("card-art/" + c.id + ".jpg", jpg); written++;
-                if (mask != null && (c.type == (int)CardTypeOptions.Minion || c.type == (int)CardTypeOptions.Hero)) { Put("card-masks/" + c.id + ".png", mask); masks++; }
-            }
+                // troops and warlords: the art's see-through parts are drawn over the frame
+                byte[] mask = null;
+                if (wantMask)
+                {
+                    int mw = w / 2, mh = h / 2;
+                    var la = new byte[mw * mh * 2];
+                    bool clear = false;
+                    for (int y = 0; y < mh; y++)
+                        for (int x = 0; x < mw; x++)
+                        {
+                            int s = ((y * 2) * w + x * 2) * 4 + 3, r = w * 4;
+                            int a = (rgba[s] + rgba[s + 4] + rgba[s + r] + rgba[s + r + 4] + 2) / 4;
+                            if (a < 250) clear = true;
+                            la[(y * mw + x) * 2] = 255; la[(y * mw + x) * 2 + 1] = (byte)a;
+                        }
+                    if (clear) mask = ImageEncoders.Png(la, mw, mh, 2);
+                }
+                foreach (var c in art.Cards)
+                {
+                    Put("card-art/" + c.id + ".jpg", jpg); Interlocked.Increment(ref written);
+                    if (mask != null && (c.type == (int)CardTypeOptions.Minion || c.type == (int)CardTypeOptions.Hero)) { Put("card-masks/" + c.id + ".png", mask); Interlocked.Increment(ref masks); }
+                }
+            });
         }
 
         /// <summary>
@@ -289,49 +315,71 @@ namespace WarpforgeRevival
             }
         }
 
-        /// <summary>The faction frames, from the game's own frame list (loaded with the card screens).</summary>
+        /// <summary>The faction frames, from the game's own frame list (loaded with the card screens): listed here,
+        /// read a few at a time over the next frames (FrameStep) and encoded by the worker.</summary>
         private static void Frames()
         {
-            CardFramesSO so = null;
+            frameList = null;
+            frameJobs = new Queue<(CardArmy, CardTypeOptions, string, int)>();
             foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<CardFramesSO>()))
             {
-                so = o.TryCast<CardFramesSO>();
-                if ((object)so != null) break;
+                frameList = o.TryCast<CardFramesSO>();
+                if ((object)frameList != null) break;
             }
-            if ((object)so == null) { RevivalMod.Log.Warning("[art export] the game's frame list is not loaded: no frames written (open the Collection once and export again)"); return; }
+            if ((object)frameList == null) { RevivalMod.Log.Warning("[art export] the game's frame list is not loaded: no frames written (open the Collection once and export again)"); return; }
             foreach (CardArmy army in Enum.GetValues(typeof(CardArmy)))
             {
                 if (army == CardArmy.Neutral) continue;
                 foreach (var (type, word) in new[] { (CardTypeOptions.Minion, "troop"), (CardTypeOptions.Tactic, "stratagem") })
-                    for (int tier = 0; tier < 4; tier++)
-                    {
-                        try
-                        {
-                            var pair = so.GetClanFrame(army, (CardTier)tier, type);
-                            var sprite = pair.Item1;
-                            if (!Alive(sprite) || !Alive(sprite.texture)) { RevivalMod.Log.Warning($"[art export] frame {army} {word} {tier + 1} not loaded"); continue; }
-                            // the frame sprite is only the drawn part of its 1024 x 1024 texture; the site's frames are
-                            // a fixed part of the whole texture, so the whole texture is read
-                            var tex = sprite.texture;
-                            var r = new Rect(0, 0, tex.width, tex.height);
-                            float k = tex.width / 1024f;
-                            if (frames == 0) RevivalMod.Log.Msg($"[art export] first frame: texture {tex.width} x {tex.height}, sprite part {sprite.textureRect}");
-                            var crop = new RectInt((int)Math.Round(FrameX * k), (int)Math.Round(FrameTop * k), (int)Math.Round(FrameW * k), (int)Math.Round(FrameH * k));
-                            var rgba = Read(tex, r, 0, 0, crop);
-                            Put($"card-frames/{army}_{word}_{tier + 1}.png", ImageEncoders.Png(rgba, crop.width, crop.height, 4));
-                            frames++;
-                            try { so.ReleaseCardFrame(army, (CardTier)tier, type); } catch { }
-                        }
-                        catch (Exception e) { RevivalMod.Log.Warning($"[art export] frame {army} {word} {tier + 1}: {e.Message}"); }
-                    }
+                    for (int tier = 0; tier < 4; tier++) frameJobs.Enqueue((army, type, word, tier));
             }
+        }
+
+        private static void FrameStep((CardArmy army, CardTypeOptions type, string word, int tier) job)
+        {
+            var (army, type, word, tier) = job;
+            var so = frameList;
+            try
+            {
+                var pair = so.GetClanFrame(army, (CardTier)tier, type);
+                var sprite = pair.Item1;
+                if (!Alive(sprite) || !Alive(sprite.texture)) { RevivalMod.Log.Warning($"[art export] frame {army} {word} {tier + 1} not loaded"); return; }
+                // the frame sprite is only the drawn part of its 1024 x 1024 texture; the site's frames are
+                // a fixed part of the whole texture, so the whole texture is read
+                var tex = sprite.texture;
+                var r = new Rect(0, 0, tex.width, tex.height);
+                float k = tex.width / 1024f;
+                if (frames == 0 && pending == 0) RevivalMod.Log.Msg($"[art export] first frame: texture {tex.width} x {tex.height}, sprite part {sprite.textureRect}");
+                var crop = new RectInt((int)Math.Round(FrameX * k), (int)Math.Round(FrameTop * k), (int)Math.Round(FrameW * k), (int)Math.Round(FrameH * k));
+                var rgba = Read(tex, r, 0, 0, crop);
+                int cw = crop.width, ch = crop.height;
+                string name = $"card-frames/{army}_{word}_{tier + 1}.png";
+                Encode(() => { Put(name, ImageEncoders.Png(rgba, cw, ch, 4)); Interlocked.Increment(ref frames); });
+                try { so.ReleaseCardFrame(army, (CardTier)tier, type); } catch { }
+            }
+            catch (Exception e) { RevivalMod.Log.Warning($"[art export] frame {army} {word} {tier + 1}: {e.Message}"); }
         }
 
         private static void Put(string name, byte[] data)
         {
-            var entry = zip.CreateEntry(name, System.IO.Compression.CompressionLevel.NoCompression);       // pictures are packed already
-            using var s = entry.Open();
-            s.Write(data, 0, data.Length);
+            lock (ZipGate)
+            {
+                var entry = zip.CreateEntry(name, System.IO.Compression.CompressionLevel.NoCompression);       // pictures are packed already
+                using var s = entry.Open();
+                s.Write(data, 0, data.Length);
+            }
+        }
+
+        /// <summary>Hands one picture's encoding and writing to the background worker (one at a time, in order).</summary>
+        private static void Encode(Action job)
+        {
+            Interlocked.Increment(ref pending);
+            worker = worker.ContinueWith(_ =>
+            {
+                try { if (workerError == null) job(); }
+                catch (Exception e) { workerError ??= e; }
+                finally { Interlocked.Decrement(ref pending); }
+            }, TaskScheduler.Default);
         }
 
         // The game's text entries the site needs to show official cards: names, rules text (with the
@@ -398,11 +446,20 @@ namespace WarpforgeRevival
             RevivalMod.Log.Msg($"[art export] card text: {textTerms} entries in {textLanguages} languages ({mem.Length / 1024} KB)");
         }
 
-        private static void Finish()
+        private static bool finishing;
+
+        /// <summary>The pictures are all handed over: start on the frames (read over the next frames, see Tick).</summary>
+        private static void StartFinish()
         {
+            finishing = true;
             ReleaseAnchor();
             Say("Exporting card frames...");
             Frames();
+        }
+
+        private static void Finish()
+        {
+            finishing = false;
             Say("Exporting card text...");
             try { Texts(); }
             catch (Exception e) { RevivalMod.Log.Warning("[art export] card text: " + e.Message); }
@@ -434,7 +491,10 @@ namespace WarpforgeRevival
             running = false;
             try { ReleaseAnchor(); foreach (var l in loading) try { Addressables.Release(l.load); } catch { } } catch { }
             loading.Clear(); todo.Clear();
-            try { zip?.Dispose(); } catch { }
+            finishing = false; frameJobs = null;
+            workerError ??= new OperationCanceledException();          // the worker skips what is left
+            try { worker.Wait(TimeSpan.FromSeconds(30)); } catch { }
+            try { lock (ZipGate) zip?.Dispose(); } catch { }
             zip = null;
             try { if (partPath != null && File.Exists(partPath)) File.Delete(partPath); } catch { }
             Say("Card art export failed (see the log)");

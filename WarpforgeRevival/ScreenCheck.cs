@@ -286,9 +286,12 @@ namespace WarpforgeRevival
                 int lit = 0;
                 float max = 0f;
                 for (int y = 0; y < SmallH; y++)
+                {
+                    // one sampled row read at a time (M-27, 0.13.74: was one GetPixel call per sampled pixel)
+                    var row = full.GetPixels(0, y * h / SmallH, w, 1);
                     for (int x = 0; x < SmallW; x++)
                     {
-                        var c = full.GetPixel(x * w / SmallW, y * h / SmallH);
+                        var c = row[x * w / SmallW];
                         int o = 54 + y * rowBytes + x * 3;     // BMP rows run bottom-up, like the texture's
                         bmp[o] = (byte)(Mathf.Clamp01(c.b) * 255f);
                         bmp[o + 1] = (byte)(Mathf.Clamp01(c.g) * 255f);
@@ -298,6 +301,7 @@ namespace WarpforgeRevival
                         if (l > 0.08f) lit++;
                         if (l > max) max = l;
                     }
+                }
                 string saved = "";
                 try
                 {

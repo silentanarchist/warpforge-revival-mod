@@ -20,9 +20,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.13.73-a";
+        public const string Version = "0.13.74-a";
 #else
-        public const string Version = "0.13.73-w";
+        public const string Version = "0.13.74-w";
 #endif
 
         /// <summary>
@@ -128,9 +128,7 @@ namespace WarpforgeRevival
                         FileHash = Convert.ToHexString(sha.ComputeHash(System.IO.File.ReadAllBytes(file))).ToLowerInvariant();
             }
             catch (Exception e) { Log.Warning("[mods] could not read this mod's own file: " + e.Message); }
-#if !ANDROID_PORT   // Windows only
             try { Updater.LoadedFrom = MelonAssembly.Location ?? ""; } catch { }
-#endif
             Log.Msg($"Warpforge Revival {Version} - server: {Config.ServerUrl}" + (Config.Secure ? " (encrypted)" : " (not encrypted)"));
 
             string dataDir = Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival");
@@ -152,12 +150,7 @@ namespace WarpforgeRevival
             ServerSettings.Start(Config.ServerUrl);
             CardText.Start(Config.ServerUrl);
             GlobalChat.Start(Config.ServerUrl);
-#if ANDROID_PORT
-            try { AndroidUpdater.LoadedFrom = MelonAssembly.Location ?? ""; } catch { }
-            AndroidUpdater.Start(Config.ServerUrl);
-#else
             Updater.Start(Config.ServerUrl, dataDir);
-#endif
 
             if (Config.DiagnosticLogging)
                 Diagnostics.Install(HarmonyInstance);
@@ -185,21 +178,13 @@ namespace WarpforgeRevival
         /// </summary>
         internal static System.Threading.Tasks.Task<bool> UpdateForServer()
         {
-#if ANDROID_PORT
-            return AndroidUpdater.UpdateNow();
-#else
             return Updater.UpdateNow();
-#endif
         }
 
         /// <summary>Settings > Mod > Check for updates: what to show, or null when an update has started.</summary>
         internal static System.Threading.Tasks.Task<string> CheckForUpdates()
         {
-#if ANDROID_PORT
-            return AndroidUpdater.CheckNow();
-#else
             return Updater.CheckNow();
-#endif
         }
 
         public override void OnGUI()

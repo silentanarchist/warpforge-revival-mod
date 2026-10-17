@@ -83,7 +83,11 @@ namespace WarpforgeRevival
             {
                 try
                 {
-                    // The port may come from the server's settings; give a slow answer a moment.
+                    // The port may come from the server's settings; give a slow answer a moment. The settings
+                    // and the route below share one limit of 10 s (M-13: up to 3 + 10 s before), with at least 5 s for the
+                    // route (an unanswered route means an unencrypted connection); both are normally known already,
+                    // asked for at sign-in
+                    var started = System.Diagnostics.Stopwatch.StartNew();
                     for (int i = 0; i < 30 && !ServerSettings.Loaded; i++) System.Threading.Thread.Sleep(100);
                     if (!Address(out string host, out int port))
                     {
@@ -91,7 +95,8 @@ namespace WarpforgeRevival
                         return false;
                     }
                     string server = host + ":" + port;
-                    MatchTunnel.Route(ref host, ref port, TimeSpan.FromSeconds(10));
+                    var left = TimeSpan.FromSeconds(10) - started.Elapsed;
+                    MatchTunnel.Route(ref host, ref port, left > TimeSpan.FromSeconds(5) ? left : TimeSpan.FromSeconds(5));
                     var data = __instance.playerData;
                     string version = (object)data != null ? data.gameVersionWithEnviromentAndBundles : PhotonNetwork.gameVersion;
                     // Anything in the game that reconnects from its saved settings lands here too.

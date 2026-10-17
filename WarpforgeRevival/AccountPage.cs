@@ -110,6 +110,10 @@ namespace WarpforgeRevival
         {
             StatusWithRetry(1);
             ProfileStats.Prefetch();       // your own record, ready before your profile is opened
+            // M-13 (0.13.74): what the first match connection needs is asked for now, in the background, so the
+            // first match normally has nothing to wait for (settings, the encrypted route, the match ticket)
+            try { ServerSettings.Refresh(); MatchTunnel.Probe(); MatchTicket.Refresh(); }
+            catch (Exception e) { RevivalMod.Log.Warning("[match] getting ready for matches: " + e.Message); }
         }
 
         // The answer decides whether this player sees tester-only things (the Testers button). Asked while the
