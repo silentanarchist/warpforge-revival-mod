@@ -48,25 +48,6 @@ namespace WarpforgeRevival
             return localId;
         }
 
-        /// <summary>
-        /// A game login file downloaded from the Revival site (profile page) signs the game in as the
-        /// game account linked to that site account, with or without Steam. Returns its contents, or
-        /// null when there is no such file. While the file is present it always wins.
-        /// </summary>
-        private static string GameLoginFile()
-        {
-            try
-            {
-                string file = Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival", "game-login.txt");
-                if (!File.Exists(file)) return null;
-                string text = File.ReadAllText(file).Trim();
-                if (text.StartsWith("wfr-login-") && text.Length > 40 && text.Length < 200) return text;
-                RevivalMod.Log.Warning("[steam] game-login.txt is not a game login file from the site - ignored");
-            }
-            catch (Exception e) { RevivalMod.Log.Warning("[steam] could not read game-login.txt: " + e.Message); }
-            return null;
-        }
-
         private static void Announce()
         {
             if (announced) return;
@@ -180,7 +161,9 @@ namespace WarpforgeRevival
         {
             private static bool Prefix(ref string __result)
             {
-                string file = GameLoginFile();
+                // a game login file from the site (profile page) or the game's own sign-in window signs the game
+                // in as the linked game account, with or without Steam; while it is present it always wins
+                string file = GameSignIn.Token();
                 if (file != null)
                 {
                     __result = file;

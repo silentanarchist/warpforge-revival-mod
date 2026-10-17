@@ -34,14 +34,6 @@ namespace WarpforgeRevival
             return false;
         }
 
-        private static void SetText(TMP_Text label, string text)
-        {
-            if ((object)label == null) return;
-            var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
-            if ((object)loc != null) loc.enabled = false;        // otherwise the original wording comes back
-            label.text = text;
-        }
-
         /// <summary>
         /// Hides something for good. The window switches its rows back on when the tab opens, so
         /// switching the object off is not enough: everything it draws is turned off as well, which
@@ -113,13 +105,13 @@ namespace WarpforgeRevival
                 bool isIntro = (object)intro != null && label.Pointer == intro.Pointer;
                 seen.Add($"{label.name}='{label.text}'" + (inFaq ? " [button]" : isIntro ? " [intro]" : "")
                     + (label.gameObject.activeInHierarchy ? "" : " (not shown)"));
-                if (inFaq) { SetText(label, ButtonText); continue; }
-                if (isIntro) { SetText(label, Intro); continue; }
+                if (inFaq) { Ui.SetText(label, ButtonText); continue; }
+                if (isIntro) { Ui.SetText(label, Intro); continue; }
                 if ((object)title == null && (object)label.GetComponentInParent<EverguildButton>() == null)
                 {
                     title = label;
                     oldTitle = label.text;
-                    SetText(label, TabName);
+                    Ui.SetText(label, TabName);
                     continue;
                 }
                 Hide(label);
@@ -178,7 +170,7 @@ namespace WarpforgeRevival
                     var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
                     bool same = label.text == oldTitle || ((object)loc != null && !string.IsNullOrEmpty(term) && loc.mTerm == term);
                     if (!same) continue;
-                    SetText(label, TabName);
+                    Ui.SetText(label, TabName);
                     renamed++;
                 }
             }
@@ -212,14 +204,10 @@ namespace WarpforgeRevival
             if ((object)parent == null) return;
             var old = parent.Find(CheckName);
             if ((object)old != null) { check = old; return; }        // set up already (the page was set up again)
-            var go = UnityEngine.Object.Instantiate(faq.gameObject, parent, false);
-            go.name = CheckName;
+            var go = CopyButton(faq, parent, CheckName, CheckText, OnCheck, "update", out checkLabel);
+            if ((object)go == null) return;
             check = go.transform;
             check.SetSiblingIndex(faqT.GetSiblingIndex() + 1);
-            // the copy must not open the website: its UrlButton goes (its click handler was added in
-            // code by the game, so the copy never had it), and the button gets the check instead
-            var url = go.GetComponent<UrlButton>();
-            if ((object)url != null) UnityEngine.Object.DestroyImmediate(url);
             // no layout group to stack them: put the copy below by hand
             if ((object)parent.GetComponent<UnityEngine.UI.LayoutGroup>() == null)
             {
@@ -227,17 +215,12 @@ namespace WarpforgeRevival
                 var src = faqT.Cast<RectTransform>();
                 rt.anchoredPosition = src.anchoredPosition - new Vector2(0f, src.rect.height + 24f);
             }
-            checkLabel = go.GetComponentInChildren<TMP_Text>(true);
-            SetText(checkLabel, CheckText);
-            var button = go.GetComponent<UnityEngine.UI.Button>() ?? go.GetComponentInChildren<UnityEngine.UI.Button>(true);
-            if ((object)button == null) { RevivalMod.Log.Warning("[support] the update button has no button to click"); return; }
-            button.onClick.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(OnCheck)));
             RevivalMod.Log.Msg("[support] Check for updates button added" + ((object)parent.GetComponent<UnityEngine.UI.LayoutGroup>() == null ? " (placed by hand)" : ""));
         }
 
         private static void Label(string text)
         {
-            try { if ((object)checkLabel != null && checkLabel.Pointer != IntPtr.Zero) SetText(checkLabel, text); } catch { }
+            try { if ((object)checkLabel != null && checkLabel.Pointer != IntPtr.Zero) Ui.SetText(checkLabel, text); } catch { }
         }
 
         private static void OnCheck()
@@ -274,22 +257,16 @@ namespace WarpforgeRevival
             if ((object)parent == null || (object)check == null) return;
             var old = parent.Find(ReportName);
             if ((object)old != null) { report = old; return; }
-            var go = UnityEngine.Object.Instantiate(faq.gameObject, parent, false);
-            go.name = ReportName;
+            var go = CopyButton(faq, parent, ReportName, "Report a bug", BugReport.Request, "report", out _);
+            if ((object)go == null) return;
             report = go.transform;
             report.SetSiblingIndex(check.GetSiblingIndex() + 1);
-            var url = go.GetComponent<UrlButton>();
-            if ((object)url != null) UnityEngine.Object.DestroyImmediate(url);
             if ((object)parent.GetComponent<UnityEngine.UI.LayoutGroup>() == null)
             {
                 var rt = report.Cast<RectTransform>();
                 var src = check.Cast<RectTransform>();
                 rt.anchoredPosition = src.anchoredPosition - new Vector2(0f, src.rect.height + 24f);
             }
-            SetText(go.GetComponentInChildren<TMP_Text>(true), "Report a bug");
-            var button = go.GetComponent<UnityEngine.UI.Button>() ?? go.GetComponentInChildren<UnityEngine.UI.Button>(true);
-            if ((object)button == null) { RevivalMod.Log.Warning("[support] the report button has no button to click"); return; }
-            button.onClick.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(BugReport.Request)));
             report.gameObject.SetActive(AccountPage.IsTester);
         }
 
@@ -305,24 +282,17 @@ namespace WarpforgeRevival
             if ((object)parent == null || (object)check == null) return;
             var old = parent.Find(ExportName);
             if ((object)old != null) { export = old; exportLabel = old.GetComponentInChildren<TMP_Text>(true); return; }
-            var go = UnityEngine.Object.Instantiate(faq.gameObject, parent, false);
-            go.name = ExportName;
+            var go = CopyButton(faq, parent, ExportName, CardArtExport.Running ? "Exporting card art..." : ExportText, OnExport, "export", out exportLabel);
+            if ((object)go == null) return;
             export = go.transform;
             var after = (object)report != null && report.Pointer != IntPtr.Zero ? report : check;
             export.SetSiblingIndex(after.GetSiblingIndex() + 1);
-            var url = go.GetComponent<UrlButton>();
-            if ((object)url != null) UnityEngine.Object.DestroyImmediate(url);
             if ((object)parent.GetComponent<UnityEngine.UI.LayoutGroup>() == null)
             {
                 var rt = export.Cast<RectTransform>();
                 var src = check.Cast<RectTransform>();
                 rt.anchoredPosition = src.anchoredPosition - new Vector2(0f, 2f * (src.rect.height + 24f));
             }
-            exportLabel = go.GetComponentInChildren<TMP_Text>(true);
-            SetText(exportLabel, CardArtExport.Running ? "Exporting card art..." : ExportText);
-            var button = go.GetComponent<UnityEngine.UI.Button>() ?? go.GetComponentInChildren<UnityEngine.UI.Button>(true);
-            if ((object)button == null) { RevivalMod.Log.Warning("[support] the export button has no button to click"); return; }
-            button.onClick.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(OnExport)));
         }
 
         // ---- Watch a replay code (0.13.37): the first button of a second column, right of the website
@@ -340,28 +310,21 @@ namespace WarpforgeRevival
             if ((object)parent == null) return;
             var old = parent.Find(WatchName);
             if ((object)old != null) { watch = old; watchLabel = old.GetComponentInChildren<TMP_Text>(true); return; }
-            var go = UnityEngine.Object.Instantiate(faq.gameObject, parent, false);
-            go.name = WatchName;
-            watch = go.transform;
-            var url = go.GetComponent<UrlButton>();
-            if ((object)url != null) UnityEngine.Object.DestroyImmediate(url);
-            var le = go.GetComponent<UnityEngine.UI.LayoutElement>() ?? go.AddComponent<UnityEngine.UI.LayoutElement>();
-            le.ignoreLayout = true;                     // not stacked with the first column
-            watchLabel = go.GetComponentInChildren<TMP_Text>(true);
-            SetText(watchLabel, WatchText);
-            var button = go.GetComponent<UnityEngine.UI.Button>() ?? go.GetComponentInChildren<UnityEngine.UI.Button>(true);
-            if ((object)button == null) { RevivalMod.Log.Warning("[support] the watch button has no button to click"); return; }
-            button.onClick.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() =>
+            var go = CopyButton(faq, parent, WatchName, WatchText, () =>
             {
                 ReplayCodes.WatchStatus = text => { WatchLabel(string.IsNullOrEmpty(text) ? WatchText : text); watchResetAt = Time.realtimeSinceStartup + 4f; };
                 ReplayCodes.WatchFromClipboard();
-            })));
+            }, "watch", out watchLabel);
+            if ((object)go == null) return;
+            watch = go.transform;
+            var le = go.GetComponent<UnityEngine.UI.LayoutElement>() ?? go.AddComponent<UnityEngine.UI.LayoutElement>();
+            le.ignoreLayout = true;                     // not stacked with the first column
             PlaceWatch(faqT);
         }
 
         private static void WatchLabel(string text)
         {
-            try { if ((object)watchLabel != null && watchLabel.Pointer != IntPtr.Zero) SetText(watchLabel, text); } catch { }
+            try { if ((object)watchLabel != null && watchLabel.Pointer != IntPtr.Zero) Ui.SetText(watchLabel, text); } catch { }
         }
 
         /// <summary>Same row as the website button, one button's width plus a gap to its right.</summary>
@@ -388,7 +351,7 @@ namespace WarpforgeRevival
             RevivalMod.Log.Msg("[support] Export card art pressed, Compress Card Art " + (compressArt ? "on" : "off"));
             CardArtExport.Start(text =>
             {
-                try { if ((object)exportLabel != null && exportLabel.Pointer != IntPtr.Zero) SetText(exportLabel, text); } catch { }
+                try { if ((object)exportLabel != null && exportLabel.Pointer != IntPtr.Zero) Ui.SetText(exportLabel, text); } catch { }
             }, compressArt);
         }
 
@@ -575,6 +538,26 @@ namespace WarpforgeRevival
                 try { Apply(__instance); }
                 catch (Exception e) { RevivalMod.Log.Warning("[support] " + e.Message); }
             }
+        }
+
+        /// <summary>
+        /// A copy of the page's website button for one of the mod's own buttons (0.13.75: one routine for the four,
+        /// code review M-27): named, its website link removed (the game added the link's click in code, so the copy
+        /// never has it; its UrlButton goes too), its text set, and <paramref name="click"/> as its click. Null when
+        /// the copy has no button to click (logged).
+        /// </summary>
+        private static GameObject CopyButton(Component faq, Transform parent, string name, string text, Action click, string what, out TMP_Text label)
+        {
+            var go = UnityEngine.Object.Instantiate(faq.gameObject, parent, false);
+            go.name = name;
+            var url = go.GetComponent<UrlButton>();
+            if ((object)url != null) UnityEngine.Object.DestroyImmediate(url);
+            label = go.GetComponentInChildren<TMP_Text>(true);
+            Ui.SetText(label, text);
+            var button = go.GetComponent<UnityEngine.UI.Button>() ?? go.GetComponentInChildren<UnityEngine.UI.Button>(true);
+            if ((object)button == null) { RevivalMod.Log.Warning($"[support] the {what} button has no button to click"); return null; }
+            button.onClick.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(click)));
+            return go;
         }
     }
 }

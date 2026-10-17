@@ -42,7 +42,7 @@ namespace WarpforgeRevival
         public static void Pump()
         {
             int n = 0;
-            while (n++ < 32 && MainThread.TryDequeue(out var a))
+            while (n++ < 128 && MainThread.TryDequeue(out var a))
             {
                 try { a(); }
                 catch (Exception e) { RevivalMod.Log.Error("[playfab] callback failed: " + e); }
@@ -132,8 +132,8 @@ namespace WarpforgeRevival
                         {
                             if (RevivalMod.Config.DiagnosticLogging)
                                 RevivalMod.Log.Msg($"[playfab] <- {endpoint} ({body.Length} bytes)");
-#if ANDROID_TEST
-                            // test build: show what the server answered when it is short (errors are short)
+#if ANDROID_PORT
+                            // phones: show what the server answered when it is short (errors are short)
                             if (body.Length < 600) RevivalMod.Log.Msg("[playfab]    " + body);
 #endif
                             DraftPacks.Watch(body);
@@ -183,6 +183,13 @@ namespace WarpforgeRevival
             }
         }
 
+        private static string Why(Exception e)
+        {
+            string why = e.GetType().Name + ": " + e.Message;
+            for (var inner = e.InnerException; inner != null; inner = inner.InnerException) why += " <- " + inner.Message;
+            return why;
+        }
+
         /// <summary>Sends one API call: (reply body, null) or (null, why it failed).</summary>
         private static async Task<(string, string)> Send(string url, byte[] payload, List<KeyValuePair<string, string>> headers, string endpoint)
         {
@@ -190,10 +197,15 @@ namespace WarpforgeRevival
             // Both tries of one request carry the same id: when the first did reach the server after
             // all, the server answers the second with the first one's answer instead of doing it twice.
             string requestId = Guid.NewGuid().ToString("N");
-#if ANDROID_TEST
-            // test build: one more try when the connection itself fails, and the full reason in the log
+            // A connection that the server or the network closed while it sat unused fails the moment
+            // it is used, before the request reaches the server. That one failure (or a try that timed out)
+            // is tried once more on a new connection: both tries carry the same request id, so if the first
+            // did reach the server it is not carried out twice. Anything after that is reported as it is.
+            // (One loop for PC and Android since 0.13.75, code review M-23; Android also retried timeouts, PC
+            // only failed connections, and their logging differed.)
             for (int attempt = 1; attempt <= 2 && body == null; attempt++)
             {
+                var started = System.Diagnostics.Stopwatch.StartNew();
                 try
                 {
                     using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = new ByteArrayContent(payload) };
@@ -214,59 +226,18 @@ namespace WarpforgeRevival
                         if (attempt == 1) await Task.Delay(1000);
                     }
                 }
-                catch (Exception e)
+                catch (Exception e) when (attempt == 1 && (e is HttpRequestException || e is TaskCanceledException))
                 {
-                    string why = e.GetType().Name + ": " + e.Message;
-                    for (var inner = e.InnerException; inner != null; inner = inner.InnerException)
-                        why += " <- " + inner.GetType().Name + ": " + inner.Message;
-                    error = $"Revival server unreachable ({why})";
-                    RevivalMod.Log.Warning($"[playfab] {endpoint} attempt {attempt} failed: {why}");
-                }
-            }
-#else
-            // A connection that the server or the network closed while it sat unused fails the moment
-            // it is used, before the request reaches the server. That one failure is tried once more
-            // on a new connection; anything slower is a real problem and is reported as it is.
-            for (int attempt = 1; attempt <= 2 && body == null; attempt++)
-            {
-                var started = System.Diagnostics.Stopwatch.StartNew();
-                try
-                {
-                    using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = new ByteArrayContent(payload) };
-                    msg.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
-                    msg.Headers.TryAddWithoutValidation("X-Revival-Request", requestId);
-                    foreach (var h in headers)
-                        if (!h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
-                            msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
-                    using var resp = await Http.SendAsync(msg);
-                    body = await resp.Content.ReadAsStringAsync();
-                    error = null;
-                    if ((int)resp.StatusCode >= 500 && string.IsNullOrEmpty(body))
-                    {
-                        // the server turned the connection away before reading it (too busy): try once more
-                        RevivalMod.Log.Warning($"[playfab] {endpoint}: the server answered {(int)resp.StatusCode} with no reply" + (attempt == 1 ? "; trying again" : ""));
-                        if (attempt == 1) { body = null; error = $"Revival server busy ({(int)resp.StatusCode})"; await Task.Delay(1000); }
-                        else { body = null; error = $"Revival server busy ({(int)resp.StatusCode})"; }
-                    }
-                }
-                catch (HttpRequestException e) when (attempt == 1)
-                {
-                    // The connection failed (closed while unused, refused, or cut off) rather than the
-                    // server answering. Tried once more on a new connection: both tries carry the same
-                    // request id, so if the first did reach the server it is not carried out twice.
                     error = $"Revival server unreachable ({e.GetType().Name}: {e.Message})";
-                    string why = e.Message;
-                    for (var inner = e.InnerException; inner != null; inner = inner.InnerException) why += " <- " + inner.Message;
-                    RevivalMod.Log.Msg($"[playfab] {endpoint}: the connection failed after {started.ElapsedMilliseconds} ms ({why}); trying again");
+                    RevivalMod.Log.Msg($"[playfab] {endpoint}: the connection failed after {started.ElapsedMilliseconds} ms ({Why(e)}); trying again");
                     if (started.ElapsedMilliseconds >= 1000) await Task.Delay(500);
                 }
                 catch (Exception e)
                 {
-                    error = $"Revival server unreachable ({e.GetType().Name}: {e.Message})";
+                    error = $"Revival server unreachable ({Why(e)})";
                     break;
                 }
             }
-#endif
             return (body, error);
         }
 

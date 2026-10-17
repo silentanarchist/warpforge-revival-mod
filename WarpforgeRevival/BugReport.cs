@@ -541,7 +541,7 @@ namespace WarpforgeRevival
         }
 
         // ------------------------------------------------------------------ sending
-        private static readonly HttpClient Http = Net.Client(TimeSpan.FromSeconds(60));
+        private static readonly TimeSpan BugTimeout = TimeSpan.FromSeconds(60);
 
         private static string Body(Draft d)
         {
@@ -588,23 +588,12 @@ namespace WarpforgeRevival
         /// <summary>(id, url, null) on success; (null, null, message) on failure, with keep = true when it should be kept as a draft.</summary>
         private static async Task<(string id, string url, string error, bool keep)> Post(string body)
         {
-            try
-            {
-                using var msg = new HttpRequestMessage(HttpMethod.Post, RevivalMod.Config.ServerUrl + "/playfab/Revival/BugSubmit")
-                { Content = new StringContent(body, Encoding.UTF8, "application/json") };
-                string ticket = PlayFabTransport.SessionTicket;
-                if (!string.IsNullOrEmpty(ticket)) msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
-                msg.Headers.TryAddWithoutValidation("X-Revival-Mod", RevivalMod.Version);
-                using var reply = await Http.SendAsync(msg);
-                string text = await reply.Content.ReadAsStringAsync();
-                using var doc = JsonDocument.Parse(text);
-                var root = doc.RootElement;
-                if (reply.IsSuccessStatusCode && root.TryGetProperty("data", out var data) && data.TryGetProperty("id", out var id))
-                    return (id.GetString(), data.TryGetProperty("url", out var u) ? u.GetString() : "", null, false);
-                string why = root.TryGetProperty("errorMessage", out var em) ? em.GetString() : "the server answered " + (int)reply.StatusCode;
-                return (null, null, why, (int)reply.StatusCode >= 500 || (int)reply.StatusCode == 429);
-            }
-            catch (Exception e) { return (null, null, "could not reach the server (" + e.GetType().Name + ")", true); }
+            var reply = await Net.PostJson("/playfab/Revival/BugSubmit", body, BugTimeout,
+                new[] { new KeyValuePair<string, string>("X-Revival-Mod", RevivalMod.Version) });
+            if (reply.Ok && reply.Data.ValueKind == JsonValueKind.Object && reply.Data.TryGetProperty("id", out var id))
+                return (id.GetString(), reply.Data.TryGetProperty("url", out var u) ? u.GetString() : "", null, false);
+            if (reply.Unreachable) return (null, null, "could not reach the server", true);
+            return (null, null, reply.Error, reply.Status >= 500 || reply.Status == 429);
         }
 
         private static void KeepDraft(string body)
@@ -692,24 +681,20 @@ namespace WarpforgeRevival
             private static float sc = 1f;
             private static Rect R(float x, float y, float w, float h) => new Rect(x * sc, y * sc, w * sc, h * sc);
 
-            private static Texture2D Solid(Color c)
-            {
-                var t = new Texture2D(1, 1); t.SetPixel(0, 0, c); t.Apply(); t.hideFlags = HideFlags.HideAndDontSave; return t;
-            }
 
             private static void Styles()
             {
                 if (box == null)
                 {
-                    shade = Solid(new Color(0f, 0f, 0f, 0.6f));
-                    panel = Solid(new Color(0.05f, 0.11f, 0.09f, 0.97f));
+                    shade = Ui.Solid(new Color(0f, 0f, 0f, 0.6f));
+                    panel = Ui.Solid(new Color(0.05f, 0.11f, 0.09f, 0.97f));
                     box = new GUIStyle(GUI.skin.box); box.normal.background = panel;
                     label = new GUIStyle(GUI.skin.label) { wordWrap = true }; label.normal.textColor = new Color(0.85f, 0.95f, 0.9f);
                     small = new GUIStyle(label); small.normal.textColor = new Color(0.6f, 0.75f, 0.7f);
                     field = new GUIStyle(GUI.skin.textField);
                     button = new GUIStyle(GUI.skin.button);
                 }
-                sc = Mathf.Max(0.5f, Mathf.Min(Screen.width / 1280f, Screen.height / 720f));
+                sc = Ui.GuiScale();
                 label.fontSize = Mathf.RoundToInt(20 * sc); small.fontSize = Mathf.RoundToInt(15 * sc);
                 field.fontSize = Mathf.RoundToInt(20 * sc); button.fontSize = Mathf.RoundToInt(18 * sc);
             }
@@ -737,7 +722,7 @@ namespace WarpforgeRevival
                 {
                     GUI.Label(R(cx, cy, cw, 120), status, label); cy += 130;
                     if (!string.IsNullOrEmpty(sentUrl) && GUI.Button(R(cx, cy, 300, 46), "Open on the website", button))
-                        try { OpenUrl(sentUrl); } catch (Exception e) { status += "\n" + sentUrl; RevivalMod.Log.Warning("[bugs] could not open the browser: " + e.Message); }
+                        try { Ui.OpenUrl(sentUrl); } catch (Exception e) { status += "\n" + sentUrl; RevivalMod.Log.Warning("[bugs] could not open the browser: " + e.Message); }
                     if (GUI.Button(R(cx + cw - 160, cy, 160, 46), "Close", button)) Hide();
                     return;
                 }
@@ -796,9 +781,6 @@ namespace WarpforgeRevival
                     if (openDrop != 0 && ev != null && ev.type == EventType.MouseDown) { openDrop = 0; ev.Use(); }
                 }
             }
-
-            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-            private static void OpenUrl(string url) => UnityEngine.Application.OpenURL(url);
 
             private static void Send()
             {

@@ -40,11 +40,10 @@ namespace WarpforgeRevival
 
         public static void Start(string serverUrl) => server = serverUrl;
 
-        private static bool Alive(ChatGlobalManager m) => (object)m != null && m.Pointer != IntPtr.Zero && m.m_CachedPtr != IntPtr.Zero;
 
         private static void Remember(ChatGlobalManager m)
         {
-            if (!Alive(m) || ((object)manager != null && manager.Pointer == m.Pointer)) return;
+            if (!Ui.Alive(m) || ((object)manager != null && manager.Pointer == m.Pointer)) return;
             manager = m;
             managerSeen = UnityEngine.Time.realtimeSinceStartup;
             forcedChannel = false;
@@ -123,7 +122,7 @@ namespace WarpforgeRevival
                     string text = (object)message == null ? null : IL2CPP.Il2CppStringToManaged(message.Pointer);
                     if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(channelName)) return true;
                     string sender = "";
-                    try { if (Alive(manager)) sender = manager.PlayerId ?? ""; } catch { }
+                    try { if (Ui.Alive(manager)) sender = manager.PlayerId ?? ""; } catch { }
                     string cid = Guid.NewGuid().ToString("N");
                     justSent = text;
                     RevivalMod.Log.Msg($"[chat] sending to {channelName} ({text.Length} characters)");
@@ -429,7 +428,7 @@ namespace WarpforgeRevival
         {
             if (server == null) return;
             var m = manager;
-            if (!Alive(m)) { manager = null; return; }
+            if (!Ui.Alive(m)) { manager = null; return; }
             float now = UnityEngine.Time.realtimeSinceStartup;
             ShowFriendStatus(m);
             while (PrivateInbox.TryDequeue(out var pm)) ReceivePrivate(m, pm.from, pm.data);

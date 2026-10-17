@@ -151,6 +151,14 @@ namespace WarpforgeRevival
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[long] could not mark the deck as Long Game: " + e.Message); }
             }
+
+            // The editor works on its own copy of the deck; make sure that copy, and what gets saved, is a
+            // Long Game deck too. (One patch class with the prefix since 0.13.75, M-26.)
+            private static void Postfix(DeckEditingPanel __instance)
+            {
+                try { if (editingLong) MakeLong(__instance.editingDeck); }
+                catch (Exception ex) { RevivalMod.Log.Warning("[long] editor copy: " + ex.Message); }
+            }
         }
 
         // ------------------------------------------------------------------ which page is open
@@ -265,18 +273,6 @@ namespace WarpforgeRevival
                     MakeLong(deck);
                 }
                 catch (Exception ex) { RevivalMod.Log.Warning("[long] editor: " + ex); }
-            }
-        }
-
-        // The editor works on its own copy of the deck; make sure that copy, and what gets saved, is a
-        // Long Game deck too.
-        [HarmonyPatch(typeof(DeckEditingPanel), nameof(DeckEditingPanel.Initialize))]
-        private static class EditorCopy
-        {
-            private static void Postfix(DeckEditingPanel __instance)
-            {
-                try { if (editingLong) MakeLong(__instance.editingDeck); }
-                catch (Exception ex) { RevivalMod.Log.Warning("[long] editor copy: " + ex.Message); }
             }
         }
 
@@ -483,29 +479,21 @@ namespace WarpforgeRevival
         /// <summary>The game's own starting hand and second player's extra cards (seen at the first match; -1 before).</summary>
         internal static (int hand, int extra) GameDefaultHand => (gameHand, gameSecondExtra);
 
-        internal static bool InLongMatch()
-        {
-            try
-            {
-                var modes = LiveOpsManager.GetHandler<GameModes>();
-                return (object)modes != null && IsLongEvent(modes.CurrentPlayingEvent);
-            }
-            catch { return false; }
-        }
-
+        /// <summary>The game mode being played (null when not known).</summary>
         private static IPlayEvent CurrentPlayEvent()
         {
             try { var modes = LiveOpsManager.GetHandler<GameModes>(); return (object)modes == null ? null : modes.CurrentPlayingEvent; }
             catch { return null; }
         }
 
+        internal static bool InLongMatch() => IsLongEvent(CurrentPlayEvent());
+
         /// <summary>Event id of the game mode being played (null when not known).</summary>
         internal static string PlayingEventId()
         {
             try
             {
-                var modes = LiveOpsManager.GetHandler<GameModes>();
-                var e = (object)modes == null ? null : modes.CurrentPlayingEvent;
+                var e = CurrentPlayEvent();
                 var data = (object)e == null ? null : e.GetBaseData();
                 return (object)data == null ? null : data.eventId;
             }

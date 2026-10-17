@@ -28,18 +28,11 @@ namespace WarpforgeRevival
         private static TMP_Text line;
         private static TMP_Text showLabel;
 
-        private static (float top, float bottom, float left, float right) Box(RectTransform rt)
-        {
-            var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
-            rt.GetWorldCorners(c);
-            return (Math.Max(c[0].y, c[1].y), Math.Min(c[0].y, c[1].y), Math.Min(c[0].x, c[2].x), Math.Max(c[0].x, c[2].x));
-        }
-
         private static void PutAt(Transform t, float left, float top)
         {
             var rt = t.GetComponent<RectTransform>();
             if ((object)rt == null) return;
-            var b = Box(rt);
+            var b = Ui.WorldBox(rt);
             t.position += new Vector3(left - b.left, top - b.top, 0f);
         }
 
@@ -63,9 +56,7 @@ namespace WarpforgeRevival
             var label = go.GetComponentInChildren<TMP_Text>(true);
             if ((object)label != null)
             {
-                var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
-                if ((object)loc != null) loc.enabled = false;
-                label.text = text;
+                Ui.SetText(label, text);
                 label.enableAutoSizing = true;
             }
             return go;
@@ -127,15 +118,15 @@ namespace WarpforgeRevival
             if (!linked) return;
 
             // under the button row: the password box (the username box's width), then the buttons, then the line
-            var u = Box(userRt);
-            var r = Box(rowButton.GetComponent<RectTransform>());
+            var u = Ui.WorldBox(userRt);
+            var r = Ui.WorldBox(rowButton.GetComponent<RectTransform>());
             float gap = (u.top - u.bottom) * 0.35f;
             PutAt(passT, u.left, r.bottom - gap * 1.4f);
-            var p = Box(passT.GetComponent<RectTransform>());
+            var p = Ui.WorldBox(passT.GetComponent<RectTransform>());
             PutAt(makeT, u.left, p.bottom - gap);
-            var m = Box(makeT.GetComponent<RectTransform>());
+            var m = Ui.WorldBox(makeT.GetComponent<RectTransform>());
             if ((object)showT != null) { PutAt(showT, m.right + gap, m.top); showT.gameObject.SetActive(code != null); }
-            if ((object)copyT != null && (object)showT != null) { var s = Box(showT.GetComponent<RectTransform>()); PutAt(copyT, s.right + gap, m.top); copyT.gameObject.SetActive(code != null); }
+            if ((object)copyT != null && (object)showT != null) { var s = Ui.WorldBox(showT.GetComponent<RectTransform>()); PutAt(copyT, s.right + gap, m.top); copyT.gameObject.SetActive(code != null); }
             if ((object)textT != null) PutAt(textT, u.left, m.bottom - gap * 0.6f);
             var mb = makeT.GetComponent<Button>();
             if ((object)mb != null) mb.interactable = !busy;
@@ -184,31 +175,21 @@ namespace WarpforgeRevival
             string ticket = PlayFabTransport.SessionTicket;
             if (string.IsNullOrEmpty(ticket)) { status = "Not signed in to the server yet."; Refresh(); return; }
             busy = true; status = "Making a recovery code…"; Refresh();
-            string url = RevivalMod.Config.ServerUrl + "/playfab/Revival/GameRecoveryCode";
             System.Threading.Tasks.Task.Run(async () =>
             {
                 string made = null, name = null, at = null, error = null;
                 try
                 {
-                    using var http = Net.Client(TimeSpan.FromSeconds(Math.Max(20, RevivalMod.Config.TimeoutSeconds)));
                     var body = JsonSerializer.Serialize(new System.Collections.Generic.Dictionary<string, string> { ["passphrase"] = pass });
-                    using var msg = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url)
-                    { Content = new System.Net.Http.StringContent(body, Encoding.UTF8, "application/json") };
-                    msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
-                    using var reply = await http.SendAsync(msg);
-                    using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
-                    var root = doc.RootElement;
-                    if (reply.IsSuccessStatusCode && root.TryGetProperty("data", out var d) && d.TryGetProperty("recoveryCode", out var c))
+                    var reply = await Net.PostJson("/playfab/Revival/GameRecoveryCode", body, TimeSpan.FromSeconds(Math.Max(20, RevivalMod.Config.TimeoutSeconds)));
+                    var d = reply.Data;
+                    if (reply.Ok && d.ValueKind == JsonValueKind.Object && d.TryGetProperty("recoveryCode", out var c))
                     {
                         made = c.GetString();
                         name = d.TryGetProperty("name", out var n) ? n.GetString() : account;
                         at = d.TryGetProperty("at", out var a) ? a.GetString() : "";
                     }
-                    else
-                    {
-                        error = root.TryGetProperty("errorMessage", out var m) ? m.GetString() : "the server answered " + (int)reply.StatusCode;
-                        if (!string.IsNullOrEmpty(error)) error = char.ToUpperInvariant(error[0]) + error.Substring(1) + ".";
-                    }
+                    else error = reply.Error;
                 }
                 catch (Exception e) { error = "Could not reach the server."; RevivalMod.Log.Warning("[account] recovery code: " + e.Message); }
                 PlayFabTransport.OnMainThread(() =>

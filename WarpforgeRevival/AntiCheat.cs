@@ -78,19 +78,14 @@ namespace WarpforgeRevival
             RevivalMod.Log.Warning($"[anticheat] {(kind == "tamper" ? "tampering" : "speed")} detector raised an alarm {seconds} s into the match");
             string ticket = PlayFabTransport.SessionTicket;
             if (string.IsNullOrEmpty(ticket)) return;
-            string url = RevivalMod.Config.ServerUrl + "/playfab/Revival/CheatAlarm";
             string detail = $"{seconds} s into the match, mod {RevivalMod.Version}";
             System.Threading.Tasks.Task.Run(async () =>
             {
                 try
                 {
-                    using var http = Net.Client(TimeSpan.FromSeconds(20));
-                    using var msg = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url)
-                    {
-                        Content = new System.Net.Http.StringContent(JsonSerializer.Serialize(new Dictionary<string, string> { ["kind"] = kind, ["detail"] = detail }), Encoding.UTF8, "application/json")
-                    };
-                    msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
-                    using var reply = await http.SendAsync(msg);
+                    var reply = await Net.PostJson("/playfab/Revival/CheatAlarm",
+                        JsonSerializer.Serialize(new Dictionary<string, string> { ["kind"] = kind, ["detail"] = detail }), TimeSpan.FromSeconds(20));
+                    if (reply.Unreachable) RevivalMod.Log.Warning("[anticheat] alarm not sent: " + reply.Error);
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[anticheat] alarm not sent: " + e.Message); }
             });

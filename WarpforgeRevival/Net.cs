@@ -49,6 +49,116 @@ namespace WarpforgeRevival
         internal static HttpClient Client(TimeSpan timeout, bool gzip = false)
             => new HttpClient(Handler(gzip), disposeHandler: false) { Timeout = timeout };
 
+        // ---------------------------------------------------------------- the mod's own server calls (M-25)
+        // Nine places built "POST JSON to /playfab/Revival/..., with the session, read data / errorMessage" by
+        // hand, three ways, two with their own clients and timeouts, one with its own retry, and the same message
+        // fix-up in three. One way since 0.13.75.
+
+        /// <summary>The server's answer to one of the mod's own calls.</summary>
+        internal sealed class Reply
+        {
+            /// <summary>The call worked and the answer has a "data" part.</summary>
+            public bool Ok;
+            public int Status;
+            /// <summary>The answer's "data" (a copy, usable after the call); default when not Ok.</summary>
+            public System.Text.Json.JsonElement Data;
+            /// <summary>The server's error code ("error"), when it gave one.</summary>
+            public string Code;
+            /// <summary>A sentence for the player: the server's errorMessage (capitalised, with a full stop), or
+            /// why the server could not be reached.</summary>
+            public string Error;
+            /// <summary>The call never got an answer (no connection, timed out).</summary>
+            public bool Unreachable;
+        }
+
+        /// <summary>Writes a JSON object with the given writer calls.</summary>
+        internal static string Json(Action<System.Text.Json.Utf8JsonWriter> write)
+        {
+            using var ms = new System.IO.MemoryStream();
+            using (var w = new System.Text.Json.Utf8JsonWriter(ms)) { w.WriteStartObject(); write(w); w.WriteEndObject(); }
+            return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+        }
+
+        /// <summary>
+        /// POSTs <paramref name="json"/> to the revival server at <paramref name="path"/> ("/playfab/Revival/..."),
+        /// with the game's session (X-Authorization) when signed in and any <paramref name="headers"/>. A connection
+        /// that fails before an answer is tried once more on a new one (the usual cause is a kept-open connection
+        /// the server had already closed) when <paramref name="retry"/> is set: only for calls a repeat does no harm
+        /// to. Never throws.
+        /// </summary>
+        internal static async System.Threading.Tasks.Task<Reply> PostJson(string path, string json, TimeSpan timeout,
+            System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, string>> headers = null, bool session = true,
+            bool retry = false)
+        {
+            var result = new Reply();
+            string ticket = session ? PlayFabTransport.SessionTicket : null;
+            using var http = Client(timeout);
+            for (int attempt = 1; attempt <= 2; attempt++)
+            {
+                try
+                {
+                    using var msg = new HttpRequestMessage(HttpMethod.Post, RevivalMod.Config.ServerUrl + path)
+                    {
+                        Content = new StringContent(json ?? "{}", System.Text.Encoding.UTF8, "application/json")
+                    };
+                    if (!string.IsNullOrEmpty(ticket)) msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
+                    if (headers != null) foreach (var h in headers) if (h.Value != null) msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                    using var reply = await http.SendAsync(msg);
+                    result.Status = (int)reply.StatusCode;
+                    string text = await reply.Content.ReadAsStringAsync();
+                    System.Text.Json.JsonElement root = default;
+                    bool parsed = false;
+                    try { using var doc = System.Text.Json.JsonDocument.Parse(text); root = doc.RootElement.Clone(); parsed = true; } catch { }
+                    if (reply.IsSuccessStatusCode && parsed && root.ValueKind == System.Text.Json.JsonValueKind.Object && root.TryGetProperty("data", out var data))
+                    {
+                        result.Ok = true;
+                        result.Data = data;
+                        return result;
+                    }
+                    if (!parsed || root.ValueKind != System.Text.Json.JsonValueKind.Object)
+                    {
+                        // not the server's own answer (a proxy's or a network's error page): as the hand-built calls
+                        // treated it, the server could not be reached
+                        result.Unreachable = true;
+                        result.Error = "Could not reach the server.";
+                        return result;
+                    }
+                    {
+                        result.Code = root.TryGetProperty("error", out var ec) && ec.ValueKind == System.Text.Json.JsonValueKind.String ? ec.GetString() : null;
+                        string why = root.TryGetProperty("errorMessage", out var em) && em.ValueKind == System.Text.Json.JsonValueKind.String ? em.GetString() : null;
+                        result.Error = Sentence(why);
+                    }
+                    result.Error ??= "The server did not accept that (" + result.Status + ").";
+                    return result;
+                }
+                // tried again only where a repeat does no harm (retry: true); the server does not recognise a repeated
+                // /Revival/ call, and a failed connection may have reached it
+                catch (Exception e) when (retry && attempt == 1 && e is HttpRequestException)
+                {
+                    await System.Threading.Tasks.Task.Delay(500);
+                }
+                catch (Exception e)
+                {
+                    result.Unreachable = true;
+                    result.Error = "Could not reach the server.";
+                    RevivalMod.Log.Warning($"[net] {path}: {e.GetType().Name}: {e.Message}");
+                    return result;
+                }
+            }
+            result.Unreachable = true;
+            result.Error = "Could not reach the server.";
+            return result;
+        }
+
+        /// <summary>A server message as a sentence: first letter capitalised, ending with a full stop (null for none).</summary>
+        internal static string Sentence(string why)
+        {
+            if (string.IsNullOrWhiteSpace(why)) return null;
+            why = why.Trim();
+            why = char.ToUpperInvariant(why[0]) + why.Substring(1);
+            return why.EndsWith(".") || why.EndsWith("!") || why.EndsWith("?") ? why : why + ".";
+        }
+
         private static X509Certificate2Collection roots;
         private static volatile bool told;
 

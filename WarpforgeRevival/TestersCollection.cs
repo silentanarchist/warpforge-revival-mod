@@ -35,22 +35,21 @@ namespace WarpforgeRevival
         private static bool placedLogged, switchOffChanged, unlitLogged;
         private static IntPtr groupPtr;
 
-        private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
 
         /// <summary>True when this window is the Testers window (not the normal Collection).</summary>
         internal static bool IsUnder(Transform t)
         {
-            if (!Alive(copy)) return false;
+            if (!Ui.Alive(copy)) return false;
             for (; (object)t != null; t = t.parent)
                 if (t.Pointer == copy.transform.Pointer) return true;
             return false;
         }
 
-        internal static bool IsCopy(GameWindow w) => Alive(copy) && (object)w != null && w.Pointer == copy.Pointer;
+        internal static bool IsCopy(GameWindow w) => Ui.Alive(copy) && (object)w != null && w.Pointer == copy.Pointer;
 
         internal static void Close()
         {
-            try { if (Alive(copy) && copy.IsOpen()) WindowsManager.Instance.CloseWindow(copy); }
+            try { if (Ui.Alive(copy) && copy.IsOpen()) WindowsManager.Instance.CloseWindow(copy); }
             catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }
         }
 
@@ -89,7 +88,7 @@ namespace WarpforgeRevival
         /// <summary>The window, made the first time from the window file behind the menu bar's Collection button.</summary>
         private static CollectionScreen Copy()
         {
-            if (Alive(copy)) return copy;
+            if (Ui.Alive(copy)) return copy;
             copy = null;
             var nav = GameState.FindNav();
             var toggle = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Collection);
@@ -103,11 +102,11 @@ namespace WarpforgeRevival
                 RevivalMod.Log.Warning("[testers] the Collection window is not a window file; Testers window not made");
                 return null;
             }
-            if (!Alive(sourcePrefab))
+            if (!Ui.Alive(sourcePrefab))
             {
                 // our own handle on the file: the game's reference object (and its handle) is left alone
                 var loaded = new AssetReference(prefabRef.AssetGUID).LoadAssetAsync<GameObject>().WaitForCompletion();
-                if (!Alive(loaded) || (object)loaded.GetComponent<CollectionScreen>() == null)
+                if (!Ui.Alive(loaded) || (object)loaded.GetComponent<CollectionScreen>() == null)
                 {
                     RevivalMod.Log.Warning("[testers] Collection window file not loaded");
                     return null;
@@ -123,18 +122,6 @@ namespace WarpforgeRevival
             copy.updateNavPanel = false;        // the menu bar's Collection button stays the normal Collection's
             RevivalMod.Log.Msg($"[testers] Testers window made from the Collection window file {prefabRef.AssetGUID}");
             return copy;
-        }
-
-        private static WindowTabBase TabOf<T>(GameWindowWithTabs w) where T : WindowTabBase
-        {
-            var tabs = w.tabs;
-            if (tabs == null) return null;
-            for (int i = 0; i < tabs.Count; i++)
-            {
-                var t = tabs[i];
-                if ((object)t != null && (object)t.TryCast<T>() != null) return t;
-            }
-            return null;
         }
 
         /// <summary>Called every frame: four times a second, the menu-bar highlight and removing the window once closed.
@@ -197,7 +184,7 @@ namespace WarpforgeRevival
         /// </summary>
         private static void DropWhenClosed(float now)
         {
-            if (!Alive(copy)) { copy = null; closedAt = 0; return; }
+            if (!Ui.Alive(copy)) { copy = null; closedAt = 0; return; }
             bool open;
             try
             {
@@ -227,13 +214,13 @@ namespace WarpforgeRevival
         {
             // nothing to do while there is no Testers window and nothing of ours to put back: the look-ups
             // below search the whole scene, and four times a second during loading that showed up as stutter
-            if (!Alive(copy) && !switchOffChanged) { TestersTab.Lit(false); return; }
+            if (!Ui.Alive(copy) && !switchOffChanged) { TestersTab.Lit(false); return; }
             bool showing = false;
             try
             {
                 var wm = WindowsManager.Instance;
                 var current = (object)wm == null ? null : wm.CurrentWindow;
-                showing = Alive(copy) && copy.isActiveAndEnabled && (object)current != null && current.Pointer == copy.Pointer;
+                showing = Ui.Alive(copy) && copy.isActiveAndEnabled && (object)current != null && current.Pointer == copy.Pointer;
                 var nav = GameState.Nav;               // kept, not searched for 4 times a second (M-11)
                 var col = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Collection);
                 var toggle = (object)col == null ? null : col.toggle;
@@ -388,7 +375,7 @@ namespace WarpforgeRevival
                 try
                 {
                     if (!IsCopy(__instance)) return;
-                    var tab = TabOf<CardbackCollectionTab>(__instance);
+                    var tab = Ui.TabOf<CardbackCollectionTab>(__instance);
                     if ((object)tab != null) __result = tab;
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }

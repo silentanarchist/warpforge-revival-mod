@@ -53,7 +53,7 @@ namespace WarpforgeRevival
             {
                 LoadCached();
                 using var http = Net.Client(TimeSpan.FromSeconds(RevivalMod.Config.TimeoutSeconds), gzip: true);
-                #if ANDROID_TEST
+#if ANDROID_PORT
                 // a phone needs the Android build of the content files
                 var manifestJson = await http.GetStringAsync(server + "/api/v1/content/manifest?platform=android");
 #else

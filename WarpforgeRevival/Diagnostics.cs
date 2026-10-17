@@ -77,7 +77,7 @@ namespace WarpforgeRevival
                 foreach (var m in type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly).Where(filter))
                 {
                     if (m.IsAbstract || m.ContainsGenericParameters) continue;
-#if ANDROID_TEST
+#if ANDROID_PORT
                     // On a phone (ARM64) the patching layer mishandles game methods that hand back a
                     // struct (async methods do): the method then runs with scrambled arguments and
                     // crashes. Leave those alone.

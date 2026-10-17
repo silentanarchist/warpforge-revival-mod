@@ -16,12 +16,10 @@ namespace WarpforgeRevival
     internal static class ProfileStats
     {
         private const string PanelName = "Revival Record";
-        private static readonly System.Net.Http.HttpClient Http = Net.Client(TimeSpan.FromSeconds(10));
         private static readonly Dictionary<string, string> Known = new Dictionary<string, string>();   // player id -> last text shown
         private static int asked;
         private static bool reported;
 
-        private static bool Alive(TMP_Text t) => (object)t != null && t.Pointer != IntPtr.Zero && t.m_CachedPtr != IntPtr.Zero;
 
         internal static void Show(ProfileTab tab, string playerId)
         {
@@ -34,7 +32,7 @@ namespace WarpforgeRevival
             Fetch(playerId, text => PlayFabTransport.OnMainThread(() =>
             {
                 if (text != null) Known[playerId.ToUpperInvariant()] = text;
-                if (mine != asked || !Alive(label)) return;         // another profile was opened meanwhile
+                if (mine != asked || !Ui.Alive(label)) return;         // another profile was opened meanwhile
                 label.text = text ?? "";
                 Place(tab, label);
             }));
@@ -158,20 +156,15 @@ namespace WarpforgeRevival
         {
             string ticket = PlayFabTransport.SessionTicket;
             if (string.IsNullOrEmpty(ticket)) { done(null); return; }
-            string url = RevivalMod.Config.ServerUrl + "/playfab/Revival/PlayerStats";
             System.Threading.Tasks.Task.Run(async () =>
             {
                 string text = null, answeredId = null;
                 try
                 {
-                    using var msg = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url)
-                    {
-                        Content = new System.Net.Http.StringContent(JsonSerializer.Serialize(new Dictionary<string, string> { ["playerId"] = playerId }), Encoding.UTF8, "application/json")
-                    };
-                    msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
-                    using var reply = await Http.SendAsync(msg);
-                    using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
-                    if (reply.IsSuccessStatusCode && doc.RootElement.TryGetProperty("data", out var data) && data.TryGetProperty("total", out var total))
+                    var reply = await Net.PostJson("/playfab/Revival/PlayerStats",
+                        JsonSerializer.Serialize(new Dictionary<string, string> { ["playerId"] = playerId }), TimeSpan.FromSeconds(10), retry: true);
+                    var data = reply.Data;
+                    if (reply.Ok && data.ValueKind == JsonValueKind.Object && data.TryGetProperty("total", out var total))
                     {
                         var sb = new StringBuilder();
                         sb.Append("<size=125%><color=#F0B840>Record</color></size>\n");

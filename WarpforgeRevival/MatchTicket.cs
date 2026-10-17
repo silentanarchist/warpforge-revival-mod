@@ -19,7 +19,6 @@ namespace WarpforgeRevival
     internal static class MatchTicket
     {
         private const byte OpTicket = 160;                 // the same number the server listens for
-        private static readonly System.Net.Http.HttpClient Http = Net.Client(TimeSpan.FromSeconds(10));
         private static volatile string ticket;
         private static DateTime validUntil = DateTime.MinValue;
         private static Task fetching;
@@ -44,22 +43,16 @@ namespace WarpforgeRevival
         {
             try
             {
-                using var msg = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, RevivalMod.Config.ServerUrl + "/playfab/Revival/MatchTicket")
-                {
-                    Content = new System.Net.Http.StringContent("{}", System.Text.Encoding.UTF8, "application/json")
-                };
-                msg.Headers.TryAddWithoutValidation("X-Authorization", session);
-                using var reply = await Http.SendAsync(msg);
-                using var doc = System.Text.Json.JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
-                if (reply.IsSuccessStatusCode && doc.RootElement.TryGetProperty("data", out var data)
-                    && data.TryGetProperty("ticket", out var t))
+                var reply = await Net.PostJson("/playfab/Revival/MatchTicket", "{}", TimeSpan.FromSeconds(10), retry: true);
+                var data = reply.Data;
+                if (reply.Ok && data.ValueKind == System.Text.Json.JsonValueKind.Object && data.TryGetProperty("ticket", out var t))
                 {
                     int seconds = data.TryGetProperty("seconds", out var s) && s.TryGetInt32(out int n) ? n : 1800;
                     ticket = t.GetString();
                     validUntil = DateTime.UtcNow.AddSeconds(seconds);
                     if (!reported) { reported = true; RevivalMod.Log.Msg("[match] match ticket received"); }
                 }
-                else RevivalMod.Log.Warning("[match] the server gave no match ticket (" + (int)reply.StatusCode + ")");
+                else RevivalMod.Log.Warning("[match] the server gave no match ticket (" + (reply.Unreachable ? reply.Error : reply.Status.ToString()) + ")");
             }
             catch (Exception e) { RevivalMod.Log.Warning("[match] could not get a match ticket: " + e.Message); }
         }

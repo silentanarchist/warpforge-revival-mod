@@ -42,9 +42,7 @@ namespace WarpforgeRevival
             copy.onClick = new UnityEngine.UI.Button.ButtonClickedEvent();          // nothing of Resign's comes along
             foreach (var label in go.GetComponentsInChildren<TMP_Text>(true))
             {
-                var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
-                if ((object)loc != null) loc.enabled = false;
-                label.text = "Report bug";
+                Ui.SetText(label, "Report bug");
             }
             foreach (var loc in go.GetComponentsInChildren<Il2CppI2.Loc.Localize>(true)) loc.enabled = false;
 

@@ -32,9 +32,7 @@ namespace WarpforgeRevival
         private static NavigationPanelController nav;
         private static bool shownLogged, hierarchyLogged;
 
-        private static bool Alive(GameObject g) => (object)g != null && g.Pointer != IntPtr.Zero && g.m_CachedPtr != IntPtr.Zero;
 
-        private static bool AliveNav(NavigationPanelController n) => (object)n != null && n.Pointer != IntPtr.Zero && n.m_CachedPtr != IntPtr.Zero;
 
         // The menu bar is built (a new one after every match): the button goes in with it.
         [HarmonyLib.HarmonyPatch(typeof(NavigationPanelController), nameof(NavigationPanelController.Awake))]
@@ -49,7 +47,7 @@ namespace WarpforgeRevival
             try
             {
                 if (AccountPage.IsTester) StartIcon();
-                if (!AliveNav(nav)) nav = GameState.FindNav();
+                if (!Ui.Alive(nav)) nav = GameState.FindNav();
                 Ensure(nav);
             }
             catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }
@@ -60,21 +58,21 @@ namespace WarpforgeRevival
         {
             try
             {
-                if (AliveNav(bar)) nav = bar;
+                if (Ui.Alive(bar)) nav = bar;
                 bool want = AccountPage.IsTester;
                 if (!want)
                 {
                     if (TestersPage.IsOpen) TestersPage.Close();
                     TestersCollection.Close();
-                    if (Alive(button) && button.activeSelf) button.SetActive(false);
+                    if (Ui.Alive(button) && button.activeSelf) button.SetActive(false);
                     return;
                 }
-                if (Alive(button) && AliveNav(nav) && button.transform.parent != null && button.transform.IsChildOf(nav.transform))
+                if (Ui.Alive(button) && Ui.Alive(nav) && button.transform.parent != null && button.transform.IsChildOf(nav.transform))
                 {
                     if (!button.activeSelf) button.SetActive(true);
                     return;
                 }
-                if (!AliveNav(nav)) return;
+                if (!Ui.Alive(nav)) return;
                 var social = nav.GetToggle(NavigationPanelToggleType.Social);
                 if ((object)social == null) return;
                 button = Build(social.gameObject);
@@ -160,7 +158,7 @@ namespace WarpforgeRevival
         {
             try
             {
-                if (!Alive(button)) return;
+                if (!Ui.Alive(button)) return;
                 var toggle = button.GetComponent<UnityEngine.UI.Toggle>();
                 if ((object)toggle == null || toggle.isOn == on) return;
                 toggle.SetIsOnWithoutNotify(on);

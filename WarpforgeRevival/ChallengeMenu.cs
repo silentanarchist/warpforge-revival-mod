@@ -43,7 +43,6 @@ namespace WarpforgeRevival
         private static string status = "";
         private static bool dirty = true;
 
-        private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
 
         /// <summary>Modes offered as presets: Classic and Skirmish (the two the game's own challenge can carry).</summary>
         private static List<string> Presets()
@@ -63,7 +62,7 @@ namespace WarpforgeRevival
         }
 
         /// <summary>True for the Challenge tab (the copy), not the real Alliances tab.</summary>
-        internal static bool IsChallengeTab(UnityEngine.Object t) => Alive(tab) && (object)t != null && t.Pointer == tab.Pointer;
+        internal static bool IsChallengeTab(UnityEngine.Object t) => Ui.Alive(tab) && (object)t != null && t.Pointer == tab.Pointer;
 
         /// <summary>Called every frame: redraws the page after a click on it (picking a friend, a mode, a rule).</summary>
         internal static void Tick()
@@ -71,7 +70,7 @@ namespace WarpforgeRevival
             if (!dirty) return;
             try
             {
-                if (!Alive(window) || !Alive(tab) || !tab.gameObject.activeInHierarchy) return;
+                if (!Ui.Alive(window) || !Ui.Alive(tab) || !tab.gameObject.activeInHierarchy) return;
                 Build(window, tab.transform);
             }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] menu: " + e.Message); dirty = false; }
@@ -141,7 +140,7 @@ namespace WarpforgeRevival
             {
                 try
                 {
-                    if (!Alive(tab) || !Alive(window) || __instance.Pointer != window.Pointer) return;
+                    if (!Ui.Alive(tab) || !Ui.Alive(window) || __instance.Pointer != window.Pointer) return;
                     tab.Setup(__instance);
                     var tabs = __instance.tabs;
                     if (tabs != null && !tabs.Contains(tab)) tabs.Add(tab);     // after the game filed them by class
@@ -162,7 +161,7 @@ namespace WarpforgeRevival
         /// WindowTabBase.TryOpenTab, which crashed the Android loader (its code starts 8 bytes before a page end).</summary>
         private static void TabChanged(WindowTabBase to)
         {
-            try { if (IsChallengeTab(to) && Alive(window)) Build(window, tab.transform); }
+            try { if (IsChallengeTab(to) && Ui.Alive(window)) Build(window, tab.transform); }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] menu: " + e.Message); }
         }
 

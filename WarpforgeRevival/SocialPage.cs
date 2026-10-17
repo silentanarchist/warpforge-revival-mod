@@ -13,18 +13,6 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class SocialPage
     {
-        private static WindowTabBase Find<T>(GameWindowWithTabs w) where T : WindowTabBase
-        {
-            var tabs = w.tabs;
-            if (tabs == null) return null;
-            for (int i = 0; i < tabs.Count; i++)
-            {
-                var t = tabs[i];
-                if ((object)t != null && (object)t.TryCast<T>() != null) return t;
-            }
-            return null;
-        }
-
         [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.GetStartingTab))]
         private static class StartOnFriends
         {
@@ -33,7 +21,7 @@ namespace WarpforgeRevival
                 try
                 {
                     if ((object)__instance.TryCast<SocialMenuWindow>() == null) return;
-                    var friends = Find<FriendsTab>(__instance);
+                    var friends = Ui.TabOf<FriendsTab>(__instance);
                     if ((object)friends != null) __result = friends;
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[social] " + e.Message); }

@@ -108,9 +108,7 @@ namespace WarpforgeRevival
             if ((object)label == null) return null;
             var m = PlayerId.Match(label.text ?? "");
             if (!m.Success) return null;
-            var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
-            if ((object)loc != null) loc.enabled = false;
-            label.text = "Friend code: " + AccountPage.FriendCode(m.Value);
+            Ui.SetText(label, "Friend code: " + AccountPage.FriendCode(m.Value));
             return m.Value.ToUpperInvariant();
         }
 

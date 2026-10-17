@@ -148,7 +148,6 @@ namespace WarpforgeRevival
 
         // ---------------------------------------------------------------- applying it, once per window
 
-        private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
 
         /// <summary>Which layout a window takes, or null.</summary>
         private static string WindowKey(GameWindowWithTabs w)
@@ -303,7 +302,7 @@ namespace WarpforgeRevival
                 if (want >= 0 && a.Button.GetSiblingIndex() != want) a.Button.SetSiblingIndex(want);
             }
             foreach (var a in record.Buttons) a.Index = a.Button.GetSiblingIndex();
-            watched.RemoveAll(x => !Alive(x.Window) || x.Window.Pointer == w.Pointer);
+            watched.RemoveAll(x => !Ui.Alive(x.Window) || x.Window.Pointer == w.Pointer);
             watched.Add(record);
             RevivalMod.Log.Msg($"[menu layout] {key} ribbon set as the window was built ({source} layout): {string.Join(", ", done)}");
         }
@@ -325,7 +324,7 @@ namespace WarpforgeRevival
         private static Sprite Icon(string name)
         {
             if (name != "play") return null;
-            if (Alive(playIcon)) return playIcon;
+            if (Ui.Alive(playIcon)) return playIcon;
             try
             {
                 var nav = GameState.FindNav();
@@ -335,7 +334,7 @@ namespace WarpforgeRevival
                 playIcon = (object)image == null ? null : image.sprite;
             }
             catch { playIcon = null; }
-            return Alive(playIcon) ? playIcon : null;
+            return Ui.Alive(playIcon) ? playIcon : null;
         }
 
         // ---------------------------------------------------------------- pages laid out per platform
@@ -375,19 +374,19 @@ namespace WarpforgeRevival
             nextCheck = now + 1f;
             try
             {
-                watched.RemoveAll(x => !Alive(x.Window));
+                watched.RemoveAll(x => !Ui.Alive(x.Window));
                 foreach (var win in watched)
                 {
                     if (!win.Window.isActiveAndEnabled) continue;
                     foreach (var a in win.Buttons)
                     {
-                        if (!Alive(a.Button)) continue;
+                        if (!Ui.Alive(a.Button)) continue;
                         var go = a.Button.gameObject;
                         if (a.Visible.HasValue && go.activeSelf != a.Visible.Value) { Drift(a, "shown/hidden", go.activeSelf + " (set " + a.Visible.Value + ")"); go.SetActive(a.Visible.Value); }
                         if (a.Label != null)
                             foreach (var t in a.Texts)
-                                if (Alive(t) && t.text != a.Label) { Drift(a, "label", "'" + t.text + "'"); t.text = a.Label; }
-                        if ((object)a.Icon != null && Alive(a.IconImage) && (object)a.IconImage.sprite != null && a.IconImage.sprite.Pointer != a.Icon.Pointer)
+                                if (Ui.Alive(t) && t.text != a.Label) { Drift(a, "label", "'" + t.text + "'"); t.text = a.Label; }
+                        if ((object)a.Icon != null && Ui.Alive(a.IconImage) && (object)a.IconImage.sprite != null && a.IconImage.sprite.Pointer != a.Icon.Pointer)
                         { Drift(a, "icon", a.IconImage.sprite.name); a.IconImage.sprite = a.Icon; }
                         if (a.Index.HasValue && a.Button.GetSiblingIndex() != a.Index.Value)
                         { Drift(a, "position", a.Button.GetSiblingIndex() + " (set " + a.Index.Value + ")"); a.Button.SetSiblingIndex(a.Index.Value); }

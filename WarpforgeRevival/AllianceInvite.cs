@@ -25,7 +25,6 @@ namespace WarpforgeRevival
     internal static class AllianceInvite
     {
         private const string HolderName = "Revival invite by code";
-        private static readonly HttpClient Http = Net.Client(TimeSpan.FromSeconds(10));
         private static readonly ConcurrentQueue<Action> MainThread = new ConcurrentQueue<Action>();
 
         private static AllianceView view;
@@ -81,9 +80,7 @@ namespace WarpforgeRevival
                     var ph = box.placeholder?.TryCast<TMP_Text>();
                     if ((object)ph != null)
                     {
-                        var loc = ph.GetComponent<Il2CppI2.Loc.Localize>();
-                        if ((object)loc != null) loc.enabled = false;
-                        ph.text = "Friend code to invite";
+                        Ui.SetText(ph, "Friend code to invite");
                     }
                     box.onSubmit.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<string>>(new Action<string>(_ => Send())));
                 }
@@ -102,9 +99,7 @@ namespace WarpforgeRevival
                 var label = btnGo.GetComponentInChildren<TMP_Text>(true);
                 if ((object)label != null)
                 {
-                    var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
-                    if ((object)loc != null) loc.enabled = false;
-                    label.text = "Invite";
+                    Ui.SetText(label, "Invite");
                     label.enableAutoSizing = true;
                 }
 
@@ -144,13 +139,6 @@ namespace WarpforgeRevival
                 if (may) placeIn = 5;
             }
             catch (Exception e) { RevivalMod.Log.Warning("[alliances] invite box: " + e.Message); }
-        }
-
-        private static (float left, float right, float top, float bottom) Corners(RectTransform rt)
-        {
-            var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
-            rt.GetWorldCorners(c);
-            return (Math.Min(c[0].x, c[2].x), Math.Max(c[0].x, c[2].x), Math.Max(c[0].y, c[1].y), Math.Min(c[0].y, c[1].y));
         }
 
         private static void Place()
@@ -200,12 +188,6 @@ namespace WarpforgeRevival
             rt.anchoredPosition = at;
         }
 
-        private static void PutLeftMid(RectTransform rt, float left, float midY)
-        {
-            var c = Corners(rt);
-            rt.position += new Vector3(left - c.left, midY - (c.top + c.bottom) / 2f, 0f);
-        }
-
         private static void Say(string text, bool good)
         {
             if ((object)status == null) return;
@@ -229,21 +211,14 @@ namespace WarpforgeRevival
                     string text; bool good = false;
                     try
                     {
-                        using var msg = new HttpRequestMessage(HttpMethod.Post, RevivalMod.Config.ServerUrl + "/playfab/Revival/AllianceInvite")
+                        var reply = await Net.PostJson("/playfab/Revival/AllianceInvite", JsonSerializer.Serialize(new { code }), TimeSpan.FromSeconds(10));
+                        if (reply.Ok)
                         {
-                            Content = new StringContent(JsonSerializer.Serialize(new { code }), Encoding.UTF8, "application/json")
-                        };
-                        msg.Headers.TryAddWithoutValidation("X-Authorization", session);
-                        using var reply = await Http.SendAsync(msg);
-                        using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
-                        var root = doc.RootElement;
-                        if (reply.IsSuccessStatusCode && root.TryGetProperty("data", out var data))
-                        {
-                            string name = data.TryGetProperty("name", out var n) ? n.GetString() : "";
+                            string name = reply.Data.ValueKind == JsonValueKind.Object && reply.Data.TryGetProperty("name", out var n) ? n.GetString() : "";
                             text = "Invited " + (string.IsNullOrEmpty(name) ? "that player" : name);
                             good = true;
                         }
-                        else text = root.TryGetProperty("errorMessage", out var em) ? em.GetString() : "The server refused the invitation";
+                        else text = reply.Unreachable ? "Could not reach the server" : (reply.Error ?? "The server refused the invitation").TrimEnd('.');
                     }
                     catch (Exception e) { text = "Could not reach the server"; RevivalMod.Log.Warning("[alliances] invite by friend code: " + e.Message); }
                     MainThread.Enqueue(() =>

@@ -88,6 +88,9 @@ namespace WarpforgeRevival
         [HarmonyPatch(typeof(MatchData), nameof(MatchData.GetBotDeck))]
         private static class BotDeck
         {
+            // practice matches: the AI's deck follows the Classic/Skirmish switch (PracticeMenu)
+            private static void Postfix(MatchType matchType, ref PrebuiltDeck __result) => PracticeMenu.AiDeck.Postfix(matchType, ref __result);
+
             private static bool Prefix(MatchData __instance, MatchType matchType, ref PrebuiltDeck __result)
             {
                 bool skirmishList = matchType == MatchType.FastModeBot || matchType == MatchType.ClosedDeckBot;

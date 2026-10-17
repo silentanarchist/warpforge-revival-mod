@@ -106,14 +106,6 @@ namespace WarpforgeRevival
             private static float sc = 1f;
             private static Rect R(float x, float y, float w, float h) => new Rect(x * sc, y * sc, w * sc, h * sc);
 
-            private static Texture2D Solid(Color c)
-            {
-                var t = new Texture2D(1, 1);
-                t.SetPixel(0, 0, c);
-                t.Apply();
-                t.hideFlags = HideFlags.HideAndDontSave;
-                return t;
-            }
 
             internal static void Show(string who, string whoName, string matchIndex)
             {
@@ -127,9 +119,9 @@ namespace WarpforgeRevival
             {
                 if (box == null || (object)panel == null)
                 {
-                    shade = Solid(new Color(0f, 0f, 0f, 0.6f));
-                    panel = Solid(new Color(0.09f, 0.05f, 0.05f, 0.97f));
-                    pickedBack = Solid(new Color(0.45f, 0.14f, 0.1f, 1f));
+                    shade = Ui.Solid(new Color(0f, 0f, 0f, 0.6f));
+                    panel = Ui.Solid(new Color(0.09f, 0.05f, 0.05f, 0.97f));
+                    pickedBack = Ui.Solid(new Color(0.45f, 0.14f, 0.1f, 1f));
                     box = new GUIStyle(GUI.skin.box); box.normal.background = panel;
                     label = new GUIStyle(GUI.skin.label) { wordWrap = true }; label.normal.textColor = new Color(0.95f, 0.9f, 0.85f);
                     small = new GUIStyle(label); small.normal.textColor = new Color(0.75f, 0.68f, 0.62f);
@@ -137,7 +129,7 @@ namespace WarpforgeRevival
                     button = new GUIStyle(GUI.skin.button);
                     picked = new GUIStyle(GUI.skin.button); picked.normal.background = pickedBack; picked.hover.background = pickedBack;
                 }
-                sc = Mathf.Max(0.5f, Mathf.Min(Screen.width / 1280f, Screen.height / 720f));
+                sc = Ui.GuiScale();
                 label.fontSize = Mathf.RoundToInt(20 * sc); small.fontSize = Mathf.RoundToInt(15 * sc);
                 field.fontSize = Mathf.RoundToInt(19 * sc); button.fontSize = picked.fontSize = Mathf.RoundToInt(18 * sc);
             }
@@ -193,25 +185,15 @@ namespace WarpforgeRevival
                     if (log.Length > 200000) log = log.Substring(log.Length - 200000);
                     body["log"] = log;
                 }
-                string url = RevivalMod.Config.ServerUrl + "/playfab/Revival/PlayerReport";
                 System.Threading.Tasks.Task.Run(async () =>
                 {
                     string id = null, error = null;
                     try
                     {
-                        using var http = Net.Client(TimeSpan.FromSeconds(Math.Max(20, RevivalMod.Config.TimeoutSeconds)));
-                        using var msg = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url)
-                        { Content = new System.Net.Http.StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json") };
-                        msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
-                        using var reply = await http.SendAsync(msg);
-                        using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
-                        var root = doc.RootElement;
-                        if (reply.IsSuccessStatusCode && root.TryGetProperty("data", out var d) && d.TryGetProperty("id", out var i)) id = i.GetString();
-                        else
-                        {
-                            error = root.TryGetProperty("errorMessage", out var m) ? m.GetString() : "the server answered " + (int)reply.StatusCode;
-                            if (!string.IsNullOrEmpty(error)) error = char.ToUpperInvariant(error[0]) + error.Substring(1) + ".";
-                        }
+                        var reply = await Net.PostJson("/playfab/Revival/PlayerReport", JsonSerializer.Serialize(body),
+                                                       TimeSpan.FromSeconds(Math.Max(20, RevivalMod.Config.TimeoutSeconds)));
+                        if (reply.Ok && reply.Data.ValueKind == JsonValueKind.Object && reply.Data.TryGetProperty("id", out var i)) id = i.GetString();
+                        else error = reply.Error;
                     }
                     catch (Exception e) { error = "Could not reach the server."; RevivalMod.Log.Warning("[report] " + e.Message); }
                     PlayFabTransport.OnMainThread(() =>

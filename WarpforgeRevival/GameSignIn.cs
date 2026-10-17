@@ -22,7 +22,6 @@ namespace WarpforgeRevival
     internal static class GameSignIn
     {
         private const string Prefix = "wfr-login-";
-        private static readonly HttpClient Http = Net.Client(TimeSpan.FromSeconds(20));
 
         private static string FilePath => Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival", "game-login.txt");
 
@@ -137,17 +136,13 @@ namespace WarpforgeRevival
         private static void OpenTerms()
         {
             string url = TermsUrl();
-            try { OpenUrl(url); RevivalMod.Log.Msg("[signin] opened " + url); }
+            try { Ui.OpenUrl(url); RevivalMod.Log.Msg("[signin] opened " + url); }
             catch (Exception e)
             {
                 RevivalMod.Log.Warning("[signin] could not open the terms page: " + e.Message);
                 Say("Open " + url + " in a browser to read them.", false);
             }
         }
-
-        // Kept apart so that a game build missing Application.OpenURL fails inside OpenTerms' try, not in Draw.
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-        private static void OpenUrl(string url) => Application.OpenURL(url);
 
         private static string ServerName()
         {
@@ -286,14 +281,6 @@ namespace WarpforgeRevival
         private static GUIStyle box, label, small, field, button;
         private static Texture2D shade, panel;
 
-        private static Texture2D Solid(Color c)
-        {
-            var t = new Texture2D(1, 1);
-            t.SetPixel(0, 0, c);
-            t.Apply();
-            t.hideFlags = HideFlags.HideAndDontSave;
-            return t;
-        }
 
         // Laid out on a 1280 x 720 page and scaled to the screen by hand: the phone's game build lacks
         // parts of Unity's GUI that would do this (GUI.matrix, GUI.depth), and using them fails there.
@@ -302,7 +289,7 @@ namespace WarpforgeRevival
 
         private static float Scale()
         {
-            sc = Mathf.Max(0.5f, Mathf.Min(Screen.width / 1280f, Screen.height / 720f));
+            sc = Ui.GuiScale();
             label.fontSize = Mathf.RoundToInt(22 * sc);
             small.fontSize = Mathf.RoundToInt(16 * sc);
             field.fontSize = Mathf.RoundToInt(24 * sc);
@@ -313,8 +300,8 @@ namespace WarpforgeRevival
         private static void Styles()
         {
             if (box != null) return;
-            shade = Solid(new Color(0f, 0f, 0f, 0.75f));
-            panel = Solid(new Color(0.05f, 0.11f, 0.09f, 0.97f));
+            shade = Ui.Solid(new Color(0f, 0f, 0f, 0.75f));
+            panel = Ui.Solid(new Color(0.05f, 0.11f, 0.09f, 0.97f));
             box = new GUIStyle(GUI.skin.box);
             box.normal.background = panel;
             label = new GUIStyle(GUI.skin.label) { fontSize = 22, wordWrap = true };
@@ -418,41 +405,30 @@ namespace WarpforgeRevival
             if ((create || termsAsked) && !agreed) { Say("Tick the box to agree to the Terms and Privacy notice.", true); return; }
             bool agree = (create || termsAsked) && agreed;
             busy = true;
-            string url = RevivalMod.Config.ServerUrl + "/playfab/Revival/GameAccountSignIn";
             Task.Run(async () =>
             {
                 string token = null, why, error = null;
                 try
                 {
-                    using var ms = new MemoryStream();
-                    using (var w = new System.Text.Json.Utf8JsonWriter(ms))
+                    string body = Net.Json(w =>
                     {
-                        w.WriteStartObject();
                         w.WriteString("name", name);
                         w.WriteString("passphrase", pass);
                         w.WriteBoolean("create", create);
                         w.WriteBoolean("termsBox", true);
                         if (agree) w.WriteBoolean("agreeTerms", true);
-                        w.WriteEndObject();
-                    }
-                    using var msg = new HttpRequestMessage(HttpMethod.Post, url)
-                    {
-                        Content = new StringContent(System.Text.Encoding.UTF8.GetString(ms.ToArray()), System.Text.Encoding.UTF8, "application/json")
-                    };
-                    msg.Headers.TryAddWithoutValidation("X-Revival-Mod", RevivalMod.Version);
-                    using var reply = await Http.SendAsync(msg);
-                    using var doc = System.Text.Json.JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
-                    var root = doc.RootElement;
-                    if (reply.IsSuccessStatusCode && root.TryGetProperty("data", out var data) && data.TryGetProperty("token", out var t))
+                    });
+                    var reply = await Net.PostJson("/playfab/Revival/GameAccountSignIn", body, TimeSpan.FromSeconds(20),
+                        new[] { new System.Collections.Generic.KeyValuePair<string, string>("X-Revival-Mod", RevivalMod.Version) }, session: false);
+                    if (reply.Ok && reply.Data.ValueKind == System.Text.Json.JsonValueKind.Object && reply.Data.TryGetProperty("token", out var t))
                     {
                         token = t.GetString();
                         why = null;
                     }
                     else
                     {
-                        error = root.TryGetProperty("error", out var ec) ? ec.GetString() : null;
-                        why = root.TryGetProperty("errorMessage", out var e) ? e.GetString() : null;
-                        why = string.IsNullOrEmpty(why) ? "The server did not accept that (" + (int)reply.StatusCode + ")." : char.ToUpperInvariant(why[0]) + why.Substring(1) + ".";
+                        error = reply.Code;
+                        why = reply.Error ?? "The server did not accept that.";
                     }
                 }
                 catch (Exception e)

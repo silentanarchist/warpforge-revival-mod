@@ -194,17 +194,17 @@ namespace WarpforgeRevival
             try { if (load.IsDone && load.Status == AsyncOperationStatus.Succeeded) got = load.Result; } catch { }
             Texture tex = null;
             Rect rect = default;
-            if (Alive(got))
+            if (Ui.Alive(got))
             {
                 var t2 = got.TryCast<Texture2D>();
                 var sp = (object)t2 == null ? got.TryCast<Sprite>() : null;
                 if ((object)t2 != null) { tex = t2; rect = new Rect(0, 0, t2.width, t2.height); }
-                else if ((object)sp != null && Alive(sp.texture)) { tex = sp.texture; rect = sp.textureRect; }
+                else if ((object)sp != null && Ui.Alive(sp.texture)) { tex = sp.texture; rect = sp.textureRect; }
             }
-            if (!Alive(tex))
+            if (!Ui.Alive(tex))
             {
                 foreach (var c in art.Cards) missing.Add(c.id);
-                RevivalMod.Log.Warning($"[art export] picture {art.Guid} did not load ({art.Cards[0].id}; got {(Alive(got) ? got.GetIl2CppType().Name : "nothing")})");
+                RevivalMod.Log.Warning($"[art export] picture {art.Guid} did not load ({art.Cards[0].id}; got {(Ui.Alive(got) ? got.GetIl2CppType().Name : "nothing")})");
                 try { Addressables.Release(load); } catch { }
                 return;
             }
@@ -259,10 +259,6 @@ namespace WarpforgeRevival
         /// top row first. With <paramref name="crop"/> (in the sprite's own pixels, from its top left) only
         /// that part is read, at full size.
         /// </summary>
-        private static bool Alive(UnityEngine.Object o)
-        {
-            try { return (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero; } catch { return false; }
-        }
 
         private static byte[] Read(Texture tex, Rect r, int width, int height, RectInt? crop)
         {
@@ -293,9 +289,9 @@ namespace WarpforgeRevival
                 }
                 // The read-back picture is the mod's own; nothing in the game points to it, so the clean-up
                 // between factions (UnloadUnusedAssets) would throw it away unless it is marked to stay.
-                if (!Alive(readback) || readback.width != width || readback.height != height)
+                if (!Ui.Alive(readback) || readback.width != width || readback.height != height)
                 {
-                    if (Alive(readback)) UnityEngine.Object.Destroy(readback);
+                    if (Ui.Alive(readback)) UnityEngine.Object.Destroy(readback);
                     readback = new Texture2D(width, height, TextureFormat.RGBA32, false, false);
                     readback.hideFlags = HideFlags.DontUnloadUnusedAsset;
                 }
@@ -343,7 +339,7 @@ namespace WarpforgeRevival
             {
                 var pair = so.GetClanFrame(army, (CardTier)tier, type);
                 var sprite = pair.Item1;
-                if (!Alive(sprite) || !Alive(sprite.texture)) { RevivalMod.Log.Warning($"[art export] frame {army} {word} {tier + 1} not loaded"); return; }
+                if (!Ui.Alive(sprite) || !Ui.Alive(sprite.texture)) { RevivalMod.Log.Warning($"[art export] frame {army} {word} {tier + 1} not loaded"); return; }
                 // the frame sprite is only the drawn part of its 1024 x 1024 texture; the site's frames are
                 // a fixed part of the whole texture, so the whole texture is read
                 var tex = sprite.texture;

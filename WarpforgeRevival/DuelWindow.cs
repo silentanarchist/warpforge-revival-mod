@@ -37,9 +37,7 @@ namespace WarpforgeRevival
             foreach (var label in labels)
             {
                 if ((object)label == null) continue;
-                var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
-                if ((object)loc != null) loc.enabled = false;    // otherwise it blanks the text again
-                label.text = caption;
+                Ui.SetText(label, caption);
             }
         }
     }

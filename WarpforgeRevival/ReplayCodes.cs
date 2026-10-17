@@ -26,21 +26,12 @@ namespace WarpforgeRevival
     internal static class ReplayCodes
     {
         private const string ButtonName = "RevivalReplayCode";
-        private static readonly ConcurrentQueue<Action> Main = new ConcurrentQueue<Action>();
         private static bool placedLogged;
         private static readonly Regex Dashed = new Regex(@"\b([0-9A-Za-z]{4})-([0-9A-Za-z]{4})\b");
         private static readonly Regex Code = new Regex(@"^[0-9A-HJKMNP-TV-Z]{8}$");
 
         /// <summary>What watching a code is doing, for the button that started it (Settings > Mod).</summary>
         internal static Action<string> WatchStatus = _ => { };
-
-        internal static void Tick()
-        {
-            while (Main.TryDequeue(out var a))
-            {
-                try { a(); } catch (Exception e) { RevivalMod.Log.Warning("[replay code] " + e.Message); }
-            }
-        }
 
         /// <summary>A code typed or pasted in any of the forgiving forms, as the 8 characters the server keeps; "" if none.</summary>
         internal static string Normalize(string text)
@@ -160,13 +151,13 @@ namespace WarpforgeRevival
             // lay the row out now, so the names can be measured and the buttons placed before it is drawn
             try { var row = item.GetComponent<RectTransform>(); if ((object)row != null) LayoutRebuilder.ForceRebuildLayoutImmediate(row); } catch { }
             Arrange(item, parent, rt, report, w);
-            Vector3 codeAt = rt.localPosition, reportAt = Alive(report) ? report.localPosition : Vector3.zero;
-            Main.Enqueue(() =>
+            Vector3 codeAt = rt.localPosition, reportAt = Ui.Alive(report) ? report.localPosition : Vector3.zero;
+            PlayFabTransport.OnMainThread(() =>
             {
                 // the check: placed again once the row has been laid out by the game; logged if anything moved
                 Arrange(item, parent, rt, report, w);
-                if (movedLogged || !Alive(rt)) return;
-                bool moved = (rt.localPosition - codeAt).sqrMagnitude > 4f || (Alive(report) && (report.localPosition - reportAt).sqrMagnitude > 4f);
+                if (movedLogged || !Ui.Alive(rt)) return;
+                bool moved = (rt.localPosition - codeAt).sqrMagnitude > 4f || (Ui.Alive(report) && (report.localPosition - reportAt).sqrMagnitude > 4f);
                 if (moved) { movedLogged = true; RevivalMod.Log.Warning($"[replay code] battle log buttons moved after the row's layout (CODE {codeAt.x:0} -> {rt.localPosition.x:0}); please send this log"); }
             });
             string index = match.recordingIndex;
@@ -183,12 +174,11 @@ namespace WarpforgeRevival
 
         // ---------------------------------------------------------------- where the buttons go
 
-        private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
 
         /// <summary>A box in parent's space: the text actually drawn (not its whole box), or null.</summary>
         private static Rect? TextSpan(TMP_Text text, Transform parent)
         {
-            if (!Alive(text) || !text.gameObject.activeInHierarchy || string.IsNullOrEmpty(text.text)) return null;
+            if (!Ui.Alive(text) || !text.gameObject.activeInHierarchy || string.IsNullOrEmpty(text.text)) return null;
             text.ForceMeshUpdate(false, false);
             var b = text.textBounds;
             if (b.size.x <= 0f) return RectSpan(text.rectTransform, parent);
@@ -199,7 +189,7 @@ namespace WarpforgeRevival
 
         private static Rect? RectSpan(RectTransform rt, Transform parent)
         {
-            if (!Alive(rt) || !rt.gameObject.activeInHierarchy) return null;
+            if (!Ui.Alive(rt) || !rt.gameObject.activeInHierarchy) return null;
             var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
             rt.GetWorldCorners(c);
             Vector3 a = parent.InverseTransformPoint(c[0]), z = parent.InverseTransformPoint(c[2]);
@@ -225,11 +215,11 @@ namespace WarpforgeRevival
         {
             try
             {
-                if (!Alive(item) || !Alive(code)) return;
+                if (!Ui.Alive(item) || !Ui.Alive(code)) return;
                 float pad = Math.Max(8f, width * 0.08f);
                 var me = item.playerInfo;
-                Rect? myName = Alive(me) ? TextSpan(me.playerName, parent) : null;
-                Rect? myIcon = Alive(me) && Alive(me.ratingImage) ? RectSpan(me.ratingImage.rectTransform, parent) : null;
+                Rect? myName = Ui.Alive(me) ? TextSpan(me.playerName, parent) : null;
+                Rect? myIcon = Ui.Alive(me) && Ui.Alive(me.ratingImage) ? RectSpan(me.ratingImage.rectTransform, parent) : null;
                 Rect? mode = TextSpan(item.mode, parent);
                 if (myName.HasValue)
                 {
@@ -239,11 +229,11 @@ namespace WarpforgeRevival
                     PutIn(code, left, right, myName.Value.center.y, width);
                 }
                 Rect? theirName = null, theirIcon = null;
-                if (Alive(report))
+                if (Ui.Alive(report))
                 {
                     var them = item.enemyInfo;
-                    theirName = Alive(them) ? TextSpan(them.playerName, parent) : null;
-                    theirIcon = Alive(them) && Alive(them.ratingImage) ? RectSpan(them.ratingImage.rectTransform, parent) : null;
+                    theirName = Ui.Alive(them) ? TextSpan(them.playerName, parent) : null;
+                    theirIcon = Ui.Alive(them) && Ui.Alive(them.ratingImage) ? RectSpan(them.ratingImage.rectTransform, parent) : null;
                     if (theirName.HasValue)
                     {
                         float left = theirName.Value.xMax + pad;
@@ -268,7 +258,7 @@ namespace WarpforgeRevival
                 if ((object)label == null || label.Pointer == IntPtr.Zero) return;
                 label.text = text;
                 if (seconds <= 0) return;
-                System.Threading.Tasks.Task.Delay((int)(seconds * 1000)).ContinueWith(_ => Main.Enqueue(() =>
+                System.Threading.Tasks.Task.Delay((int)(seconds * 1000)).ContinueWith(_ => PlayFabTransport.OnMainThread(() =>
                 {
                     try { if ((object)label != null && label.Pointer != IntPtr.Zero && label.text == text) label.text = "CODE"; } catch { }
                 }));
@@ -280,29 +270,20 @@ namespace WarpforgeRevival
         {
             string ticket = PlayFabTransport.SessionTicket;
             if (string.IsNullOrEmpty(ticket)) { Notice("Sign in first"); return; }
-            string url = RevivalMod.Config.ServerUrl + "/playfab/Revival/ReplayCode";
             Flash(label, "...", 0);
             System.Threading.Tasks.Task.Run(async () =>
             {
                 string code = null, error = null;
                 try
                 {
-                    using var http = Net.Client(TimeSpan.FromSeconds(Math.Max(20, RevivalMod.Config.TimeoutSeconds)));
-                    using var msg = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url)
-                    {
-                        Content = new System.Net.Http.StringContent(JsonSerializer.Serialize(new Dictionary<string, string> { ["recordingIndex"] = index }), Encoding.UTF8, "application/json")
-                    };
-                    msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
-                    using var reply = await http.SendAsync(msg);
-                    using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
-                    var root = doc.RootElement;
-                    if (reply.IsSuccessStatusCode && root.TryGetProperty("data", out var data) && data.TryGetProperty("code", out var c))
-                        code = c.GetString();
-                    else
-                        error = root.TryGetProperty("errorMessage", out var m) ? m.GetString() : "the server answered " + (int)reply.StatusCode;
+                    var reply = await Net.PostJson("/playfab/Revival/ReplayCode",
+                        JsonSerializer.Serialize(new Dictionary<string, string> { ["recordingIndex"] = index }),
+                        TimeSpan.FromSeconds(Math.Max(20, RevivalMod.Config.TimeoutSeconds)), retry: true);     // the same code again: no harm
+                    if (reply.Ok && reply.Data.ValueKind == JsonValueKind.Object && reply.Data.TryGetProperty("code", out var c)) code = c.GetString();
+                    else error = reply.Unreachable ? "could not reach the server" : reply.Error;
                 }
                 catch (Exception e) { error = "could not reach the server"; RevivalMod.Log.Warning("[replay code] " + e.Message); }
-                Main.Enqueue(() =>
+                PlayFabTransport.OnMainThread(() =>
                 {
                     if (!string.IsNullOrEmpty(code))
                     {

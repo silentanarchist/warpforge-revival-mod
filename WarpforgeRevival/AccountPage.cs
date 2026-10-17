@@ -88,7 +88,6 @@ namespace WarpforgeRevival
         // server apply the account's permissions (in-game tester) to this player. The passphrase is
         // sent once to make the link and is not kept anywhere on this computer.
 
-        private static readonly System.Net.Http.HttpClient Http = Net.Client(TimeSpan.FromSeconds(15));
         private static volatile string linkedName;          // null: not asked yet, "": not linked
         private static volatile bool tester, busy;
         private static bool described;
@@ -140,48 +139,24 @@ namespace WarpforgeRevival
         {
             string ticket = PlayFabTransport.SessionTicket;
             if (string.IsNullOrEmpty(ticket)) { done?.Invoke(false, "Not signed in to the server yet."); return; }
-            string url = RevivalMod.Config.ServerUrl + "/playfab/Revival/AccountLink";
             System.Threading.Tasks.Task.Run(async () =>
             {
                 bool ok = false;
                 string message;
                 try
                 {
-                    using var ms = new System.IO.MemoryStream();
-                    using (var w = new System.Text.Json.Utf8JsonWriter(ms))
+                    string body = Net.Json(w =>
                     {
-                        w.WriteStartObject();
                         w.WriteString("op", op);
                         if (name != null) w.WriteString("name", name);
                         if (passphrase != null) w.WriteString("passphrase", passphrase);
-                        w.WriteEndObject();
-                    }
-                    using var msg = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url)
-                    {
-                        Content = new System.Net.Http.StringContent(System.Text.Encoding.UTF8.GetString(ms.ToArray()), System.Text.Encoding.UTF8, "application/json")
-                    };
-                    msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
+                    });
                     string login = op == "unlink" ? GameSignIn.Token() : null;      // the one saved sign-in to cancel
-                    if (login != null) msg.Headers.TryAddWithoutValidation("X-Revival-Login", login);
-                    System.Net.Http.HttpResponseMessage reply;
-                    try { reply = await Http.SendAsync(msg); }
-                    catch (System.Net.Http.HttpRequestException first)
+                    var extra = login != null ? new[] { new System.Collections.Generic.KeyValuePair<string, string>("X-Revival-Login", login) } : null;
+                    var reply = await Net.PostJson("/playfab/Revival/AccountLink", body, TimeSpan.FromSeconds(15), extra, retry: true);
+                    if (reply.Ok)
                     {
-                        // usually a kept-open connection the server had already closed: one more try on a new one
-                        RevivalMod.Log.Msg("[account] " + op + ": sending failed (" + Inner(first) + "); trying once more");
-                        await System.Threading.Tasks.Task.Delay(500);
-                        using var again = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url)
-                        {
-                            Content = new System.Net.Http.StringContent(System.Text.Encoding.UTF8.GetString(ms.ToArray()), System.Text.Encoding.UTF8, "application/json")
-                        };
-                        foreach (var h in msg.Headers) again.Headers.TryAddWithoutValidation(h.Key, h.Value);
-                        reply = await Http.SendAsync(again);
-                    }
-                    using var replyOwned = reply;
-                    using var doc = System.Text.Json.JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
-                    var root = doc.RootElement;
-                    if (reply.IsSuccessStatusCode && root.TryGetProperty("data", out var data))
-                    {
+                        var data = reply.Data;
                         string linked = data.TryGetProperty("linked", out var l) ? l.GetString() ?? "" : "";
                         bool isTester = data.TryGetProperty("account", out var a) && a.ValueKind == System.Text.Json.JsonValueKind.Object &&
                                         a.TryGetProperty("tester", out var t) && t.ValueKind == System.Text.Json.JsonValueKind.True;
@@ -202,11 +177,10 @@ namespace WarpforgeRevival
                             PlayFabTransport.OnMainThread(TestersTab.RoleChanged);      // the Testers button follows the role
                         }
                     }
+                    else if (reply.Unreachable) message = Unreachable;
                     else
                     {
-                        message = root.TryGetProperty("errorMessage", out var e) ? e.GetString() : null;
-                        if (string.IsNullOrEmpty(message)) message = "The server did not accept that (" + (int)reply.StatusCode + ").";
-                        else message = char.ToUpperInvariant(message[0]) + message.Substring(1) + ".";
+                        message = reply.Error;
                         RevivalMod.Log.Msg("[account] " + op + " refused: " + message);
                     }
                 }
@@ -219,13 +193,12 @@ namespace WarpforgeRevival
             });
         }
 
-        private static bool Usable(AccountTab tab) => (object)tab != null && tab.Pointer != IntPtr.Zero && tab.m_CachedPtr != IntPtr.Zero;
 
         private static void Apply(AccountTab tab)
         {
             try
             {
-                if (!Usable(tab)) return;
+                if (!Ui.Alive(tab)) return;
                 bool linked = !string.IsNullOrEmpty(linkedName);
 
                 var user = tab.emailInput;
@@ -271,9 +244,7 @@ namespace WarpforgeRevival
                     var label = button.GetComponentInChildren<TMP_Text>(true);
                     if ((object)label != null)
                     {
-                        var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
-                        if ((object)loc != null) loc.enabled = false;
-                        label.text = !linked ? "Link account" : SignedInWithAccount ? "Sign out" : "Unlink account";
+                        Ui.SetText(label, !linked ? "Link account" : SignedInWithAccount ? "Sign out" : "Unlink account");
                     }
                 }
 
@@ -321,9 +292,7 @@ namespace WarpforgeRevival
                 var label = go.GetComponentInChildren<TMP_Text>(true);
                 if ((object)label != null)
                 {
-                    var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
-                    if ((object)loc != null) loc.enabled = false;
-                    label.text = "Open profile on website";
+                    Ui.SetText(label, "Open profile on website");
                     label.enableAutoSizing = true;
                 }
                 RevivalMod.Log.Msg("[account] Open profile button added");
@@ -337,8 +306,8 @@ namespace WarpforgeRevival
             var msgRt = (object)msg == null ? null : msg.GetComponent<RectTransform>();
             if ((object)msgRt != null)
             {
-                var u = Corners(userRt);
-                var m = Corners(msgRt);
+                var u = Ui.WorldBox(userRt);
+                var m = Ui.WorldBox(msgRt);
                 float target = u.bottom - (u.top - u.bottom) * 0.5f;
                 if (Math.Abs(m.top - target) > 0.001f) msg.transform.position += new Vector3(0f, target - m.top, 0f);
 
@@ -352,8 +321,8 @@ namespace WarpforgeRevival
                     var brt = button.GetComponent<RectTransform>();
                     if ((object)brt != null)
                     {
-                        var b = Corners(brt);
-                        m = Corners(msgRt);
+                        var b = Ui.WorldBox(brt);
+                        m = Ui.WorldBox(msgRt);
                         float lineH = Math.Max(0.0001f, (u.top - u.bottom) * 0.35f);
                         float want = m.bottom - lineH;                      // the buttons' top, a little under the text
                         if (Math.Abs(b.top - want) > 0.001f)
@@ -368,7 +337,7 @@ namespace WarpforgeRevival
             var prt = profile.GetComponent<RectTransform>();
             if ((object)prt == null) return;
             // same row as the button; its left edge on the username box's left edge
-            float userLeft = Left(userRt), half = profile.position.x - Left(prt);
+            float userLeft = Ui.WorldBox(userRt).left, half = profile.position.x - Ui.WorldBox(prt).left;
             profile.position = new Vector3(userLeft + half, btnT.position.y, btnT.position.z);
             var c = profile.GetComponent<UnityEngine.UI.Button>();
             if ((object)c != null) c.interactable = true;
@@ -386,20 +355,6 @@ namespace WarpforgeRevival
         {
             for (; (object)t != null; t = t.parent) if (t.Pointer == ancestor.Pointer) return true;
             return false;
-        }
-
-        private static (float top, float bottom) Corners(RectTransform rt)
-        {
-            var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
-            rt.GetWorldCorners(c);
-            return (Math.Max(c[0].y, c[1].y), Math.Min(c[0].y, c[1].y));
-        }
-
-        private static float Left(RectTransform rt)
-        {
-            var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
-            rt.GetWorldCorners(c);
-            return Math.Min(c[0].x, c[2].x);
         }
 
         private static void OpenProfile()
@@ -432,7 +387,7 @@ namespace WarpforgeRevival
         {
             try
             {
-                if (!Usable(tab)) return;
+                if (!Ui.Alive(tab)) return;
                 var msg = tab.errorMessage;
                 if ((object)msg == null) return;
                 msg.gameObject.SetActive(true);
@@ -451,7 +406,7 @@ namespace WarpforgeRevival
         /// <summary>Told about the tab as soon as the Settings window is built (see SupportPage).</summary>
         internal static void Remember(AccountTab tab)
         {
-            if (!Usable(tab)) return;
+            if (!Ui.Alive(tab)) return;
             // the button row's phone/PC layout, settled at set-up (0.13.55): see MenuLayout.SettlePlatformLayout
             int settled = MenuLayout.SettlePlatformLayout(tab);
             if (settled > 0) RevivalMod.Log.Msg($"[account] phone/PC layout settled at set-up ({settled})");
@@ -475,7 +430,7 @@ namespace WarpforgeRevival
             seenNext = now + 0.25f;
             try
             {
-                if (!Usable(seen)) { seen = null; return; }
+                if (!Ui.Alive(seen)) { seen = null; return; }
                 if (!seen.gameObject.activeInHierarchy) { seenFrames = 0; return; }
                 if (seenFrames < 0) return;
                 if (++seenFrames < 3) return;
@@ -561,7 +516,7 @@ namespace WarpforgeRevival
                     Send(linked ? "unlink" : "link", name, pass, (ok, message) =>
                     {
                         busy = false;
-                        try { if (Usable(tab) && (object)tab.passwordInput != null) tab.passwordInput.SetTextWithoutNotify(""); } catch { }
+                        try { if (Ui.Alive(tab) && (object)tab.passwordInput != null) tab.passwordInput.SetTextWithoutNotify(""); } catch { }
                         if (ok && !linked) { try { tab.emailInput.SetTextWithoutNotify(linkedName ?? ""); } catch { } }
                         if (ok && linked) { try { tab.emailInput.SetTextWithoutNotify(""); } catch { } }
                         Apply(tab);

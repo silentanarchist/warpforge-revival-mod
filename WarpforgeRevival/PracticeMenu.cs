@@ -74,10 +74,11 @@ namespace WarpforgeRevival
         // When the deck it picked is for the other mode, a practice deck for the chosen mode is used.
         private static readonly System.Random Dice = new System.Random();
 
-        [HarmonyPatch(typeof(MatchData), nameof(MatchData.GetBotDeck))]
-        private static class AiDeck
+        /// <summary>Called from BotDecks' patch on MatchData.GetBotDeck (one place for "which deck the AI gets",
+        /// code review M-26, 0.13.75).</summary>
+        internal static class AiDeck
         {
-            private static void Postfix(MatchType matchType, ref PrebuiltDeck __result)
+            internal static void Postfix(MatchType matchType, ref PrebuiltDeck __result)
             {
                 try
                 {

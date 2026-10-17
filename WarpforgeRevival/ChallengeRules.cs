@@ -265,8 +265,9 @@ namespace WarpforgeRevival
                 }
                 var root = JsonNode.Parse(json) as JsonObject;
                 if (root == null) return json;
-                root["revivalRules"] = outgoing.ToJson();
-                RevivalMod.Log.Msg($"[challenge] custom rules sent to {target}: {outgoing.ToJson().ToJsonString()}");
+                var rulesJson = outgoing.ToJson();
+                RevivalMod.Log.Msg($"[challenge] custom rules sent to {target}: {rulesJson.ToJsonString()}");
+                root["revivalRules"] = rulesJson;
                 return root.ToJsonString();
             }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] " + e.Message); return json; }

@@ -82,6 +82,7 @@ namespace WarpforgeRevival
         };
         private static readonly Regex EventPattern = new Regex(@"^[A-Za-z0-9_.-]{1,64}$");
         private static readonly Regex CardsPattern = new Regex(@"^[A-Za-z0-9._-]{1,80}$");
+        private static readonly Regex CardIdPattern = new Regex(@"^[A-Za-z0-9._-]{1,64}$");
 
         private static string noted;          // this match's rules, waiting for the recording to be sent
         /// <summary>The current (or last) match's rules as sent with its recording, or null (for bug reports).</summary>
@@ -201,7 +202,7 @@ namespace WarpforgeRevival
             var list = new JsonArray();
             foreach (var kv in seenCards)
             {
-                if (kv.Key < 0 || kv.Key > 100000 || !System.Text.RegularExpressions.Regex.IsMatch(kv.Value.id, "^[A-Za-z0-9._-]{1,64}$")) continue;
+                if (kv.Key < 0 || kv.Key > 100000 || !CardIdPattern.IsMatch(kv.Value.id)) continue;
                 list.Add(new JsonArray(kv.Key, kv.Value.id, kv.Value.own ? 1 : 0));
             }
             seenCards.Clear();
