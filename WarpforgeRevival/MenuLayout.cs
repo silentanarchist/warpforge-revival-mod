@@ -28,8 +28,9 @@ namespace WarpforgeRevival
     /// Layout format (each window: a list of buttons, each named by its tab's class):
     ///   "menuLayout": { "Social":  [ {"tab": "AlliancesTab", "label": "CHALLENGE", "icon": "play", "after": "FriendsTab", "visible": true} ],
     ///                   "Testers": [ {"tab": "CardbackCollectionTab", "label": "PLAY", "icon": "play", "position": 0}, ... ] }
-    /// Windows: Social (the Social window), Testers (the mod's Testers window). Icons: "play" (the menu bar's Play
-    /// button picture). Omitted fields are left as the game has them.
+    /// Windows: Social (the Social window), Testers (the mod's Testers window). Tabs: the tab's class name, or the
+    /// name of a tab the mod adds ("Challenge"). Icons: "play" (the menu bar's Play button picture). Omitted fields
+    /// are left as the game has them.
     /// </summary>
     internal static class MenuLayout
     {
@@ -47,10 +48,12 @@ namespace WarpforgeRevival
 
         private static Dictionary<string, List<Button>> BuiltIn() => new Dictionary<string, List<Button>>
         {
-            // the Alliances tab is the Challenge tab (ChallengeMenu), directly below Friends
+            // the mod's Challenge tab (ChallengeMenu) directly below Friends; the game's Alliances tab hidden until
+            // alliances work on the server (the server's layout can show it: {"tab": "AlliancesTab", "visible": true})
             ["Social"] = new List<Button>
             {
-                new Button { Tab = "AlliancesTab", Label = "CHALLENGE", Icon = "play", After = "FriendsTab", Visible = true },
+                new Button { Tab = "Challenge", Label = "CHALLENGE", Icon = "play", After = "FriendsTab", Visible = true },
+                new Button { Tab = "AlliancesTab", Visible = false },
             },
             // the Testers window (a copy of the Collection window): Play, Decks, Cards; Styles hidden
             ["Testers"] = new List<Button>
@@ -175,9 +178,22 @@ namespace WarpforgeRevival
             }
         }
 
+        // tabs the mod adds (by pointer), named in the layout by these names instead of their class
+        private static readonly Dictionary<IntPtr, string> custom = new Dictionary<IntPtr, string>();
+
+        /// <summary>Names a tab the mod added (ChallengeMenu: "Challenge"), so layouts can place it.</summary>
+        internal static void Name(WindowTabBase tab, string name)
+        {
+            if ((object)tab == null) return;
+            var dead = new List<IntPtr>();
+            foreach (var kv in custom) if (kv.Value == name) dead.Add(kv.Key);   // one live tab per name
+            foreach (var k in dead) custom.Remove(k);
+            custom[tab.Pointer] = name;
+        }
+
         private static string TabName(WindowTabBase tab)
         {
-            try { return tab.GetIl2CppType().Name; } catch { return null; }
+            try { return custom.TryGetValue(tab.Pointer, out var n) ? n : tab.GetIl2CppType().Name; } catch { return null; }
         }
 
         private static TabButtons.TabButton Find(Il2CppSystem.Collections.Generic.List<TabButtons.TabButton> options, string tab)
