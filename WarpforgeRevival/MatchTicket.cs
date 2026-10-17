@@ -71,6 +71,39 @@ namespace WarpforgeRevival
             private static void Prefix() { try { Refresh(); MatchTunnel.Probe(); } catch { } }
         }
 
+        /// <summary>
+        /// The match service refused the ticket (0.13.62). It keeps tickets only while it runs, so after a server restart
+        /// a game that was already open kept sending its old ticket and was refused every 2 seconds for up to 20
+        /// minutes. Now the ticket is dropped and a new one fetched at once; the game's next reconnect sends it.
+        /// </summary>
+        internal static void Rejected()
+        {
+            lock (Gate)
+            {
+                if (ticket == null) return;
+                ticket = null;
+                validUntil = DateTime.MinValue;
+            }
+            RevivalMod.Log.Msg("[match] the match service refused the match ticket (server restarted?): getting a new one");
+            Refresh();
+        }
+
+        // The match service's answer to signing in: 32767 ("invalid authentication") is how it refuses a ticket.
+        [HarmonyPatch(typeof(NetworkingPeer), nameof(NetworkingPeer.OnOperationResponse))]
+        private static class Answer
+        {
+            private static void Prefix(Il2CppExitGames.Client.Photon.OperationResponse operationResponse)
+            {
+                try
+                {
+                    if ((object)operationResponse == null || operationResponse.ReturnCode != 32767) return;
+                    byte code = operationResponse.OperationCode;
+                    if (code == 230 || code == 231) Rejected();
+                }
+                catch { }
+            }
+        }
+
         // ...and hand it over just before the match client signs in (on every connection).
         [HarmonyPatch(typeof(NetworkingPeer), "CallAuthenticate")]
         private static class Hand
