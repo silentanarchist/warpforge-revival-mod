@@ -82,8 +82,6 @@ namespace WarpforgeRevival
 
         // ------------------------------------------------------------------ the window
         private static volatile bool open;
-        /// <summary>The sign-in or closing window is up (the bug-report tab stays away meanwhile).</summary>
-        internal static bool Busy => open || closing;
         private static TaskCompletionSource<string> waiting;
         private static string userName = "", password = "", password2 = "", message = "", serverNote = "";
         private static bool busy, problem, drawn;

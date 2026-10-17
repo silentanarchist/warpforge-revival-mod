@@ -64,26 +64,6 @@ namespace WarpforgeRevival
         // native code. The compiler merges identical small methods (empty bodies, trivial
         // getters) into one shared function; hooking one of those hooks thousands of others.
 
-        // Types whose async/coroutine state machines (MoveNext) are traced. MoveNext bodies are
-        // always unique, so this is safe; we deliberately do NOT trace every method of a type.
-        private static readonly string[] TracedTypes =
-        {
-            "AddressablesManager",
-            "LiveOpsManager",
-            "EntityObjectsManager",
-            "Everguild.LiveOps.Config.ConfigManager",
-            "SharedEventDataManager",
-            "SegmentationController",
-            "LoginManager",
-        };
-
-        // State machines of these PlayerDataManager methods (the type itself is too busy to trace whole).
-        private static readonly string[] PlayerDataStateMachines =
-        {
-            "UnpackUserInfo", "UnpackAddressables", "InitializeLiveOpsAndConfig", "PreloadLeaderboards",
-            "AsyncInitialization", "ProcessData",
-        };
-
         private const int MaxLinesPerMethod = 40;
         private static readonly ConcurrentDictionary<MethodBase, int> Counts = new ConcurrentDictionary<MethodBase, int>();
 

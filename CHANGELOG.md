@@ -24,6 +24,8 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Server name:** the mod now connects to **wf-revival.silentanarchist.com**, and the website moves there too. If your settings still name warpforge.silentanarchist.com, the mod switches them over by itself; while the new name is not reachable yet, the old one (the same server) is used. The old name keeps working for now and will be retired in a later update.
 
 ### Fixes
+- **Turn timer:** the timer length is taken from the server once per match, so the two players can no longer end up with different timers if the server setting changes mid-match.
+- **Smoother menus:** the Social page and the collection no longer do repeated full searches in the background.
 - **Challenges:** with a friend's custom-rules challenge still waiting, an ordinary challenge you sent to someone else could take those rules on your side only, so the two games disagreed. Not yet confirmed in play.
 - **Shorter logs:** the game's "No listener registered to this event" line (about 70% of a PC log) is left out, and old investigation tools were removed (freeze trace, deck and AI diagnostics). Diagnostic logging stays on.
 - **"While in play" on enchantments:** an enchantment's "while in play" ability was applied once and never refreshed, so Space Wolves' Everstorm (all units -1 Ranged) only ever affected the two warlords. It now reaches units played later too; a jammed unit still loses its effects.

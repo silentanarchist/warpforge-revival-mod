@@ -31,8 +31,6 @@ namespace WarpforgeRevival
         private const PlayModes LongMode = PlayModes.Battle4Warpforge;
         private static bool inside;                      // guards against re-entry from our own calls
 
-        public static void Start(string dataDir) { }
-
         private static string EventId => ServerSettings.LongGameEvent;
 
         private static IPlayEvent Event()

@@ -9,13 +9,16 @@ namespace WarpforgeRevival
     /// The turn timer length is part of the game's built-in battle rules (60 seconds). Set it each
     /// time a battle's clock is set up, from the server's settings (so both players agree); the
     /// local TurnSeconds setting is only used when the server does not provide one.
+    /// The server's value is taken once, when the battle's clock is set up, and kept for the whole match
+    /// (mod code review M-12, 2026-10-16): read again each turn, one player could pick up a changed server
+    /// setting mid-match while the other kept the old one. A challenge's own turn time still applies.
     /// </summary>
     internal static class TurnClock
     {
         [HarmonyPatch(typeof(ClockManager), nameof(ClockManager.Initialize))]
         private static class Setup
         {
-            private static void Prefix(ClockManager __instance) => Apply(__instance);
+            private static void Prefix(ClockManager __instance) { Snapshot(); Apply(__instance); }
             private static void Postfix(ClockManager __instance) => Apply(__instance);
         }
 
@@ -26,18 +29,32 @@ namespace WarpforgeRevival
         }
 
         private static bool noted;
+        private static int? matchSeconds;               // the server's turn time for the match being set up
+        private static PropertyInfo managerProp;
+        private static bool managerStatic, managerLooked;
+
+        /// <summary>The server's turn time, taken once as a battle's clock is set up.</summary>
+        private static void Snapshot()
+        {
+            try { ServerSettings.Refresh(); } catch { }
+            matchSeconds = ServerSettings.TurnSeconds;
+        }
 
         private static void Apply(ClockManager clock)
         {
             try
             {
-                ServerSettings.Refresh();
-                int seconds = ChallengeRules.TurnSeconds ?? ServerSettings.TurnSeconds ?? RevivalMod.Config.TurnSeconds;
+                int seconds = ChallengeRules.TurnSeconds ?? matchSeconds ?? ServerSettings.TurnSeconds ?? RevivalMod.Config.TurnSeconds;
                 if (seconds < 20 || seconds > 3600) return;
-                PropertyInfo p = AccessTools.Property(typeof(ClockManager), "manager");
-                if (p == null) return;
-                bool isStatic = p.GetGetMethod(true) != null && p.GetGetMethod(true).IsStatic;
-                var battle = p.GetValue(isStatic ? null : clock) as BattleManager;
+                if (!managerLooked)
+                {
+                    managerLooked = true;
+                    managerProp = AccessTools.Property(typeof(ClockManager), "manager");
+                    var getter = managerProp?.GetGetMethod(true);
+                    managerStatic = getter != null && getter.IsStatic;
+                }
+                if (managerProp == null) return;
+                var battle = managerProp.GetValue(managerStatic ? null : clock) as BattleManager;
                 if ((object)battle == null || battle.Pointer == IntPtr.Zero) return;
                 var rules = battle.scenarioVariables;
                 if ((object)rules == null) return;

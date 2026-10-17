@@ -44,7 +44,7 @@ namespace WarpforgeRevival
         private static readonly List<(Art art, AsyncOperationHandle<UnityEngine.Object> load, float since)> loading = new List<(Art, AsyncOperationHandle<UnityEngine.Object>, float)>();
         private static AsyncOperationHandle<UnityEngine.Object> anchor;   // (interop handles are objects: null = none)            // keeps the current faction's art bundle loaded
         private static int anchorArmy = int.MinValue;
-        private static int total, done, written, masks, frames, sinceCleanup;
+        private static int total, done, written, masks, frames;
         private static AsyncOperation unloading;
         private static readonly List<string> missing = new List<string>();
         private static ZipArchive zip;
@@ -74,7 +74,7 @@ namespace WarpforgeRevival
                 zip = new ZipArchive(new FileStream(partPath, FileMode.Create, FileAccess.ReadWrite), ZipArchiveMode.Create);
                 todo.Clear(); loading.Clear(); missing.Clear();
                 foreach (var a in cards) todo.Enqueue(a);
-                total = cards.Count; done = written = masks = frames = sinceCleanup = textTerms = textLanguages = 0;
+                total = cards.Count; done = written = masks = frames = textTerms = textLanguages = 0;
                 anchor = null; anchorArmy = int.MinValue; unloading = null;
                 clock = Stopwatch.StartNew();
                 running = true;

@@ -687,8 +687,8 @@ namespace WarpforgeRevival
                 catch (Exception e) { RevivalMod.Log.Warning("[bugs] " + e.Message); blocked = null; }
             }
 
-            private static GUIStyle box, label, small, field, button, tab;
-            private static Texture2D shade, panel, tabBack;
+            private static GUIStyle box, label, small, field, button;
+            private static Texture2D shade, panel;
             private static float sc = 1f;
             private static Rect R(float x, float y, float w, float h) => new Rect(x * sc, y * sc, w * sc, h * sc);
 
@@ -703,26 +703,17 @@ namespace WarpforgeRevival
                 {
                     shade = Solid(new Color(0f, 0f, 0f, 0.6f));
                     panel = Solid(new Color(0.05f, 0.11f, 0.09f, 0.97f));
-                    tabBack = Solid(new Color(0.05f, 0.11f, 0.09f, 0.8f));
                     box = new GUIStyle(GUI.skin.box); box.normal.background = panel;
                     label = new GUIStyle(GUI.skin.label) { wordWrap = true }; label.normal.textColor = new Color(0.85f, 0.95f, 0.9f);
                     small = new GUIStyle(label); small.normal.textColor = new Color(0.6f, 0.75f, 0.7f);
                     field = new GUIStyle(GUI.skin.textField);
                     button = new GUIStyle(GUI.skin.button);
-                    tab = new GUIStyle(GUI.skin.button); tab.normal.background = tabBack;
                 }
                 sc = Mathf.Max(0.5f, Mathf.Min(Screen.width / 1280f, Screen.height / 720f));
                 label.fontSize = Mathf.RoundToInt(20 * sc); small.fontSize = Mathf.RoundToInt(15 * sc);
-                field.fontSize = Mathf.RoundToInt(20 * sc); button.fontSize = Mathf.RoundToInt(18 * sc); tab.fontSize = Mathf.RoundToInt(14 * sc);
+                field.fontSize = Mathf.RoundToInt(20 * sc); button.fontSize = Mathf.RoundToInt(18 * sc);
             }
 
-            /// <summary>The small "Report bug" tab on the left edge (testers only).</summary>
-            internal static void DrawTab(Action onClick)
-            {
-                Styles();
-                float h = Screen.height / sc;
-                if (GUI.Button(R(0, h * 0.42f, 96, 34), "Report bug", tab)) onClick();
-            }
 
             private static bool Tick(float x, float y, string text, bool on)
             {

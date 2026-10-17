@@ -19,6 +19,10 @@ namespace WarpforgeRevival
     internal static class OffenceInCollection
     {
         private static bool noted;
+        // The sweep below looks at every loaded object; it is run again only when the game's card library is new
+        // or rebuilt (mod code review M-8, 2026-10-16), not on every listing of the collection.
+        private static IntPtr sweptLibrary;
+        private static int sweptCount = -1;
 
         private static bool IsOffence(RawCardScript c) =>
             (object)c != null && c.spellType == SpellType.OffensiveCard && c.inventoryOptions == CardInventoryOptions.CantAddToDeck;
@@ -29,6 +33,10 @@ namespace WarpforgeRevival
         /// <summary>Marks the real Offence cards "show" (their internal helper cards stay hidden).</summary>
         private static void Reveal()
         {
+            var library = PlayerDataManager.singletonManager?.allCardCollection;
+            IntPtr id = library == null ? IntPtr.Zero : library.Pointer;
+            int count = library == null ? -1 : library.Count;
+            if (id != IntPtr.Zero && id == sweptLibrary && count == sweptCount) return;
             int changed = 0;
             var all = Resources.FindObjectsOfTypeAll<RawCardScript>();
             if (all == null) return;
@@ -39,6 +47,8 @@ namespace WarpforgeRevival
                 c.showInCollectionOptions = ShowInCollectionOptions.Show;
                 changed++;
             }
+            sweptLibrary = id;
+            sweptCount = count;
             if (changed > 0 || !noted)
             {
                 noted = true;

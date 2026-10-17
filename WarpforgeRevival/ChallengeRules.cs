@@ -233,7 +233,7 @@ namespace WarpforgeRevival
             outgoing = rules;
             outgoingTo = to;
             outgoingAt = Time.realtimeSinceStartup;
-            Apply(rules, null, true);     // the challenger's own match uses them too
+            Apply(rules, true);     // the challenger's own match uses them too
         }
 
         /// <summary>
@@ -350,19 +350,6 @@ namespace WarpforgeRevival
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] popup: " + e.Message); return text; }
         }
 
-        private static string FriendName(string id, string fallback)
-        {
-            try
-            {
-                var fl = PlayerDataManager.singletonManager?.friendsData?.friendList;
-                if (fl != null)
-                    for (int i = 0; i < fl.Count; i++)
-                        if ((object)fl[i] != null && fl[i].id == id && !string.IsNullOrEmpty(fl[i].name)) return fl[i].name;
-            }
-            catch { }
-            return fallback;
-        }
-
         /// <summary>
         /// The game's popup sizes its text to fit, so the rules came out small: once it is on screen, its
         /// text is allowed to be larger (and the box taller where the popup lets it grow).
@@ -426,7 +413,7 @@ namespace WarpforgeRevival
 
         internal static void ForReplay(RuleSet rules)
         {
-            Apply(rules, null, false);
+            Apply(rules, false);
             activeIsReplay = true;
         }
 
@@ -472,14 +459,14 @@ namespace WarpforgeRevival
                     RevivalMod.Log.Msg($"[challenge] challenge match starting with '{opponent}': {(rules == null ? "ordinary rules" : "custom rules")}");
                     // nothing is cleared here for an ordinary one: rules already noted stay until the battle
                     // (which only uses them in a friend match), a call-off, or 5 minutes
-                    if (rules != null && !ReferenceEquals(rules, active)) Apply(rules, null, ReferenceEquals(rules, outgoing));
+                    if (rules != null && !ReferenceEquals(rules, active)) Apply(rules, ReferenceEquals(rules, outgoing));
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[challenge] match start: " + e.Message); }
                 return true;
             }
         }
 
-        private static void Apply(RuleSet rules, IPlayEvent ev, bool challenger)
+        private static void Apply(RuleSet rules, bool challenger)
         {
             Restore();
             active = rules;
@@ -565,7 +552,7 @@ namespace WarpforgeRevival
             if (!found && opponent.Length == 0 && incoming.Count == 1) { got = incoming.Values.First(); found = true; opponent = incoming.Keys.First(); }
             if (!found || now - got.at > 300f) { RevivalMod.Log.Msg($"[challenge] friend match: no challenge rules for '{opponent}'"); return; }
             RevivalMod.Log.Msg($"[challenge] friend match with {opponent}: the accepted challenge's rules");
-            Apply(got.rules, null, false);
+            Apply(got.rules, false);
         }
 
         private static void Set(GameplayVariablesData gv, string key, RuleSet rules)

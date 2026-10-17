@@ -24,9 +24,6 @@ namespace WarpforgeRevival
 
         public string PackVersion { get; private set; }      // the old card pack's version (cached copy only)
         public string CardsVersion { get; private set; }     // the server's version of the card bundles
-        public int CardCount { get; private set; }
-        public string PackJson { get; private set; }
-        public bool FromCache { get; private set; }
         private volatile bool bundlesRefused;                // a bundle needed a sign-in the game did not have yet
 
         /// <summary>After a sign-in: if a content bundle was refused for want of one, fetch them again now
@@ -127,7 +124,6 @@ namespace WarpforgeRevival
             try
             {
                 Parse(File.ReadAllText(packPath));
-                FromCache = true;
             }
             catch (Exception e)
             {
@@ -138,9 +134,7 @@ namespace WarpforgeRevival
         private void Parse(string json)
         {
             using var doc = JsonDocument.Parse(json);
-            PackVersion = doc.RootElement.GetProperty("version").GetString();
-            CardCount = doc.RootElement.GetProperty("cards").GetArrayLength();
-            PackJson = json;
+            PackVersion = doc.RootElement.GetProperty("version").GetString();   // only the version is used; the text is not kept
         }
     }
 }

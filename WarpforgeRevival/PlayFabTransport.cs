@@ -81,9 +81,7 @@ namespace WarpforgeRevival
                         if (h.Key == "X-Authorization" && !string.IsNullOrEmpty(h.Value) && h.Value != SessionTicket)
                         {
                             SessionTicket = h.Value;
-#if !ANDROID_TEST || ANDROID_PORT
                             AccountPage.SignedIn();
-#endif
                         }
                 }
                 catch (Exception e)

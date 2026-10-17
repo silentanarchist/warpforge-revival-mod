@@ -22,7 +22,7 @@ namespace WarpforgeRevival
     {
         private const string GlobalChannel = "Global";
 
-        private sealed class Incoming { public long Id; public string Channel, Sender, Message, Cid; public bool History; }
+        private sealed class Incoming { public long Id; public string Channel, Sender, Message; public bool History; }
 
         private static readonly HttpClient Http = Net.Client(TimeSpan.FromSeconds(15));
         private static readonly ConcurrentQueue<Incoming> Inbox = new ConcurrentQueue<Incoming>();
@@ -37,7 +37,6 @@ namespace WarpforgeRevival
         private static volatile bool polling;
         private static float nextPoll, managerSeen;
         private static bool forcedChannel, pollNoted, failNoted;
-        private static ChatPreview button;
 
         public static void Start(string serverUrl) => server = serverUrl;
 
@@ -406,7 +405,6 @@ namespace WarpforgeRevival
                             Channel = m.GetProperty("channel").GetString(),
                             Sender = m.GetProperty("sender").GetString() ?? "",
                             Message = m.GetProperty("message").GetString(),
-                            Cid = m.TryGetProperty("cid", out var c) ? c.GetString() ?? "" : "",
                             History = history,
                         });
                         n++;
@@ -570,7 +568,6 @@ namespace WarpforgeRevival
                 try
                 {
                     if ((object)__instance == null || __instance.Pointer == IntPtr.Zero) return;
-                    button = __instance;
                     __instance.Show();
                     RevivalMod.Log.Msg("[chat] chat button shown on the main menu");
                 }

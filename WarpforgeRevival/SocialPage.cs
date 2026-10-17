@@ -42,24 +42,6 @@ namespace WarpforgeRevival
             catch (Exception e) { RevivalMod.Log.Warning("[social] " + e.Message); }
         }
 
-        /// <summary>Collection: the Styles tab (alternate card art) has no content on a revival server.</summary>
-        private static void HideStyles(GameWindowWithTabs w)
-        {
-            try
-            {
-                if ((object)w == null || (object)w.TryCast<CollectionScreen>() == null) return;
-                var buttons = w.Components?.TabButtons?.options;
-                if (buttons == null) return;
-                for (int i = 0; i < buttons.Count; i++)
-                {
-                    var b = buttons[i];
-                    if (b == null || (object)b.tab == null || (object)b.toggle == null) continue;
-                    if ((object)b.tab.TryCast<AlternateArtCardCollectionTab>() != null) b.toggle.gameObject.SetActive(false);
-                }
-            }
-            catch (Exception e) { RevivalMod.Log.Warning("[collection] " + e.Message); }
-        }
-
         [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.GetStartingTab))]
         private static class StartOnFriends
         {

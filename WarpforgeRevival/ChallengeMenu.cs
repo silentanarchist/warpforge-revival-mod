@@ -19,7 +19,12 @@ namespace WarpforgeRevival
     internal static class ChallengeMenu
     {
         private const string PanelName = "RevivalChallengeMenu";
-        private static float nextCheck;
+        private static float nextCheck, nextFind;
+        // The Social window, kept once found (mod code review M-7, 2026-10-16): it was searched for in the whole
+        // scene 4 times a second for the life of the game, and its ribbon restyled every time.
+        private static SocialMenuWindow window;
+        private static bool wasOpen;
+        private static IntPtr lastTab;
         private static bool dressedLogged, builtLogged;
 
         // menu state, kept while the game runs
@@ -58,10 +63,19 @@ namespace WarpforgeRevival
             if (!slow && !dirty) return;
             try
             {
-                var w = UnityEngine.Object.FindObjectOfType<SocialMenuWindow>();
-                if (!Alive(w) || !w.isActiveAndEnabled) return;
-                Dress(w);
+                if (!Alive(window))
+                {
+                    window = null;
+                    if (now < nextFind) return;
+                    nextFind = now + 1f;                                      // looked for at most once a second
+                    window = UnityEngine.Object.FindObjectOfType<SocialMenuWindow>();
+                    if (!Alive(window)) { window = null; return; }
+                }
+                var w = window;
+                if (!w.isActiveAndEnabled) { wasOpen = false; return; }
                 var tab = w.CurrentTab;
+                IntPtr tabId = (object)tab == null ? IntPtr.Zero : tab.Pointer;
+                if (!wasOpen || tabId != lastTab) { Dress(w); wasOpen = true; lastTab = tabId; }   // when opened or the tab changes
                 bool onChallenge = (object)tab != null && (object)tab.TryCast<AlliancesTab>() != null;
                 var panel = w.transform.Find(PanelName);
                 if ((object)panel != null && panel.gameObject.activeSelf != onChallenge) panel.gameObject.SetActive(onChallenge);

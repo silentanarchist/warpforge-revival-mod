@@ -20,9 +20,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.13.48-a";
+        public const string Version = "0.13.49-a";
 #else
-        public const string Version = "0.13.48-w";
+        public const string Version = "0.13.49-w";
 #endif
 
         /// <summary>
@@ -152,7 +152,6 @@ namespace WarpforgeRevival
             ServerSettings.Start(Config.ServerUrl);
             CardText.Start(Config.ServerUrl);
             GlobalChat.Start(Config.ServerUrl);
-            LongGame.Start(dataDir);
 #if ANDROID_PORT
             try { AndroidUpdater.LoadedFrom = MelonAssembly.Location ?? ""; } catch { }
             AndroidUpdater.Start(Config.ServerUrl);
@@ -238,7 +237,6 @@ namespace WarpforgeRevival
                 try { Log.Msg("[graphics] the game draws with " + UnityEngine.SystemInfo.graphicsDeviceType + " (" + UnityEngine.SystemInfo.graphicsDeviceVersion + ", " + UnityEngine.SystemInfo.graphicsDeviceName + ")"); }
                 catch (Exception e) { Log.Msg("[graphics] could not read the drawing system: " + e.Message); }
             }
-            AndroidUpdater.Tick();
 #endif
             FrameWatch.Tick();
             BugReport.Tick();

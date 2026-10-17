@@ -145,18 +145,11 @@ namespace WarpforgeRevival
             }
         }
 
-        /// <summary>Called every frame on the main thread: the fallback that ends the process after CloseApp.</summary>
-        public static void Tick()
-        {
-            if (closeAt > 0f && UnityEngine.Time.realtimeSinceStartup >= closeAt) { closeAt = -1f; EndProcess(); }
-        }
-
         // ---- closing the app for real ----
         // Ending the process alone is not enough: Android keeps the app's screen in its list of recent
         // apps and starts it again from that leftover state, and that restart has been seen to break
         // the game (errors from its own code before login). So first ask Android to finish the screen
         // and remove it from the recent apps, the way a real exit does, and only then end the process.
-        private static float closeAt = -1f;
 
         [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "getpid")] private static extern int getpid();
         [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "kill")] private static extern int kill(int pid, int sig);

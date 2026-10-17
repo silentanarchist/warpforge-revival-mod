@@ -25,7 +25,6 @@ namespace WarpforgeRevival
         //              "copies": {"Common": 4, "Rare": 3, "Epic": 2, "Legendary": 1}}
         private static volatile string longGameEvent;
         private static double longGameHealth = 1.0;
-        private static volatile int classicDeckSize = 30;
         private static volatile int longGameHand;            // cards the first player starts with (0 = game default)
         private static volatile int longGameSecondExtra = -1; // extra cards for the second player (-1 = game default)
         public static int LongGameHand => longGameHand;
@@ -52,7 +51,6 @@ namespace WarpforgeRevival
         /// matches all run under one event, so the mode rules on the server cannot tell the two apart.
         /// </summary>
         public static int PracticeClassicLife => practiceClassicLife;
-        public static int ClassicDeckSize => classicDeckSize;
         public static int LongGameCopies(int rarity) => rarity >= 0 && rarity < longGameCopies.Length ? longGameCopies[rarity] : 0;
 
         private static volatile bool loaded;
@@ -79,8 +77,6 @@ namespace WarpforgeRevival
         /// </summary>
         public static string CreatorUrl => !string.IsNullOrEmpty(creatorUrl) ? creatorUrl : RevivalMod.Config.ServerUrl + "/creator";
 
-        /// <summary>The server's single Offence card switch ("offenseCards"), used only when it does not send one per mode.</summary>
-        public static bool OffenseCards => offenseCards;
 
         // "offenseCardModes": {eventId: true/false} - each game mode's own Offence card switch (from its
         // gameplayVariables on the server); null when the server does not send it (older server)
@@ -172,7 +168,6 @@ namespace WarpforgeRevival
                         if (lg.TryGetProperty("warlordHealth", out var lh) && lh.ValueKind == JsonValueKind.Number) longGameHealth = lh.GetDouble();
                         longGameHand = lg.TryGetProperty("startingHand", out var sh) && sh.ValueKind == JsonValueKind.Number ? sh.GetInt32() : 0;
                         longGameSecondExtra = lg.TryGetProperty("secondPlayerExtraCards", out var se) && se.ValueKind == JsonValueKind.Number ? se.GetInt32() : -1;
-                        if (lg.TryGetProperty("classicDeckSize", out var lc) && lc.ValueKind == JsonValueKind.Number) classicDeckSize = lc.GetInt32();
                         if (lg.TryGetProperty("copies", out var cp) && cp.ValueKind == JsonValueKind.Object)
                         {
                             string[] names = { "", "Common", "Rare", "Epic", "Legendary" };
