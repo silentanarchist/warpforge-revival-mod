@@ -7,11 +7,34 @@ namespace WarpforgeRevival
     /// <summary>
     /// Notes every popup the game shows in the log, with the text (or text key) it was given.
     /// A popup that comes up blank is one whose wording is missing; the key in the log says which,
-    /// so the wording can be supplied from the server's text-terms.json.
+    /// so the wording can be supplied from the server's text-terms.json. Since 0.13.60 such a popup shows readable
+    /// text instead of nothing (Readable).
     /// </summary>
     internal static class PopupNotes
     {
         private const string EverguildMail = "support@everguild.com", RevivalMail = "wf-revival@silentanarchist.com";
+
+        /// <summary>Wording for a text key that has none: known server errors in plain words, otherwise the key's last
+        /// part split into words ("PlayfabErrors/AccountNotFound" -> "Account not found").</summary>
+        internal static string Readable(string key)
+        {
+            string last = key;
+            int slash = last.LastIndexOf('/');
+            if (slash >= 0 && slash < last.Length - 1) last = last.Substring(slash + 1);
+            switch (last)
+            {
+                case "APIClientRequestRateLimitExceeded":
+                case "APIRequestRateLimitExceeded":
+                    return "Too many requests to the server. Wait a minute and try again.";
+                case "ServiceUnavailable":
+                case "InternalServerError":
+                    return "The server could not do that right now. Try again in a moment.";
+            }
+            var words = System.Text.RegularExpressions.Regex.Replace(last, "(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|_", " ").Trim();
+            if (words.Length == 0) return "Something went wrong.";
+            words = words.Substring(0, 1).ToUpperInvariant() + words.Substring(1).ToLowerInvariant();
+            return words.EndsWith(".") ? words : words + ".";
+        }
 
         [HarmonyPatch(typeof(WindowsManager), nameof(WindowsManager.LoadPopUpAndShow))]
         private static class Shown
@@ -50,6 +73,16 @@ namespace WarpforgeRevival
                                                                             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                         localizeTexts = false;
                         shown = text;
+                    }
+                    // a text key with no wording would show an empty popup (2026-10-16: the server's rate limit,
+                    // "PlayfabErrors/APIClientRequestRateLimitExceeded"): show readable text instead
+                    if (localizeTexts && string.IsNullOrEmpty(shown) && !string.IsNullOrEmpty(text))
+                    {
+                        string original = text;
+                        text = Readable(text);
+                        localizeTexts = false;
+                        shown = text;
+                        RevivalMod.Log.Msg($"[popup] no wording for '{original}'; shown as: {text}");
                     }
                     int buttons = (object)gameWindowButton != null ? gameWindowButton.Length : 0;
                     RevivalMod.Log.Msg($"[popup] text {(text == null ? "null" : "'" + text + "'")}, {(localizeTexts ? "a text key" : "literal text")}, {buttons} button(s)" +

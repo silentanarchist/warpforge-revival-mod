@@ -80,12 +80,13 @@ namespace WarpforgeRevival
                 var tab = to.TryCast<AlliancesTab>();
                 if ((object)tab == null) return;
                 var manager = SingletonBehaviour<AlliancesManager>.Instance;
-                if ((object)manager == null) { tab.Refresh(); return; }
+                if ((object)manager == null) { lastState = null; tab.Refresh(); return; }
                 var done = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<Group>>(new Action<Group>(group =>
                 {
                     try
                     {
                         if ((object)tab == null || tab.m_CachedPtr == IntPtr.Zero) return;
+                        lastState = null;          // opening always refreshes (see ShouldRefresh)
                         tab.Refresh();
                         if (!openedLogged)
                         {
@@ -98,6 +99,45 @@ namespace WarpforgeRevival
                 manager.GetCurrentGroup(done, true);
             }
             catch (Exception e) { RevivalMod.Log.Warning("[alliances] opening the tab: " + e.Message); }
+        }
+
+        // ---------------------------------------------------------------- the refresh loop (0.13.60)
+        private static string lastState;
+        private static float lastRefreshAt = -100f;
+        private static int skipped;
+
+        /// <summary>
+        /// Whether the Alliances tab's Refresh should run (called from the hook ChallengeMenu already has on it, no new
+        /// hook). The game's own chain: the alliance page's set-up asks for the alliance (GetCurrentGroup), storing the
+        /// answer fires the "alliance updated" event, the tab (subscribed in its Start) runs Refresh, which sets the
+        /// page up again and asks again: on the revival server every answer is a fresh copy, so it never settled
+        /// (0.13.59: about 30 refreshes a second; the page was rebuilt before the edit button could be used). A
+        /// Refresh within 5 s of the last one, with nothing about the alliance changed, is skipped; joining, leaving,
+        /// edits and member changes still refresh.
+        /// </summary>
+        internal static bool ShouldRefresh()
+        {
+            try
+            {
+                var manager = SingletonBehaviour<AlliancesManager>.Instance;
+                string state = "?";
+                if ((object)manager != null)
+                {
+                    var g = manager.IsInGroup ? manager.CurrentCachedGroupData : null;
+                    state = (object)g == null ? (manager.IsInGroup ? "member" : "none")
+                        : string.Join("|", g.GroupId, g.Name, g.Desc, g.MemberCount, g.LeaderId, (int)g.Privacy, g.Region, g.MinElo);
+                }
+                float now = UnityEngine.Time.realtimeSinceStartup;
+                if (state == lastState && now - lastRefreshAt < 5f)
+                {
+                    if (++skipped == 1) RevivalMod.Log.Msg("[alliances] repeated refresh of an unchanged alliance skipped (the game's refresh loop)");
+                    return false;
+                }
+                lastState = state;
+                lastRefreshAt = now;
+                return true;
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[alliances] refresh: " + e.Message); return true; }
         }
 
         [HarmonyPatch(typeof(ConfigManager), nameof(ConfigManager.Unpack))]

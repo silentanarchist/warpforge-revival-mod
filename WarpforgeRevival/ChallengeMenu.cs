@@ -354,6 +354,10 @@ namespace WarpforgeRevival
         private static class NoAllianceStart { private static bool Prefix(AlliancesTab __instance) => !IsChallengeTab(__instance); }
 
         [HarmonyPatch(typeof(AlliancesTab), nameof(AlliancesTab.Refresh))]
-        private static class NoAllianceRefresh { private static bool Prefix(AlliancesTab __instance) => !IsChallengeTab(__instance); }
+        private static class NoAllianceRefresh
+        {
+            // the real tab: AllianceConfig.ShouldRefresh breaks the game's refresh loop (0.13.60)
+            private static bool Prefix(AlliancesTab __instance) => !IsChallengeTab(__instance) && AllianceConfig.ShouldRefresh();
+        }
     }
 }
