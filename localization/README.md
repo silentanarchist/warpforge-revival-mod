@@ -20,6 +20,8 @@ that language. Translations are done on Weblate; you do not need to edit these f
 - A text without a translation is shown in English, so a half-done language is fine.
 - First drafts made by machine are marked "needs editing" on Weblate until someone who speaks the language checks them.
 
+Machine drafts not yet checked by a speaker of the language: **Spanish** (`mod/es.json`).
+
 ## How it reaches players
 
 The mod and the site download the language files from the revival server
