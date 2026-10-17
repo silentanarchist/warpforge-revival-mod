@@ -193,6 +193,9 @@ namespace WarpforgeRevival
                     if (offence != offenseCards) RevivalMod.Log.Msg($"[settings] server settings: Offence cards {(offence ? "on" : "off")} (used when the server has no per-mode switch)");
                     offenseCards = offence;
                     System.Collections.Generic.Dictionary<string, bool> om = null;
+                    // the menus' inner ribbons (MenuLayout); without it the built-in layout is used
+                    MenuLayout.FromServer(doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("menuLayout", out var ml) && ml.ValueKind == JsonValueKind.Object
+                        ? ml.Clone() : (JsonElement?)null);
                     if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("offenseCardModes", out var oms) && oms.ValueKind == JsonValueKind.Object)
                     {
                         om = new System.Collections.Generic.Dictionary<string, bool>();

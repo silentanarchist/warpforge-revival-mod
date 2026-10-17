@@ -8,7 +8,8 @@ namespace WarpforgeRevival
 {
     /// <summary>
     /// Social on a revival server: the friend list (worded for adding people by friend code or name)
-    /// and the Challenge tab, which takes the place of the unused Alliances tab (see ChallengeMenu).
+    /// and the Challenge tab, which takes the place of the unused Alliances tab (see ChallengeMenu; its ribbon
+    /// button is set by MenuLayout).
     /// </summary>
     internal static class SocialPage
     {
@@ -22,24 +23,6 @@ namespace WarpforgeRevival
                 if ((object)t != null && (object)t.TryCast<T>() != null) return t;
             }
             return null;
-        }
-
-        private static void HideAlliances(GameWindowWithTabs w)
-        {
-            try
-            {
-                if ((object)w == null || (object)w.TryCast<SocialMenuWindow>() == null) return;
-                var buttons = w.Components?.TabButtons?.options;
-                if (buttons != null)
-                    for (int i = 0; i < buttons.Count; i++)
-                    {
-                        var b = buttons[i];
-                        if (b == null || (object)b.tab == null || (object)b.toggle == null) continue;
-                        // the Alliances tab is the Challenge tab now (ChallengeMenu); it is shown, not hidden
-                        if ((object)b.tab.TryCast<AlliancesTab>() != null && !b.toggle.gameObject.activeSelf) b.toggle.gameObject.SetActive(true);
-                    }
-            }
-            catch (Exception e) { RevivalMod.Log.Warning("[social] " + e.Message); }
         }
 
         [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.GetStartingTab))]
@@ -56,12 +39,6 @@ namespace WarpforgeRevival
                 catch (Exception e) { RevivalMod.Log.Warning("[social] " + e.Message); }
             }
         }
-
-        [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.OpenTabs))]
-        private static class AfterOpenTabs { private static void Postfix(GameWindowWithTabs __instance) { HideAlliances(__instance); } }
-
-        [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.Open))]
-        private static class AfterOpen { private static void Postfix(GameWindowWithTabs __instance) { HideAlliances(__instance); } }
 
         /// <summary>Friends tab wording: add by friend code, no "instant duel" button.</summary>
         internal static void DressFriendsTab(FriendsTab tab)

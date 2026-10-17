@@ -21,10 +21,10 @@ namespace WarpforgeRevival
         private const string PanelName = "RevivalChallengeMenu";
         private static float nextCheck, nextFind;
         // The Social window, kept once found (mod code review M-7, 2026-10-16): it was searched for in the whole
-        // scene 4 times a second for the life of the game. The ribbon is still re-applied every 0.25 s while the
-        // window is open (the owner preferred that: it always stays the same).
+        // scene 4 times a second for the life of the game. Its ribbon (the Challenge button) is set once, as the
+        // window is built, by MenuLayout (0.13.51; it was re-applied here every 0.25 s before).
         private static SocialMenuWindow window;
-        private static bool dressedLogged, builtLogged;
+        private static bool builtLogged;
 
         // menu state, kept while the game runs
         private static string friendId, friendName;
@@ -32,7 +32,6 @@ namespace WarpforgeRevival
         private static ChallengeRules.RuleSet values;
         private static string status = "";
         private static bool dirty = true;
-        private static Sprite swords;
 
         private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
 
@@ -72,7 +71,6 @@ namespace WarpforgeRevival
                 }
                 var w = window;
                 if (!w.isActiveAndEnabled) return;
-                Dress(w);                // every 0.25 s while open, so the ribbon always stays the same (owner, 2026-10-16)
                 var tab = w.CurrentTab;
                 bool onChallenge = (object)tab != null && (object)tab.TryCast<AlliancesTab>() != null;
                 var panel = w.transform.Find(PanelName);
@@ -84,47 +82,6 @@ namespace WarpforgeRevival
                 if ((object)panel == null || dirty) Build(w, (object)panel == null ? null : panel.gameObject);
             }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] menu: " + e.Message); nextCheck = now + 5f; }
-        }
-
-        /// <summary>The ribbon: the Alliances button shown again as CHALLENGE, with crossed swords.</summary>
-        private static void Dress(GameWindowWithTabs w)
-        {
-            var buttons = w.Components?.TabButtons?.options;
-            if (buttons == null) return;
-            if (!Alive(swords))
-            {
-                try
-                {
-                    var nav = UnityEngine.Object.FindObjectOfType<NavigationPanelController>();
-                    var play = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Main);
-                    var img = (object)play == null ? null : play.transform.Find("Image");
-                    if ((object)img != null) swords = img.GetComponent<Image>()?.sprite;
-                }
-                catch { }
-            }
-            for (int i = 0; i < buttons.Count; i++)
-            {
-                var b = buttons[i];
-                if (b == null || (object)b.tab == null || (object)b.toggle == null) continue;
-                if ((object)b.tab.TryCast<AlliancesTab>() == null) continue;
-                var go = b.toggle.gameObject;
-                if (!go.activeSelf) go.SetActive(true);
-                // directly below Friends
-                for (int j = 0; j < buttons.Count; j++)
-                {
-                    var fb = buttons[j];
-                    if (fb == null || (object)fb.tab == null || (object)fb.toggle == null || (object)fb.tab.TryCast<FriendsTab>() == null) continue;
-                    int want = fb.toggle.transform.GetSiblingIndex() + 1;
-                    if (go.transform.parent == fb.toggle.transform.parent && go.transform.GetSiblingIndex() != want)
-                        go.transform.SetSiblingIndex(want > go.transform.GetSiblingIndex() ? want - 1 : want);
-                }
-                foreach (var loc in go.GetComponentsInChildren<Il2CppI2.Loc.Localize>(true)) if (loc.enabled) loc.enabled = false;
-                foreach (var label in go.GetComponentsInChildren<TMP_Text>(true)) if (label.text != "CHALLENGE") label.text = "CHALLENGE";
-                var icon = go.transform.Find("Icon");
-                var image = (object)icon == null ? null : icon.GetComponent<Image>();
-                if ((object)image != null && Alive(swords) && (object)image.sprite != (object)swords) image.sprite = swords;
-                if (!dressedLogged) { dressedLogged = true; RevivalMod.Log.Msg("[challenge] Social ribbon: Challenge tab shown"); }
-            }
         }
 
         // ---------------------------------------------------------------- the menu

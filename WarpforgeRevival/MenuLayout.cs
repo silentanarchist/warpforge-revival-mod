@@ -1,0 +1,345 @@
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using HarmonyLib;
+using Il2Cpp;
+using Il2CppTMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace WarpforgeRevival
+{
+    /// <summary>
+    /// The inner ribbons of the game's tabbed windows (owner, 2026-10-16: "preset all ribbons so they are built
+    /// correctly once"), from a layout the server can send ("menuLayout" in revival-settings.json) or, without one,
+    /// the layout built in here.
+    ///
+    /// When it happens (decompiled 2026-10-16): GameWindowWithTabs.Open runs SetupTabs once per window, the first
+    /// time it opens and before it is shown (Open: if (!initialized) { SetupTabs(); initialized = true; }
+    /// GameWindow.Open()). SetupTabs only wires the buttons up (TabButtons.Initialize: toggle group, click handlers,
+    /// the highlight); nothing in the game sets a tab button's label, icon, order or visibility after that, other
+    /// than each label's translation component (I2 Localize) when the button is enabled, which is switched off on
+    /// the labels changed here. So the layout is applied in a SetupTabs postfix and never again. It replaces the
+    /// 0.25 s re-dressing in ChallengeMenu and TestersCollection (0.13.50 and earlier).
+    ///
+    /// While testing, a check once a second looks at the open windows: if anything has changed a ribbon set
+    /// here, it is logged once (what and where) and put back.
+    ///
+    /// Layout format (each window: a list of buttons, each named by its tab's class):
+    ///   "menuLayout": { "Social":  [ {"tab": "AlliancesTab", "label": "CHALLENGE", "icon": "play", "after": "FriendsTab", "visible": true} ],
+    ///                   "Testers": [ {"tab": "CardbackCollectionTab", "label": "PLAY", "icon": "play", "position": 0}, ... ] }
+    /// Windows: Social (the Social window), Testers (the mod's Testers window). Icons: "play" (the menu bar's Play
+    /// button picture). Omitted fields are left as the game has them.
+    /// </summary>
+    internal static class MenuLayout
+    {
+        internal sealed class Button
+        {
+            public string Tab, Label, Icon, After;
+            public bool? Visible;
+            public int? Position;
+        }
+
+        private static readonly string[] Windows = { "Social", "Testers" };
+        private static readonly string[] Icons = { "play" };
+
+        // ---------------------------------------------------------------- the layout
+
+        private static Dictionary<string, List<Button>> BuiltIn() => new Dictionary<string, List<Button>>
+        {
+            // the Alliances tab is the Challenge tab (ChallengeMenu), directly below Friends
+            ["Social"] = new List<Button>
+            {
+                new Button { Tab = "AlliancesTab", Label = "CHALLENGE", Icon = "play", After = "FriendsTab", Visible = true },
+            },
+            // the Testers window (a copy of the Collection window): Play, Decks, Cards; Styles hidden
+            ["Testers"] = new List<Button>
+            {
+                new Button { Tab = "CardbackCollectionTab", Label = "PLAY", Icon = "play", Position = 0 },
+                new Button { Tab = "SelectDecksTab", Label = "DECKS", Position = 1 },
+                new Button { Tab = "CardCollectionTab", Label = "CARDS", Position = 2 },
+                new Button { Tab = "AlternateArtCardCollectionTab", Visible = false },
+            },
+        };
+
+        private static volatile Dictionary<string, List<Button>> layout = BuiltIn();
+        private static volatile string source = "built in";
+        private static string lastServerText;
+
+        /// <summary>The server's "menuLayout" (ServerSettings, on its worker thread). Null: back to the built-in layout.</summary>
+        internal static void FromServer(JsonElement? e)
+        {
+            try
+            {
+                if (e == null || e.Value.ValueKind != JsonValueKind.Object)
+                {
+                    if (lastServerText != null) RevivalMod.Log.Msg("[menu layout] the server has no menu layout; using the built-in one");
+                    lastServerText = null;
+                    layout = BuiltIn();
+                    source = "built in";
+                    return;
+                }
+                string text = e.Value.GetRawText();
+                if (text == lastServerText) return;
+                lastServerText = text;
+                var parsed = new Dictionary<string, List<Button>>();
+                foreach (var w in e.Value.EnumerateObject())
+                {
+                    if (Array.IndexOf(Windows, w.Name) < 0) { RevivalMod.Log.Warning($"[menu layout] unknown window '{w.Name}' ignored"); continue; }
+                    if (w.Value.ValueKind != JsonValueKind.Array) continue;
+                    var list = new List<Button>();
+                    foreach (var b in w.Value.EnumerateArray())
+                    {
+                        if (list.Count >= 12 || b.ValueKind != JsonValueKind.Object) break;
+                        var button = new Button
+                        {
+                            Tab = Str(b, "tab", 64),
+                            Label = Str(b, "label", 24),
+                            Icon = Str(b, "icon", 16),
+                            After = Str(b, "after", 64),
+                        };
+                        if (b.TryGetProperty("visible", out var v) && (v.ValueKind == JsonValueKind.True || v.ValueKind == JsonValueKind.False)) button.Visible = v.GetBoolean();
+                        if (b.TryGetProperty("position", out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out int pos) && pos >= 0 && pos < 20) button.Position = pos;
+                        if (string.IsNullOrEmpty(button.Tab)) continue;
+                        if (button.Icon != null && Array.IndexOf(Icons, button.Icon) < 0) { RevivalMod.Log.Warning($"[menu layout] unknown icon '{button.Icon}' ignored"); button.Icon = null; }
+                        list.Add(button);
+                    }
+                    parsed[w.Name] = list;
+                }
+                // windows the server leaves out keep the built-in layout
+                var all = BuiltIn();
+                foreach (var kv in parsed) all[kv.Key] = kv.Value;
+                layout = all;
+                source = "server";
+                RevivalMod.Log.Msg($"[menu layout] the server's menu layout is used ({string.Join(", ", parsed.Keys)}); windows built from now on use it");
+            }
+            catch (Exception ex) { RevivalMod.Log.Warning("[menu layout] could not read the server's menu layout: " + ex.Message); }
+        }
+
+        private static string Str(JsonElement o, string name, int max)
+        {
+            if (!o.TryGetProperty(name, out var v) || v.ValueKind != JsonValueKind.String) return null;
+            var s = v.GetString();
+            if (string.IsNullOrEmpty(s)) return null;
+            return s.Length > max ? s.Substring(0, max) : s;
+        }
+
+        // ---------------------------------------------------------------- applying it, once per window
+
+        private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
+
+        /// <summary>Which layout a window takes, or null.</summary>
+        private static string WindowKey(GameWindowWithTabs w)
+        {
+            if ((object)w.TryCast<SocialMenuWindow>() != null) return "Social";
+            if (TestersCollection.IsCopy(w)) return "Testers";
+            return null;
+        }
+
+        /// <summary>What a button was set to, for the check.</summary>
+        private sealed class Applied
+        {
+            public string Window, Tab, Label;
+            public Transform Button;
+            public bool? Visible;
+            public int? Index;
+            public Sprite Icon;
+            public Image IconImage;
+            public List<TMP_Text> Texts = new List<TMP_Text>();
+            public HashSet<string> Reported = new HashSet<string>();
+        }
+
+        private sealed class Watched
+        {
+            public GameWindowWithTabs Window;
+            public List<Applied> Buttons = new List<Applied>();
+        }
+
+        private static readonly List<Watched> watched = new List<Watched>();
+
+        [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.SetupTabs))]
+        private static class Built
+        {
+            private static void Postfix(GameWindowWithTabs __instance)
+            {
+                try
+                {
+                    if ((object)__instance == null) return;
+                    string key = WindowKey(__instance);
+                    if (key == null) return;
+                    var current = layout;
+                    if (!current.TryGetValue(key, out var buttons) || buttons.Count == 0) return;
+                    Apply(__instance, key, buttons);
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[menu layout] " + e.Message); }
+            }
+        }
+
+        private static string TabName(WindowTabBase tab)
+        {
+            try { return tab.GetIl2CppType().Name; } catch { return null; }
+        }
+
+        private static TabButtons.TabButton Find(Il2CppSystem.Collections.Generic.List<TabButtons.TabButton> options, string tab)
+        {
+            for (int i = 0; i < options.Count; i++)
+            {
+                var b = options[i];
+                if (b == null || (object)b.tab == null || (object)b.toggle == null) continue;
+                if (TabName(b.tab) == tab) return b;
+            }
+            return null;
+        }
+
+        private static void Apply(GameWindowWithTabs w, string key, List<Button> buttons)
+        {
+            var options = w.Components?.TabButtons?.options;
+            if (options == null) { RevivalMod.Log.Warning($"[menu layout] {key}: the window has no tab buttons"); return; }
+            var record = new Watched { Window = w };
+            var done = new List<string>();
+            foreach (var cfg in buttons)
+            {
+                var b = Find(options, cfg.Tab);
+                if (b == null) { RevivalMod.Log.Warning($"[menu layout] {key}: no '{cfg.Tab}' tab button"); continue; }
+                var a = new Applied { Window = key, Tab = cfg.Tab, Button = b.toggle.transform, Visible = cfg.Visible, Label = cfg.Label };
+                var go = b.toggle.gameObject;
+
+                if (cfg.Visible.HasValue)
+                {
+                    // the game's own switch on the button (the Alliances button has one, key "Alliances", wired to
+                    // SetActive when the button is enabled, i.e. after this): the layout decides instead
+                    foreach (var fc in go.GetComponents<FeatureChecker>()) if (fc.enabled) fc.enabled = false;
+                    if (go.activeSelf != cfg.Visible.Value) go.SetActive(cfg.Visible.Value);
+                }
+
+                if (cfg.Label != null)
+                {
+                    a.Texts = Labels(b.toggle);
+                    foreach (var t in a.Texts)
+                    {
+                        foreach (var loc in t.GetComponents<Il2CppI2.Loc.Localize>()) if (loc.enabled) loc.enabled = false;
+                        if (t.text != cfg.Label) t.text = cfg.Label;
+                    }
+                    if (a.Texts.Count == 0) RevivalMod.Log.Warning($"[menu layout] {key}: '{cfg.Tab}' has no label to change");
+                }
+
+                if (cfg.Icon != null)
+                {
+                    var sprite = Icon(cfg.Icon);
+                    var iconT = a.Button.Find("Icon");
+                    var image = (object)iconT == null ? null : iconT.GetComponent<Image>();
+                    if ((object)sprite != null && (object)image != null)
+                    {
+                        image.sprite = sprite;
+                        a.Icon = sprite; a.IconImage = image;
+                        // a toggle that swaps its picture when picked would put its own back: give it ours
+                        var toggle = b.toggle.TryCast<EverguildToggle>();
+                        if ((object)toggle != null && toggle.changeSpriteOnValueChange && (object)toggle.spriteToChange != null && toggle.spriteToChange.Pointer == image.Pointer)
+                        {
+                            toggle.onSprite = sprite;
+                            toggle.offSprite = sprite;
+                        }
+                    }
+                    else RevivalMod.Log.Warning($"[menu layout] {key}: icon '{cfg.Icon}' for '{cfg.Tab}' not set ({((object)sprite == null ? "picture not found" : "the button has no icon")})");
+                }
+
+                record.Buttons.Add(a);
+                done.Add(cfg.Tab);
+            }
+            // order last, once every button is in its final shown/hidden state
+            foreach (var cfg in buttons)
+            {
+                var a = record.Buttons.Find(x => x.Tab == cfg.Tab);
+                if (a == null) continue;
+                int want = -1;
+                if (cfg.Position.HasValue) want = Math.Min(cfg.Position.Value, a.Button.parent.childCount - 1);
+                else if (cfg.After != null)
+                {
+                    var after = Find(options, cfg.After);
+                    if (after == null) RevivalMod.Log.Warning($"[menu layout] {key}: no '{cfg.After}' tab button to place '{cfg.Tab}' after");
+                    else if (after.toggle.transform.parent.Pointer == a.Button.parent.Pointer)
+                    {
+                        int at = after.toggle.transform.GetSiblingIndex();
+                        want = a.Button.GetSiblingIndex() < at ? at : at + 1;
+                    }
+                }
+                if (want >= 0 && a.Button.GetSiblingIndex() != want) a.Button.SetSiblingIndex(want);
+            }
+            foreach (var a in record.Buttons) a.Index = a.Button.GetSiblingIndex();
+            watched.RemoveAll(x => !Alive(x.Window) || x.Window.Pointer == w.Pointer);
+            watched.Add(record);
+            RevivalMod.Log.Msg($"[menu layout] {key} ribbon set as the window was built ({source} layout): {string.Join(", ", done)}");
+        }
+
+        /// <summary>The button's label texts: those the game translates, else one named like a label.</summary>
+        private static List<TMP_Text> Labels(Toggle toggle)
+        {
+            var list = new List<TMP_Text>();
+            foreach (var t in toggle.GetComponentsInChildren<TMP_Text>(true))
+                if ((object)t.GetComponent<Il2CppI2.Loc.Localize>() != null) list.Add(t);
+            if (list.Count == 0)
+                foreach (var t in toggle.GetComponentsInChildren<TMP_Text>(true))
+                    if (t.gameObject.name.IndexOf("Label", StringComparison.OrdinalIgnoreCase) >= 0) { list.Add(t); break; }
+            return list;
+        }
+
+        private static Sprite playIcon;
+
+        private static Sprite Icon(string name)
+        {
+            if (name != "play") return null;
+            if (Alive(playIcon)) return playIcon;
+            try
+            {
+                var nav = UnityEngine.Object.FindObjectOfType<NavigationPanelController>();
+                var play = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Main);
+                var img = (object)play == null ? null : play.transform.Find("Image");
+                var image = (object)img == null ? null : img.GetComponent<Image>();
+                playIcon = (object)image == null ? null : image.sprite;
+            }
+            catch { playIcon = null; }
+            return Alive(playIcon) ? playIcon : null;
+        }
+
+        // ---------------------------------------------------------------- the check (testing)
+
+        private static float nextCheck;
+
+        /// <summary>Called every frame: once a second, while a window set here is open, checks its ribbon is unchanged.</summary>
+        internal static void Tick()
+        {
+            if (watched.Count == 0) return;
+            float now = Time.realtimeSinceStartup;
+            if (now < nextCheck) return;
+            nextCheck = now + 1f;
+            try
+            {
+                watched.RemoveAll(x => !Alive(x.Window));
+                foreach (var win in watched)
+                {
+                    if (!win.Window.isActiveAndEnabled) continue;
+                    foreach (var a in win.Buttons)
+                    {
+                        if (!Alive(a.Button)) continue;
+                        var go = a.Button.gameObject;
+                        if (a.Visible.HasValue && go.activeSelf != a.Visible.Value) { Drift(a, "shown/hidden", go.activeSelf + " (set " + a.Visible.Value + ")"); go.SetActive(a.Visible.Value); }
+                        if (a.Label != null)
+                            foreach (var t in a.Texts)
+                                if (Alive(t) && t.text != a.Label) { Drift(a, "label", "'" + t.text + "'"); t.text = a.Label; }
+                        if ((object)a.Icon != null && Alive(a.IconImage) && (object)a.IconImage.sprite != null && a.IconImage.sprite.Pointer != a.Icon.Pointer)
+                        { Drift(a, "icon", a.IconImage.sprite.name); a.IconImage.sprite = a.Icon; }
+                        if (a.Index.HasValue && a.Button.GetSiblingIndex() != a.Index.Value)
+                        { Drift(a, "position", a.Button.GetSiblingIndex() + " (set " + a.Index.Value + ")"); a.Button.SetSiblingIndex(a.Index.Value); }
+                    }
+                }
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[menu layout] check: " + e.Message); nextCheck = now + 10f; }
+        }
+
+        private static void Drift(Applied a, string what, string now)
+        {
+            if (!a.Reported.Add(what)) return;
+            RevivalMod.Log.Warning($"[menu layout] {a.Window}: something changed the '{a.Tab}' button's {what} after it was set (now {now}); put back. Please send this log.");
+        }
+    }
+}

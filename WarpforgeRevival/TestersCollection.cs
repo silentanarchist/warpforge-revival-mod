@@ -21,19 +21,19 @@ namespace WarpforgeRevival
     ///  - Decks: the copy's deck tab, opened straight on the Custom Test deck list (no format picker).
     ///    Back closes the window. The window is given the mode, so other modes can be passed later.
     ///  - Cards: the copy's card list. As a check that it is separate, Space Wolves are left out.
-    /// The Styles tab is hidden. The normal Collection > Decks keeps every format, Custom Test included.
+    /// The Styles tab is hidden. The ribbon (labels, Play icon, order, Styles hidden) is set once as the window is
+    /// built, by MenuLayout (0.13.51; re-applied here every 0.25 s before).
+    /// The normal Collection > Decks keeps every format, Custom Test included.
     /// </summary>
     internal static class TestersCollection
     {
         private const string CopyName = "RevivalTestersWindow", PanelName = "RevivalTestersPlay";
         private static CollectionScreen copy;
         private static GameObject sourcePrefab;
-        private static Sprite playIcon;
         private static int hidden;
         private static float nextDress, closedAt;
         private static bool placedLogged, switchOffChanged, unlitLogged;
         private static IntPtr groupPtr;
-        private static bool buttonsLogged, dressedLogged;
 
         private static bool Alive(UnityEngine.Object o) => (object)o != null && o.Pointer != IntPtr.Zero && o.m_CachedPtr != IntPtr.Zero;
 
@@ -113,7 +113,6 @@ namespace WarpforgeRevival
                 }
                 sourcePrefab = loaded;
             }
-            PlayIcon(nav);
 
             var placement = sourcePrefab.GetComponent<GameWindow>().WindowsPlacement;
             var anchor = WindowsManager.Instance.GetWindowAnchor(placement);
@@ -123,18 +122,6 @@ namespace WarpforgeRevival
             copy.updateNavPanel = false;        // the menu bar's Collection button stays the normal Collection's
             RevivalMod.Log.Msg($"[testers] Testers window made from the Collection window file {prefabRef.AssetGUID}");
             return copy;
-        }
-
-        private static void PlayIcon(NavigationPanelController nav)
-        {
-            try
-            {
-                var play = nav.GetToggle(NavigationPanelToggleType.Main);
-                var img = (object)play == null ? null : play.transform.Find("Image");
-                var image = (object)img == null ? null : img.GetComponent<Image>();
-                if ((object)image != null) playIcon = image.sprite;
-            }
-            catch { }
         }
 
         private static WindowTabBase TabOf<T>(GameWindowWithTabs w) where T : WindowTabBase
@@ -149,48 +136,6 @@ namespace WarpforgeRevival
             return null;
         }
 
-        /// <summary>The inner ribbon: Play, Decks, Collection; Styles hidden.</summary>
-        private static void Dress(GameWindowWithTabs w)
-        {
-            var buttons = w.Components?.TabButtons?.options;
-            if (buttons == null) return;
-            var order = new List<string>();
-            for (int i = 0; i < buttons.Count; i++)
-            {
-                var b = buttons[i];
-                if (b == null || (object)b.tab == null || (object)b.toggle == null) continue;
-                var t = b.toggle.transform;
-                if (!buttonsLogged) { buttonsLogged = true; LogHierarchy(t, 0); }
-                if ((object)b.tab.TryCast<AlternateArtCardCollectionTab>() != null) { if (t.gameObject.activeSelf) t.gameObject.SetActive(false); continue; }
-                if ((object)b.tab.TryCast<CardbackCollectionTab>() != null) { Relabel(t, "PLAY", playIcon); Place(t, 0); order.Add("Play"); }
-                else if ((object)b.tab.TryCast<SelectDecksTab>() != null) { Relabel(t, "DECKS", null); Place(t, 1); order.Add("Decks"); }
-                else if ((object)b.tab.TryCast<CardCollectionTab>() != null) { Relabel(t, "CARDS", null); Place(t, 2); order.Add("Cards"); }
-            }
-            if (!dressedLogged) { dressedLogged = true; RevivalMod.Log.Msg($"[testers] Testers window ribbon: {string.Join(", ", order)}"); }
-        }
-
-        private static void Place(Transform t, int index) { if (t.GetSiblingIndex() != index) t.SetSiblingIndex(index); }
-
-        private static void Relabel(Transform button, string text, Sprite icon)
-        {
-            foreach (var loc in button.GetComponentsInChildren<Il2CppI2.Loc.Localize>(true)) loc.enabled = false;
-            foreach (var label in button.GetComponentsInChildren<TMP_Text>(true)) if (label.text != text) label.text = text;
-            if ((object)icon == null) return;
-            var img = button.Find("Icon");
-            var image = (object)img == null ? null : img.GetComponent<Image>();
-            if ((object)image != null && (object)image.sprite != (object)icon) image.sprite = icon;
-        }
-
-        private static void LogHierarchy(Transform t, int depth)
-        {
-            if (depth > 3) return;
-            var names = new System.Text.StringBuilder();
-            foreach (var c in t.GetComponents<Component>())
-                if ((object)c != null) names.Append(c.GetIl2CppType().Name).Append(' ');
-            RevivalMod.Log.Msg($"[testers] tab button {new string(' ', depth * 2)}{t.name}: {names}");
-            for (int i = 0; i < t.childCount; i++) LogHierarchy(t.GetChild(i), depth + 1);
-        }
-
         /// <summary>Called every frame: menu-bar highlight, our tab labels, and the Play tab's tiles.</summary>
         internal static void Tick()
         {
@@ -200,7 +145,6 @@ namespace WarpforgeRevival
                 bool slow = now >= nextDress;
                 if (slow) { nextDress = now + 0.25f; Highlight(); DropWhenClosed(now); }
                 if (!Alive(copy) || !copy.isActiveAndEnabled) return;
-                if (slow) Dress(copy);           // the game re-labels its tab buttons; keep ours
                 var tab = copy.CurrentTab;
                 bool onPlay = (object)tab != null && (object)tab.TryCast<CardbackCollectionTab>() != null;
                 var panel = copy.transform.Find(PanelName);
@@ -406,17 +350,6 @@ namespace WarpforgeRevival
             if (scale > 0 && Mathf.Abs(rowRt.localScale.x - scale) > 0.01f) rowRt.localScale = new Vector3(scale, scale, 1);
         }
 
-        // Ribbon set up once the window's tabs exist.
-        [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.OpenTabs))]
-        private static class AfterOpenTabs
-        {
-            private static void Postfix(GameWindowWithTabs __instance)
-            {
-                try { if (IsCopy(__instance)) Dress(__instance); }
-                catch (Exception e) { RevivalMod.Log.Warning("[testers] ribbon: " + e.Message); }
-            }
-        }
-
         // The window opens on Play.
         [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.GetStartingTab))]
         private static class StartingTab
@@ -426,7 +359,6 @@ namespace WarpforgeRevival
                 try
                 {
                     if (!IsCopy(__instance)) return;
-                    Dress(__instance);
                     var tab = TabOf<CardbackCollectionTab>(__instance);
                     if ((object)tab != null) __result = tab;
                 }
