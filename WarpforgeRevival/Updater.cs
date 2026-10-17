@@ -17,7 +17,8 @@ namespace WarpforgeRevival
     /// One way of updating, the same as on phones: when the server has a newer build - seen by the
     /// check at start-up, or because the server refuses to sign in an outdated mod - the game's
     /// sign-in window says so while the game loads, the build is downloaded and checked against the
-    /// server's checksum, and the game closes and starts again with it.
+    /// server's checksum and the project owner's signature (ModSignature, 0.14.0), and the game closes and
+    /// starts again with it.
     ///
     /// Updates go to Mods\WarpforgeRevival\WarpforgeRevival.dll. If the running copy is somewhere
     /// else (straight in Mods, say) it is removed after the update so the game never loads two
@@ -54,6 +55,7 @@ namespace WarpforgeRevival
         {
             server = serverUrl;
             dataDir = data;
+            Task.Run(SelfCheck);
             if (UpdatesOff) return;
             Task.Run(async () =>
             {
@@ -71,6 +73,24 @@ namespace WarpforgeRevival
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[update] update check failed: " + e.Message); }
             });
+        }
+
+        /// <summary>A signed build checks its own signature once at start-up (in the background): proves on each
+        /// platform that the check updates rely on works, before an update ever depends on it. Logs only.</summary>
+        private static void SelfCheck()
+        {
+            try
+            {
+                string me = !string.IsNullOrEmpty(LoadedFrom) && File.Exists(LoadedFrom) ? LoadedFrom : typeof(Updater).Assembly.Location;
+                if (string.IsNullOrEmpty(me) || !File.Exists(me)) return;
+                var data = File.ReadAllBytes(me);
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                string refused = ModSignature.Check(data, FileName, out string v);
+                if (refused == "the download is not signed") RevivalMod.Log.Msg("[update] this build is not signed (a build made for testing)");
+                else if (refused == null) RevivalMod.Log.Msg($"[update] signature check works: this build ({v}) is signed by the project owner ({watch.ElapsedMilliseconds} ms)");
+                else RevivalMod.Log.Warning($"[update] this build's own signature: {refused}");
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[update] signature self-check failed: " + e.GetType().Name + ": " + e.Message); }
         }
 
         /// <summary>The server refused to sign in because this mod is out of date: update now.</summary>
@@ -138,7 +158,13 @@ namespace WarpforgeRevival
                 var data = await http.GetByteArrayAsync(server + offer.Value.url);
                 string got = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
                 if (got != offer.Value.sha) throw new InvalidDataException("downloaded mod does not match the server's checksum");
-                Install(offer.Value.label, data);
+                // signed by the project owner (0.14.0), and newer than the running build by its own version
+                string refused = ModSignature.Check(data, FileName, out string signedVersion);
+                if (refused != null) throw new InvalidDataException("downloaded mod refused: " + refused);
+                var sv = RevivalMod.Number(signedVersion); var lv = RevivalMod.Number(RevivalMod.Version);
+                if (sv == null || lv == null || !(sv > lv)) throw new InvalidDataException($"downloaded mod refused: it is {signedVersion}, not newer than {RevivalMod.Version}");
+                RevivalMod.Log.Msg($"[update] mod {signedVersion} is signed by the project owner");
+                Install(signedVersion, data);
                 return true;
             }
             catch (Exception e)

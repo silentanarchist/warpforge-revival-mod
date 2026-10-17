@@ -31,3 +31,5 @@ patcher/tool/melon_data.zip
 .vs/
 .vscode/
 *.user
+# mod signing keys: never commit (tools/mod-signing)
+*signing-key*.txt
