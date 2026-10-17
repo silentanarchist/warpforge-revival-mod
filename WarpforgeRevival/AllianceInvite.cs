@@ -80,7 +80,7 @@ namespace WarpforgeRevival
                     var ph = box.placeholder?.TryCast<TMP_Text>();
                     if ((object)ph != null)
                     {
-                        Ui.SetText(ph, "Friend code to invite");
+                        Ui.SetText(ph, Loc.T("alliance.invitePlaceholder", "Friend code to invite"));
                     }
                     box.onSubmit.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<string>>(new Action<string>(_ => Send())));
                 }
@@ -99,7 +99,7 @@ namespace WarpforgeRevival
                 var label = btnGo.GetComponentInChildren<TMP_Text>(true);
                 if ((object)label != null)
                 {
-                    Ui.SetText(label, "Invite");
+                    Ui.SetText(label, Loc.T("alliance.inviteButton", "Invite"));
                     label.enableAutoSizing = true;
                 }
 
@@ -201,11 +201,11 @@ namespace WarpforgeRevival
             {
                 if (busy || (object)box == null) return;
                 string code = (box.text ?? "").Trim();
-                if (code.Length == 0) { Say("Paste a friend code first", false); return; }
+                if (code.Length == 0) { Say(Loc.T("alliance.pasteCode", "Paste a friend code first"), false); return; }
                 string session = PlayFabTransport.SessionTicket;
-                if (string.IsNullOrEmpty(session)) { Say("Not signed in", false); return; }
+                if (string.IsNullOrEmpty(session)) { Say(Loc.T("common.notSignedIn", "Not signed in"), false); return; }
                 busy = true;
-                Say("Inviting...", true);
+                Say(Loc.T("alliance.inviting", "Inviting..."), true);
                 Task.Run(async () =>
                 {
                     string text; bool good = false;
@@ -215,12 +215,12 @@ namespace WarpforgeRevival
                         if (reply.Ok)
                         {
                             string name = reply.Data.ValueKind == JsonValueKind.Object && reply.Data.TryGetProperty("name", out var n) ? n.GetString() : "";
-                            text = "Invited " + (string.IsNullOrEmpty(name) ? "that player" : name);
+                            text = Loc.T("alliance.invited", "Invited {name}", ("name", string.IsNullOrEmpty(name) ? Loc.T("common.thatPlayer", "that player") : name));
                             good = true;
                         }
-                        else text = reply.Unreachable ? "Could not reach the server" : (reply.Error ?? "The server refused the invitation").TrimEnd('.');
+                        else text = reply.Unreachable ? Loc.T("common.unreachable", "Could not reach the server") : (reply.Error ?? Loc.T("alliance.inviteRefused", "The server refused the invitation")).TrimEnd('.');
                     }
-                    catch (Exception e) { text = "Could not reach the server"; RevivalMod.Log.Warning("[alliances] invite by friend code: " + e.Message); }
+                    catch (Exception e) { text = Loc.T("common.unreachable", "Could not reach the server"); RevivalMod.Log.Warning("[alliances] invite by friend code: " + e.Message); }
                     MainThread.Enqueue(() =>
                     {
                         busy = false;

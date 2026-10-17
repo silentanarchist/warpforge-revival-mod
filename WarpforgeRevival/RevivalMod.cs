@@ -20,9 +20,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.14.0-a";
+        public const string Version = "0.14.1-a";
 #else
-        public const string Version = "0.14.0-w";
+        public const string Version = "0.14.1-w";
 #endif
 
         /// <summary>
@@ -149,6 +149,7 @@ namespace WarpforgeRevival
             DraftPacks.Apply(HarmonyInstance);
             ServerSettings.Start(Config.ServerUrl);
             CardText.Start(Config.ServerUrl);
+            Loc.Start(Config.ServerUrl, dataDir);
             GlobalChat.Start(Config.ServerUrl);
             Updater.Start(Config.ServerUrl, dataDir);
 
@@ -246,6 +247,7 @@ namespace WarpforgeRevival
             GlobalChat.Tick();
             AllianceInvite.Tick();
             FriendRequests.Tick();
+            Loc.Tick();
             AlternateArts.Tick();
 
             // Dev helper: creating UserData/WarpforgeRevival/quit closes the game cleanly

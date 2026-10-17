@@ -93,8 +93,8 @@ namespace WarpforgeRevival
             // each copy goes where its original sits on the alliance page, measured from that page's corner: both
             // pages fill the same part of the Social window
             var arect = alliances.GetComponent<RectTransform>();
-            friendsButton = Copy(general, arect, hrt, "Friends");
-            requestsButton = Copy(trophies, arect, hrt, "Requests");
+            friendsButton = Copy(general, arect, hrt, Loc.T("friends.tabFriends", "Friends"));
+            requestsButton = Copy(trophies, arect, hrt, Loc.T("friends.tabRequests", "Requests"));
             requestsLabel = requestsButton.GetComponentInChildren<TMP_Text>(true);
 
             // room for the buttons: the add-friend box and the list move down, and a gold line goes under the buttons
@@ -218,7 +218,7 @@ namespace WarpforgeRevival
         private static void ShowRequests()
         {
             showingRequests = true;
-            if ((object)title != null && Ui.Alive(title)) Ui.SetText(title, "Your requests:");
+            if ((object)title != null && Ui.Alive(title)) Ui.SetText(title, Loc.T("friends.titleRequests", "Your requests:"));
             if ((object)friendsButton != null) friendsButton.SetIsOnWithoutNotify(false);
             if ((object)requestsButton != null) requestsButton.SetIsOnWithoutNotify(true);
             Refresh(friendsButton); Refresh(requestsButton);
@@ -230,7 +230,7 @@ namespace WarpforgeRevival
             }
             catch { }
             ClearRows();
-            AddText("Loading...");
+            AddText(Loc.T("common.loading", "Loading..."));
             Load();
         }
 
@@ -257,24 +257,24 @@ namespace WarpforgeRevival
                 try
                 {
                     var reply = await Net.PostJson("/playfab/Revival/FriendRequests", Net.Json(w => w.WriteString("op", "list")), TimeSpan.FromSeconds(10), retry: true);
-                    if (!reply.Ok) problem = reply.Unreachable ? "Could not reach the server" : reply.Error ?? "The server refused";
+                    if (!reply.Ok) problem = reply.Unreachable ? Loc.T("common.unreachable", "Could not reach the server") : reply.Error ?? Loc.T("common.refused", "The server refused");
                     else
                     {
                         Read(reply.Data, "incoming", incoming);
                         Read(reply.Data, "outgoing", outgoing);
                     }
                 }
-                catch (Exception e) { problem = "Could not reach the server"; RevivalMod.Log.Warning("[friends] requests: " + e.Message); }
+                catch (Exception e) { problem = Loc.T("common.unreachable", "Could not reach the server"); RevivalMod.Log.Warning("[friends] requests: " + e.Message); }
                 MainThread.Enqueue(() =>
                 {
                     if (!ShowingRequests) return;
                     Waiting = problem == null ? incoming.Count : Waiting;
                     ClearRows();
                     if (problem != null) { AddText(problem.TrimEnd('.')); return; }
-                    if (incoming.Count == 0 && outgoing.Count == 0) { AddText("No friend requests. Add someone with their friend code above; they will see it here."); return; }
-                    if (incoming.Count > 0) AddText("Waiting for your answer");
+                    if (incoming.Count == 0 && outgoing.Count == 0) { AddText(Loc.T("friends.none", "No friend requests. Add someone with their friend code above; they will see it here.")); return; }
+                    if (incoming.Count > 0) AddText(Loc.T("friends.incoming", "Waiting for your answer"));
                     foreach (var r in incoming) AddRow(r, true);
-                    if (outgoing.Count > 0) AddText("Sent by you, waiting for their answer");
+                    if (outgoing.Count > 0) AddText(Loc.T("friends.outgoing", "Sent by you, waiting for their answer"));
                     foreach (var r in outgoing) AddRow(r, false);
                 });
             });
@@ -387,11 +387,11 @@ namespace WarpforgeRevival
                     if (reply.Ok)
                     {
                         good = true;
-                        text = op == "accept" ? $"You and {name} are now friends" : op == "decline" ? $"Declined {name}'s request" : $"Request to {name} cancelled";
+                        text = op == "accept" ? Loc.T("friends.nowFriends", "You and {name} are now friends", ("name", name)) : op == "decline" ? Loc.T("friends.declined", "Declined {name}'s request", ("name", name)) : Loc.T("friends.cancelled", "Request to {name} cancelled", ("name", name));
                     }
-                    else text = reply.Unreachable ? "Could not reach the server" : (reply.Error ?? "The server refused").TrimEnd('.');
+                    else text = reply.Unreachable ? Loc.T("common.unreachable", "Could not reach the server") : (reply.Error ?? Loc.T("common.refused", "The server refused")).TrimEnd('.');
                 }
-                catch (Exception e) { text = "Could not reach the server"; RevivalMod.Log.Warning("[friends] " + op + ": " + e.Message); }
+                catch (Exception e) { text = Loc.T("common.unreachable", "Could not reach the server"); RevivalMod.Log.Warning("[friends] " + op + ": " + e.Message); }
                 MainThread.Enqueue(() =>
                 {
                     busy = false;
@@ -410,9 +410,9 @@ namespace WarpforgeRevival
                 if (busy || !Ui.Alive(tab)) return;
                 var input = tab.inputFieldUserName;
                 string code = ((object)input != null ? input.text : "")?.Trim() ?? "";
-                if (code.Length == 0) { Say("Type a friend code first", false); return; }
+                if (code.Length == 0) { Say(Loc.T("friends.typeCode", "Type a friend code first"), false); return; }
                 busy = true;
-                Say("Sending...", true);
+                Say(Loc.T("common.sending", "Sending..."), true);
                 Task.Run(async () =>
                 {
                     string text; bool good = false, friendsNow = false;
@@ -422,20 +422,20 @@ namespace WarpforgeRevival
                         if (reply.Ok)
                         {
                             string name = reply.Data.TryGetProperty("name", out var n) ? n.GetString() : "";
-                            if (string.IsNullOrEmpty(name)) name = "that player";
+                            if (string.IsNullOrEmpty(name)) name = Loc.T("common.thatPlayer", "that player");
                             string result = reply.Data.TryGetProperty("result", out var rr) ? rr.GetString() : "";
                             good = true;
                             switch (result)
                             {
-                                case "friends": text = $"You and {name} are now friends"; friendsNow = true; break;
-                                case "already": text = $"{name} is already your friend"; break;
-                                case "pending": text = $"Already sent to {name}; waiting for their answer"; break;
-                                default: text = $"Friend request sent to {name}"; break;
+                                case "friends": text = Loc.T("friends.nowFriends", "You and {name} are now friends", ("name", name)); friendsNow = true; break;
+                                case "already": text = Loc.T("friends.already", "{name} is already your friend", ("name", name)); break;
+                                case "pending": text = Loc.T("friends.pending", "Already sent to {name}; waiting for their answer", ("name", name)); break;
+                                default: text = Loc.T("friends.sent", "Friend request sent to {name}", ("name", name)); break;
                             }
                         }
-                        else text = reply.Unreachable ? "Could not reach the server" : (reply.Error ?? "The server refused").TrimEnd('.');
+                        else text = reply.Unreachable ? Loc.T("common.unreachable", "Could not reach the server") : (reply.Error ?? Loc.T("common.refused", "The server refused")).TrimEnd('.');
                     }
-                    catch (Exception e) { text = "Could not reach the server"; RevivalMod.Log.Warning("[friends] send: " + e.Message); }
+                    catch (Exception e) { text = Loc.T("common.unreachable", "Could not reach the server"); RevivalMod.Log.Warning("[friends] send: " + e.Message); }
                     MainThread.Enqueue(() =>
                     {
                         busy = false;
@@ -476,9 +476,9 @@ namespace WarpforgeRevival
                         {
                             var reply = await Net.PostJson("/playfab/Revival/FriendRequests", Net.Json(w => { w.WriteString("op", "remove"); w.WriteString("id", id); }), TimeSpan.FromSeconds(10));
                             good = reply.Ok;
-                            text = good ? $"Removed {name} from your friends" : reply.Unreachable ? "Could not reach the server" : (reply.Error ?? "The server refused").TrimEnd('.');
+                            text = good ? Loc.T("friends.removed", "Removed {name} from your friends", ("name", name)) : reply.Unreachable ? Loc.T("common.unreachable", "Could not reach the server") : (reply.Error ?? Loc.T("common.refused", "The server refused")).TrimEnd('.');
                         }
-                        catch (Exception e) { text = "Could not reach the server"; RevivalMod.Log.Warning("[friends] remove: " + e.Message); }
+                        catch (Exception e) { text = Loc.T("common.unreachable", "Could not reach the server"); RevivalMod.Log.Warning("[friends] remove: " + e.Message); }
                         MainThread.Enqueue(() => { Say(text, good); RevivalMod.Log.Msg($"[friends] remove {id}: {text}"); FriendsLive.RefreshNow(); });
                     });
                 }
@@ -495,7 +495,7 @@ namespace WarpforgeRevival
             if (now == shownWaiting || (object)requestsLabel == null) return;
             bool more = now > shownWaiting && shownWaiting >= 0;
             shownWaiting = now;
-            try { if (Ui.Alive(requestsLabel)) Ui.SetText(requestsLabel, now > 0 ? $"Requests ({now})" : "Requests"); } catch { }
+            try { if (Ui.Alive(requestsLabel)) Ui.SetText(requestsLabel, now > 0 ? Loc.T("friends.tabRequestsCount", "Requests ({count})", ("count", now)) : Loc.T("friends.tabRequests", "Requests")); } catch { }
             if (more && ShowingRequests) Load();          // a new request came in while the page is open
         }
     }

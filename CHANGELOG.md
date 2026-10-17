@@ -8,6 +8,9 @@ Changes made on the server take effect for everyone at once; the ones listed her
 
 ## Unreleased
 
+### New
+- **Translations (groundwork):** the mod's own texts can now be shown in the game's language (the language set in the game's Settings). Translations come from the server, so they can be added and corrected without a mod update; texts not yet translated stay in English. First texts: Friends / Requests and the alliance invite box.
+
 ## 0.14.0 - 2026-10-17
 
 ### New
