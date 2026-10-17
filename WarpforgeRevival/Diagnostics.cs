@@ -153,9 +153,20 @@ namespace WarpforgeRevival
                 var owner = t?.DeclaringType != null ? t.DeclaringType.Name + "." + t.Name : t?.Name;
                 var args = __args == null ? "" : string.Join(", ", __args.Select(Describe));
                 RevivalMod.Log.Msg($"[trace] {owner}.{__originalMethod.Name}({args})" + (n == MaxLinesPerMethod ? "  (further calls not logged)" : ""));
+                // alliances (2026-10-16, testing): who keeps asking for the current alliance (the game's own call stack)
+                if (__originalMethod.Name == "ExecuteCustomCloudscript" && __args != null && __args.Length > 0
+                    && (__args[0] as string) == "FetchCurrentGroup" && fetchStacks < 4)
+                {
+                    fetchStacks++;
+                    string stack;
+                    try { stack = new Il2CppSystem.Diagnostics.StackTrace(true).ToString(); } catch (Exception e) { stack = "(no game stack: " + e.Message + ")"; }
+                    RevivalMod.Log.Msg($"[trace] FetchCurrentGroup #{fetchStacks} asked from:\n{stack}");
+                }
             }
             catch { /* never break the game from a log line */ }
         }
+
+        private static int fetchStacks;
 
         private static string Describe(object o)
         {
