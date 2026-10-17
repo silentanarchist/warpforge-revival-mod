@@ -8,8 +8,8 @@ Windows and `WarpforgeRevival.Android.dll` for Android (the same source; the par
 `ANDROID_PORT` are the Android differences). It also holds the PC patcher that puts the mod loader
 into the Android game, and the changes made to that loader. **Playing on a phone? See
 [docs/android.md](docs/android.md).** (Until 2026-10-17 the Android parts were in their own repository,
-[warpforge-revival-mod-android](https://github.com/silentanarchist/warpforge-revival-mod-android), which
-stays up for the Warpforge Patcher app.)
+[warpforge-revival-mod-android](https://github.com/silentanarchist/warpforge-revival-mod-android). It
+stays up so older copies of the Warpforge Patcher app can find their update; the app is released here now.)
 Versions are numbered `x.y.z.f-w` for Windows and `x.y.z.f-a` for Android: `x.y.z` is the shared code
 and always the same on both; `f` counts fixes made for one of them only, is left off while it is 0
 (`0.12.1-w`), and starts again with every new `x.y.z`. The server it talks to is in

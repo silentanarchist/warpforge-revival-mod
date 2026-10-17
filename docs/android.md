@@ -2,8 +2,9 @@
 
 *This guide was the README of the separate Android repository
 ([warpforge-revival-mod-android](https://github.com/silentanarchist/warpforge-revival-mod-android)) until both mods moved
-into this one repository on 2026-10-17. That repository stays up: the Warpforge Patcher app and its releases are
-still there until the app's next version.*
+into this one repository on 2026-10-17. The mod and the Warpforge Patcher app are released from this repository's
+[releases page](https://github.com/silentanarchist/warpforge-revival-mod/releases) now; the old repository stays up so
+older copies of the app can still find their update.*
 
 Everything needed to run *Warhammer 40,000: Warpforge* on an Android phone against a
 [Warpforge Revival server](https://github.com/silentanarchist/warpforge-revival-server), now that
@@ -37,7 +38,7 @@ edges. Read the code before you rely on it, and please report what you find.
 
 The **Warpforge Patcher** app does everything the PC scripts below do, on the phone itself: it patches your own copy of the game, installs it and puts the mod in place. No PC patching, no cable, no adb. It uses the same patching code as `patcher\1 - patch.bat`. Its source is the `WarpforgePatcher` folder of [this project's LemonLoader installer fork](https://github.com/silentanarchist/MelonLoaderInstaller/tree/warpforge-revival/WarpforgePatcher) (GPL-3.0).
 
-1. Download `WarpforgePatcher-<version>.apk` from the **Warpforge Patcher** release on the [releases page](https://github.com/silentanarchist/warpforge-revival-mod-android/releases) and open it on the phone. Allow installing apps from your browser when Android asks.
+1. Download `WarpforgePatcher-<version>.apk` from the **Warpforge Patcher** release on the [releases page](https://github.com/silentanarchist/warpforge-revival-mod/releases) and open it on the phone. Allow installing apps from your browser when Android asks.
 2. Open **Warpforge Patcher** and allow the two permissions it asks for: all files access (for the loader's folder) and installing apps.
 3. Press **Patch and install** (or **Patch from a backup file** for a `.apks` / `.xapk` backup). Confirm Android's prompts (removing the old game if the app has to, then installing the patched one). The data file takes a few minutes.
 4. Start the game, allow "All files access" if it asks, and sign in.
