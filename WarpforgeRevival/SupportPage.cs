@@ -73,6 +73,11 @@ namespace WarpforgeRevival
             var root = tab.transform;
             var faqT = faq.transform;
 
+            // The game's phone/PC layout of this page, settled now (0.13.55), so it cannot undo what follows when
+            // the page is first shown (see MenuLayout.SettlePlatformLayout).
+            int settled = MenuLayout.SettlePlatformLayout(tab);
+            if (settled > 0 && !reported) RevivalMod.Log.Msg($"[support] phone/PC layout settled at set-up ({settled})");
+
             // Everything that pointed at the publisher goes.
             Hide(tab.contactButton);
             Hide(tab.privacyPolicyButton);
@@ -546,7 +551,9 @@ namespace WarpforgeRevival
                     foreach (var label in pageRoot.GetComponentsInChildren<TMP_Text>(true))
                         if ((object)label != null)
                             states.Add($"{label.name}='{(label.text ?? "").Replace("\n", " ")}' {(label.gameObject.activeInHierarchy ? "on screen" : "off")}{(label.enabled ? "" : " (hidden by the mod)")}");
-                    RevivalMod.Log.Msg($"[support] tab opened: switched on {shown} part(s) the layout had turned off; texts now: {string.Join(" | ", states)}");
+                    // since 0.13.55 the layout is settled at set-up, so nothing should need switching on here any more
+                    if (shown > 0) RevivalMod.Log.Warning($"[support] tab opened: something switched {shown} part(s) off after set-up; put back. Please send this log. Texts now: {string.Join(" | ", states)}");
+                    else RevivalMod.Log.Msg("[support] tab opened: page unchanged since set-up");
                 }
             }
             catch (Exception e)

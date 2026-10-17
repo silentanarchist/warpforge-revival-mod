@@ -106,7 +106,11 @@ namespace WarpforgeRevival
         internal static bool StatusKnown => linkedName != null;
 
         /// <summary>Called when the game has signed in: ask the server whether this player is linked.</summary>
-        internal static void SignedIn() => StatusWithRetry(1);
+        internal static void SignedIn()
+        {
+            StatusWithRetry(1);
+            ProfileStats.Prefetch();       // your own record, ready before your profile is opened
+        }
 
         // The answer decides whether this player sees tester-only things (the Testers button). Asked while the
         // game is busiest loading, the request sometimes failed to get through, and the button then stayed
@@ -443,6 +447,10 @@ namespace WarpforgeRevival
         internal static void Remember(AccountTab tab)
         {
             if (!Usable(tab)) return;
+            // the button row's phone/PC layout, settled at set-up (0.13.55): see MenuLayout.SettlePlatformLayout
+            int settled = MenuLayout.SettlePlatformLayout(tab);
+            if (settled > 0) RevivalMod.Log.Msg($"[account] phone/PC layout settled at set-up ({settled})");
+            // (the page itself is filled in by the Refresh / OnOpen postfixes, in the frame the game opens it)
             seen = tab;
             seenFrames = 0;
         }

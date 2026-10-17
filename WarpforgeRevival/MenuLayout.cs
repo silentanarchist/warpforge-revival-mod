@@ -317,6 +317,30 @@ namespace WarpforgeRevival
             return Alive(playIcon) ? playIcon : null;
         }
 
+        // ---------------------------------------------------------------- pages laid out per platform
+
+        /// <summary>
+        /// Settles the game's phone/PC layout of a page now, at set-up: each PlatformBasedComponents under it runs
+        /// its layout (what its Start would do the first time the page is shown) and is then switched off, so it
+        /// never runs again. Changes the mod makes afterwards then stay as made: before 0.13.55 that first Start
+        /// undid them as the page appeared, and a check put them back 3 frames later (Settings > Mod and Account).
+        /// Returns how many were settled.
+        /// </summary>
+        internal static int SettlePlatformLayout(Component root)
+        {
+            int n = 0;
+            if ((object)root == null) return 0;
+            foreach (var pbc in root.GetComponentsInChildren<PlatformBasedComponents>(true))
+            {
+                if ((object)pbc == null || !pbc.enabled) continue;
+                try { pbc.Start(); }
+                catch (Exception e) { RevivalMod.Log.Warning($"[menu layout] {pbc.gameObject.name}: phone/PC layout: {e.Message}"); }
+                pbc.enabled = false;
+                n++;
+            }
+            return n;
+        }
+
         // ---------------------------------------------------------------- the check (testing)
 
         private static float nextCheck;

@@ -76,6 +76,12 @@ namespace WarpforgeRevival
             }
         }
 
+        /// <summary>
+        /// The row's CODE button (and REPORT beside it). Since 0.13.55 each row keeps its buttons: the battle log
+        /// reuses rows as it scrolls, and the buttons are only updated (match, shown or not, place) instead of being
+        /// destroyed and made again. They are placed once the row is laid out, in the same frame; a second look
+        /// on the next frame only logs (and corrects) if anything moved.
+        /// </summary>
         private static void Place(BattleLogItem item, BattleLogMatch match)
         {
             var replay = item.replayButton;
@@ -83,61 +89,97 @@ namespace WarpforgeRevival
             var rb = replay.GetComponent<RectTransform>();
             var parent = rb == null ? null : rb.parent;
             if ((object)parent == null) return;
-            var old = parent.Find(ButtonName);
-            if ((object)old != null) UnityEngine.Object.Destroy(old.gameObject);
-            if (!replay.gameObject.activeSelf || string.IsNullOrEmpty(match.recordingIndex)) return;
+            var existing = parent.Find(ButtonName);
+            bool wanted = replay.gameObject.activeSelf && !string.IsNullOrEmpty(match.recordingIndex);
+            if (!wanted)
+            {
+                if ((object)existing != null && existing.gameObject.activeSelf) existing.gameObject.SetActive(false);
+                PlayerReports.Hide(parent);
+                return;
+            }
 
             // a box a little shorter than the replay button, kept out of any layout; Arrange puts it between
             // the mode's icon and the player's own name (owner, 2026-10-16), REPORT beside the opponent's name
             float h = Mathf.Max(rb.rect.height * 0.8f, 34f), w = Mathf.Max(h * 2.1f, 80f);
-            var go = new GameObject(ButtonName);
-            var rt = go.AddComponent<RectTransform>();
-            rt.SetParent(parent, false);
-            go.AddComponent<LayoutElement>().ignoreLayout = true;
-            rt.anchorMin = rt.anchorMax = rb.anchorMin == rb.anchorMax ? rb.anchorMin : new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(w, h);
+            RectTransform rt;
+            Button b;
+            TMP_Text t;
+            if ((object)existing != null)
+            {
+                rt = existing.GetComponent<RectTransform>();
+                b = existing.GetComponent<Button>();
+                t = existing.GetComponentInChildren<TMP_Text>(true);
+                if (!existing.gameObject.activeSelf) existing.gameObject.SetActive(true);
+                rt.sizeDelta = new Vector2(w, h);
+                if ((object)t != null) t.text = "CODE";
+                b.onClick.RemoveAllListeners();
+            }
+            else
+            {
+                var go = new GameObject(ButtonName);
+                rt = go.AddComponent<RectTransform>();
+                rt.SetParent(parent, false);
+                go.AddComponent<LayoutElement>().ignoreLayout = true;
+                rt.anchorMin = rt.anchorMax = rb.anchorMin == rb.anchorMax ? rb.anchorMin : new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(w, h);
+                // see-through, with a thin gold edge, so it sits on the row's own background
+                var img = go.AddComponent<Image>();
+                img.color = new Color(0f, 0f, 0f, 0.28f);
+                var edge = go.AddComponent<Outline>();
+                edge.effectColor = new Color(0.79f, 0.64f, 0.29f, 0.55f);
+                edge.effectDistance = new Vector2(1.5f, -1.5f);
+                b = go.AddComponent<Button>();
+                b.targetGraphic = img;
+                var colors = b.colors;
+                colors.highlightedColor = new Color(1.6f, 1.4f, 1.0f, 1f);
+                colors.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f);
+                b.colors = colors;
+                var font = item.GetComponentInChildren<TMP_Text>(true);
+                var label = new GameObject("Label");
+                var lrt = label.AddComponent<RectTransform>();
+                lrt.SetParent(rt, false);
+                lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one; lrt.offsetMin = lrt.offsetMax = Vector2.zero;
+                var tm = label.AddComponent<TextMeshProUGUI>();
+                if ((object)font != null) tm.font = font.font;
+                tm.text = "CODE";
+                tm.fontSize = Mathf.Clamp(h * 0.32f, 13f, 26f);
+                tm.characterSpacing = 4f;
+                tm.alignment = TextAlignmentOptions.Center;
+                tm.color = new Color(0.79f, 0.64f, 0.29f, 1f);           // the game's gold
+                tm.raycastTarget = false;
+                tm.enableAutoSizing = true; tm.fontSizeMin = 9f; tm.fontSizeMax = tm.fontSize;
+                t = tm;
+            }
             Vector3 lp = rb.localPosition;
             rt.localPosition = new Vector3(lp.x - w, lp.y, lp.z);          // until Arrange has measured the names
-            // see-through, with a thin gold edge, so it sits on the row's own background
-            var img = go.AddComponent<Image>();
-            img.color = new Color(0f, 0f, 0f, 0.28f);
-            var edge = go.AddComponent<Outline>();
-            edge.effectColor = new Color(0.79f, 0.64f, 0.29f, 0.55f);
-            edge.effectDistance = new Vector2(1.5f, -1.5f);
-            var b = go.AddComponent<Button>();
-            b.targetGraphic = img;
-            var colors = b.colors;
-            colors.highlightedColor = new Color(1.6f, 1.4f, 1.0f, 1f);
-            colors.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f);
-            b.colors = colors;
-            var font = item.GetComponentInChildren<TMP_Text>(true);
-            var label = new GameObject("Label");
-            var lrt = label.AddComponent<RectTransform>();
-            lrt.SetParent(rt, false);
-            lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one; lrt.offsetMin = lrt.offsetMax = Vector2.zero;
-            var t = label.AddComponent<TextMeshProUGUI>();
-            if ((object)font != null) t.font = font.font;
-            t.text = "CODE";
-            t.fontSize = Mathf.Clamp(h * 0.32f, 13f, 26f);
-            t.characterSpacing = 4f;
-            t.alignment = TextAlignmentOptions.Center;
-            t.color = new Color(0.79f, 0.64f, 0.29f, 1f);           // the game's gold
-            t.raycastTarget = false;
-            t.enableAutoSizing = true; t.fontSizeMin = 9f; t.fontSizeMax = t.fontSize;
             RectTransform report = null;
             try { report = PlayerReports.Place(item, match, rt, parent, w, h); }
             catch (Exception e) { RevivalMod.Log.Warning("[report] battle log button: " + e.Message); }
+
+            // lay the row out now, so the names can be measured and the buttons placed before it is drawn
+            try { var row = item.GetComponent<RectTransform>(); if ((object)row != null) LayoutRebuilder.ForceRebuildLayoutImmediate(row); } catch { }
             Arrange(item, parent, rt, report, w);
-            Main.Enqueue(() => Arrange(item, parent, rt, report, w));    // again once the row has been laid out
+            Vector3 codeAt = rt.localPosition, reportAt = Alive(report) ? report.localPosition : Vector3.zero;
+            Main.Enqueue(() =>
+            {
+                // the check: placed again once the row has been laid out by the game; logged if anything moved
+                Arrange(item, parent, rt, report, w);
+                if (movedLogged || !Alive(rt)) return;
+                bool moved = (rt.localPosition - codeAt).sqrMagnitude > 4f || (Alive(report) && (report.localPosition - reportAt).sqrMagnitude > 4f);
+                if (moved) { movedLogged = true; RevivalMod.Log.Warning($"[replay code] battle log buttons moved after the row's layout (CODE {codeAt.x:0} -> {rt.localPosition.x:0}); please send this log"); }
+            });
             string index = match.recordingIndex;
-            b.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() => Ask(index, t))));
+            var shownLabel = t;
+            b.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() => Ask(index, shownLabel))));
             if (!placedLogged)
             {
                 placedLogged = true;
                 RevivalMod.Log.Msg($"[replay code] battle log: CODE button placed, replay button {rb.rect.width:0}x{h:0} at {lp.x:0},{lp.y:0} in {parent.name}");
             }
         }
+
+        private static bool movedLogged;
 
         // ---------------------------------------------------------------- where the buttons go
 

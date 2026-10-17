@@ -25,42 +25,63 @@ namespace WarpforgeRevival
         // ---------------------------------------------------------------- the button (from ReplayCodes.Place)
 
         /// <summary>Makes the REPORT button (ReplayCodes.Arrange places it next to the opponent's name); null when the match was not against a player.</summary>
+        /// <summary>Hides the row's REPORT button (the row is being reused for a match without one).</summary>
+        internal static void Hide(Transform parent)
+        {
+            var old = (object)parent == null ? null : parent.Find(ButtonName);
+            if ((object)old != null && old.gameObject.activeSelf) old.gameObject.SetActive(false);
+        }
+
+        /// <summary>The row's REPORT button, made once per row and updated when the row is reused (0.13.55); null when
+        /// the match was not against another player.</summary>
         internal static RectTransform Place(BattleLogItem item, BattleLogMatch match, RectTransform code, Transform parent, float w, float h)
         {
-            var old = parent.Find(ButtonName);
-            if ((object)old != null) UnityEngine.Object.Destroy(old.gameObject);
+            var existing = parent.Find(ButtonName);
             string enemy = match.enemyId ?? "";
-            if (enemy.Length != 16 || enemy == "AI" || !string.IsNullOrEmpty(match.botAltid)) return null;     // only real players
+            if (enemy.Length != 16 || enemy == "AI" || !string.IsNullOrEmpty(match.botAltid)) { Hide(parent); return null; }     // only real players
 
-            var go = new GameObject(ButtonName);
-            var rt = go.AddComponent<RectTransform>();
-            rt.SetParent(parent, false);
-            go.AddComponent<LayoutElement>().ignoreLayout = true;
-            rt.anchorMin = rt.anchorMax = code.anchorMin;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(w, h);
+            RectTransform rt;
+            Button b;
+            if ((object)existing != null)
+            {
+                rt = existing.GetComponent<RectTransform>();
+                b = existing.GetComponent<Button>();
+                if (!existing.gameObject.activeSelf) existing.gameObject.SetActive(true);
+                rt.sizeDelta = new Vector2(w, h);
+                b.onClick.RemoveAllListeners();
+            }
+            else
+            {
+                var go = new GameObject(ButtonName);
+                rt = go.AddComponent<RectTransform>();
+                rt.SetParent(parent, false);
+                go.AddComponent<LayoutElement>().ignoreLayout = true;
+                rt.anchorMin = rt.anchorMax = code.anchorMin;
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(w, h);
+                var img = go.AddComponent<Image>();
+                img.color = new Color(0f, 0f, 0f, 0.28f);
+                var edge = go.AddComponent<Outline>();
+                edge.effectColor = new Color(0.75f, 0.3f, 0.25f, 0.55f);
+                edge.effectDistance = new Vector2(1.5f, -1.5f);
+                b = go.AddComponent<Button>();
+                b.targetGraphic = img;
+                var label = new GameObject("Label");
+                var lrt = label.AddComponent<RectTransform>();
+                lrt.SetParent(rt, false);
+                lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one; lrt.offsetMin = lrt.offsetMax = Vector2.zero;
+                var t = label.AddComponent<TextMeshProUGUI>();
+                var font = item.GetComponentInChildren<TMP_Text>(true);
+                if ((object)font != null) t.font = font.font;
+                t.text = "REPORT";
+                t.fontSize = Mathf.Clamp(h * 0.3f, 12f, 24f);
+                t.characterSpacing = 3f;
+                t.alignment = TextAlignmentOptions.Center;
+                t.color = new Color(0.85f, 0.45f, 0.38f, 1f);
+                t.raycastTarget = false;
+                t.enableAutoSizing = true; t.fontSizeMin = 9f; t.fontSizeMax = t.fontSize;
+            }
             rt.localPosition = code.localPosition;
-            var img = go.AddComponent<Image>();
-            img.color = new Color(0f, 0f, 0f, 0.28f);
-            var edge = go.AddComponent<Outline>();
-            edge.effectColor = new Color(0.75f, 0.3f, 0.25f, 0.55f);
-            edge.effectDistance = new Vector2(1.5f, -1.5f);
-            var b = go.AddComponent<Button>();
-            b.targetGraphic = img;
-            var label = new GameObject("Label");
-            var lrt = label.AddComponent<RectTransform>();
-            lrt.SetParent(rt, false);
-            lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one; lrt.offsetMin = lrt.offsetMax = Vector2.zero;
-            var t = label.AddComponent<TextMeshProUGUI>();
-            var font = item.GetComponentInChildren<TMP_Text>(true);
-            if ((object)font != null) t.font = font.font;
-            t.text = "REPORT";
-            t.fontSize = Mathf.Clamp(h * 0.3f, 12f, 24f);
-            t.characterSpacing = 3f;
-            t.alignment = TextAlignmentOptions.Center;
-            t.color = new Color(0.85f, 0.45f, 0.38f, 1f);
-            t.raycastTarget = false;
-            t.enableAutoSizing = true; t.fontSizeMin = 9f; t.fontSizeMax = t.fontSize;
             string who = enemy, name = match.enemyName ?? "", index = match.recordingIndex ?? "";
             b.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() => Form.Show(who, name, index))));
             return rt;

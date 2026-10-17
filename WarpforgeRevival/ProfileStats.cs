@@ -29,11 +29,11 @@ namespace WarpforgeRevival
             var label = Panel(tab);
             if ((object)label == null) return;
             Place(tab, label);
-            label.text = Known.TryGetValue(playerId, out var last) ? last : "";
+            label.text = Known.TryGetValue(playerId.ToUpperInvariant(), out var last) ? last : "";
             int mine = ++asked;
             Fetch(playerId, text => PlayFabTransport.OnMainThread(() =>
             {
-                if (text != null) Known[playerId] = text;
+                if (text != null) Known[playerId.ToUpperInvariant()] = text;
                 if (mine != asked || !Alive(label)) return;         // another profile was opened meanwhile
                 label.text = text ?? "";
                 Place(tab, label);
@@ -143,14 +143,25 @@ namespace WarpforgeRevival
             return $"{name}<pos=48%>{Num("won")} W<pos=72%>{Num("lost")} L" + (draws > 0 ? $"  {draws} D" : "");
         }
 
-        private static void Fetch(string playerId, Action<string> done)
+        /// <summary>Right after sign-in: your own record, so your profile opens with it (0.13.55).</summary>
+        internal static void Prefetch()
+        {
+            Fetch("", text => { }, (id, text) => PlayFabTransport.OnMainThread(() =>
+            {
+                if (text == null || string.IsNullOrEmpty(id)) return;
+                Known[id.ToUpperInvariant()] = text;
+                RevivalMod.Log.Msg("[profile] own record loaded at sign-in");
+            }));
+        }
+
+        private static void Fetch(string playerId, Action<string> done, Action<string, string> answered = null)
         {
             string ticket = PlayFabTransport.SessionTicket;
             if (string.IsNullOrEmpty(ticket)) { done(null); return; }
             string url = RevivalMod.Config.ServerUrl + "/playfab/Revival/PlayerStats";
             System.Threading.Tasks.Task.Run(async () =>
             {
-                string text = null;
+                string text = null, answeredId = null;
                 try
                 {
                     using var msg = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url)
@@ -171,10 +182,12 @@ namespace WarpforgeRevival
                         int skulls = total.TryGetProperty("skulls", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetInt32() : 0;
                         sb.Append("\n<color=#F0B840>Total skulls</color><pos=48%>").Append(skulls);
                         text = sb.ToString();
+                        if (answered != null && data.TryGetProperty("playerId", out var pid) && pid.ValueKind == JsonValueKind.String) answeredId = pid.GetString();
                     }
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[profile] record: " + e.Message); }
                 done(text);
+                answered?.Invoke(answeredId, text);
             });
         }
     }
