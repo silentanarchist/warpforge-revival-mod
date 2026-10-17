@@ -5,44 +5,100 @@ using Il2Cpp;
 namespace WarpforgeRevival
 {
     /// <summary>
-    /// "While in play" abilities on enchantments (fix outline from the card-creator chat, 2026-10-16, project doc
-    /// claude/fix-while-in-play-enchantments.md). The game re-applies "while in play" effects whenever the board
-    /// changes (BattleManagerSupport.BroadcastWhileInPlay), but only on cards where CardScript.HasWhileInPlayAbility()
-    /// is true, and that looks at the card's own abilities only. An enchantment's while-in-play ability is therefore
-    /// never re-run once it is attached. Seen on the Space Wolves Offence card Everstorm (SW64): its hidden
-    /// enchantment on the warlord gives every unit -1 Ranged, but only the two warlords (the only units when it was
-    /// attached) ever got it. The game has the right check, EntityScript.HasEnchantmentWhileInPlay(), and never
-    /// calls it.
+    /// "While in play" abilities on enchantments (Space Wolves' Everstorm, SW64: "All units have -1 Ranged, down to a
+    /// minimum of 1"; only the two warlords ever got it). Two gaps in the game, both needed for the fix
+    /// (fix outline: project doc claude/fix-while-in-play-enchantments.md; 0.13.46 fixed only the first, and that
+    /// one with the wrong test, so nothing changed in play):
     ///
-    /// The postfix also says yes when an attached enchantment has a while-in-play ability, keeping the game's first
-    /// rule: a jammed unit has no effects (DefinedTrait.jam), so it stays "no". Once the refresh reaches the card,
-    /// RawCardScript.TriggerAbilities already runs the enchantments' abilities. Everstorm is the only official card
-    /// affected; custom enchantments can now use "while in play" too. Both players need this (the server only hands
-    /// out the latest mod).
+    ///  1. The refresh (BattleManagerSupport.BroadcastWhileInPlay) only reaches cards whose
+    ///     CardScript.HasWhileInPlayAbility() is true, and that looks at the card's own abilities only. A warlord that
+    ///     carries Everstorm's enchantment was never refreshed. Here a card also counts when one of its active
+    ///     (not spent) enchantments has a "while in play" ability (trigger WhileInPlay or WhileInPlayVariable).
+    ///     EntityScript.HasEnchantmentWhileInPlay() looks at the enchantment's "while in play" animation flag instead,
+    ///     which Everstorm's enchantment does not set, so it is not relied on. A jammed unit still has no effects.
+    ///
+    ///  2. CardScript.UpdateWhileInPlay(unitJustSummoned) passes the card itself as the acting card only right after
+    ///     it was summoned, and nothing otherwise. Everstorm's ability has a subject condition (acting card: your own
+    ///     warlord, this card), which then checks an empty card ("Null evaluated card") and fails, so the ability ran
+    ///     only at the opening, when the warlords were the only units. For a card whose "while in play" comes only from
+    ///     an enchantment, the card itself is passed as the acting card on every refresh. Cards with their own "while
+    ///     in play" abilities are left exactly as the game runs them.
+    ///
+    /// Everstorm is the only official card affected; custom enchantments can now use "while in play" too. Both
+    /// players need this (the server only hands out the latest mod).
     /// </summary>
-    [HarmonyPatch(typeof(CardScript), nameof(CardScript.HasWhileInPlayAbility))]
     internal static class WhileInPlayEnchantments
     {
-        private static int logged;
+        private static int loggedFound, loggedActing;
 
-        private static void Postfix(CardScript __instance, ref bool __result)
+        /// <summary>True when one of the card's active enchantments has a "while in play" ability.</summary>
+        private static bool FromEnchantment(CardScript card)
         {
-            if (__result) return;
-            try
+            var list = card.activeEnchantments;
+            if (list == null) return false;
+            for (int i = 0; i < list.Count; i++)
             {
-                if ((object)__instance == null || __instance.m_CachedPtr == IntPtr.Zero) return;
-                if (__instance.HasCurrentTrait(DefinedTrait.jam)) return;          // the game's rule: jammed units have no effects
-                if (!__instance.HasEnchantmentWhileInPlay()) return;
-                __result = true;
-                if (logged < 5)
-                {
-                    logged++;
-                    string name = "?";
-                    try { name = __instance.rawCardData?.uniqueId ?? "?"; } catch { }
-                    RevivalMod.Log.Msg($"[whileinplay] {name} (#{__instance.uniqueInGameID}) has an enchantment with a while-in-play ability: its effects are refreshed");
-                }
+                var e = list[i];
+                var raw = (object)e == null ? null : e.enchantmentCard;
+                if ((object)raw == null || raw.m_CachedPtr == IntPtr.Zero) continue;
+                try { if (card.IsSpentEnchantment(raw)) continue; } catch { }
+                if (raw.HasAbilityType(AbilityTrigger.WhileInPlay) || raw.HasAbilityType(AbilityTrigger.WhileInPlayVariable)) return true;
             }
-            catch (Exception e) { RevivalMod.Log.Warning("[whileinplay] " + e.Message); }
+            return false;
+        }
+
+        private static string Name(CardScript card)
+        {
+            try { return (card.rawCardData?.uniqueId ?? "?") + " #" + card.uniqueInGameID; } catch { return "?"; }
+        }
+
+        // ---------------------------------------------------------------- 1. the refresh reaches the card
+
+        [HarmonyPatch(typeof(CardScript), nameof(CardScript.HasWhileInPlayAbility))]
+        private static class Reach
+        {
+            private static void Postfix(CardScript __instance, ref bool __result)
+            {
+                if (__result) return;
+                try
+                {
+                    if ((object)__instance == null || __instance.m_CachedPtr == IntPtr.Zero) return;
+                    if (__instance.HasCurrentTrait(DefinedTrait.jam)) return;          // the game's rule: jammed units have no effects
+                    if (!FromEnchantment(__instance)) return;
+                    __result = true;
+                    if (loggedFound < 5)
+                    {
+                        loggedFound++;
+                        RevivalMod.Log.Msg($"[whileinplay] {Name(__instance)} carries an enchantment with a while-in-play ability: refreshed with the board");
+                    }
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[whileinplay] " + e.Message); }
+            }
+        }
+
+        // ---------------------------------------------------------------- 2. the card is its own acting card
+
+        [HarmonyPatch(typeof(RawCardScript), nameof(RawCardScript.UpdateWhileInPlay))]
+        private static class Acting
+        {
+            private static void Prefix(RawCardScript __instance, CardScript thisCard, ref CardScript actingCard)
+            {
+                if ((object)actingCard != null) return;
+                try
+                {
+                    if ((object)thisCard == null || thisCard.m_CachedPtr == IntPtr.Zero || (object)__instance == null) return;
+                    // the card's own "while in play" abilities keep the game's behaviour
+                    if (__instance.HasAbilityType(AbilityTrigger.WhileInPlay) || __instance.HasAbilityType(AbilityTrigger.WhileInPlayVariable)) return;
+                    if (!FromEnchantment(thisCard)) return;
+                    actingCard = thisCard;
+                    if (loggedActing < 5)
+                    {
+                        loggedActing++;
+                        RevivalMod.Log.Msg($"[whileinplay] refreshing {Name(thisCard)}'s enchantment with the card itself as the acting card");
+                    }
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[whileinplay] " + e.Message); }
+            }
         }
     }
 }
