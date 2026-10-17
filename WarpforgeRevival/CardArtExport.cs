@@ -124,8 +124,10 @@ namespace WarpforgeRevival
                     // keep a few pictures loading, one faction at a time (its art bundle stays loaded meanwhile)
                     while (loading.Count < InFlight && todo.Count > 0 && (loading.Count == 0 || todo.Peek().Army == loading[0].art.Army))
                     {
+                        // a new faction: let the last one's pictures go first and start loading next frame, once
+                        // that unload has finished (M-20: loading in the same frame as the unload was started)
+                        if (todo.Peek().Army != anchorArmy) { NewFaction(todo.Peek().Army); return; }
                         var a = todo.Dequeue();
-                        if (a.Army != anchorArmy) NewFaction(a.Army);
                         loading.Add((a, new AssetReference(a.Guid).LoadAssetAsync<UnityEngine.Object>(), Time.realtimeSinceStartup));
                     }
                     if (loading.Count == 0) break;
@@ -189,9 +191,14 @@ namespace WarpforgeRevival
             // compressed: 512 x 512; full size: the picture as the game has it (an even size, for the mask)
             int w = compress ? ArtSize : Math.Max(2, (int)rect.width & ~1), h = compress ? ArtSize : Math.Max(2, (int)rect.height & ~1);
             if (artSizeSeen == 0) artSizeSeen = w;
-            var rgba = Read(tex, rect, w, h, null);
-            // the first picture of a faction keeps its bundle loaded; the rest are let go straight away
-            if ((object)anchor == null) anchor = load; else try { Addressables.Release(load); } catch { }
+            byte[] rgba;
+            try { rgba = Read(tex, rect, w, h, null); }
+            finally
+            {
+                // the first picture of a faction keeps its bundle loaded; the rest are let go straight away
+                // (also when reading it failed, so no picture is left loaded - M-20)
+                if ((object)anchor == null) anchor = load; else try { Addressables.Release(load); } catch { }
+            }
 
             var rgb = new byte[w * h * 3];
             for (int i = 0, j = 0; i < rgb.Length; i += 3, j += 4) { rgb[i] = rgba[j]; rgb[i + 1] = rgba[j + 1]; rgb[i + 2] = rgba[j + 2]; }

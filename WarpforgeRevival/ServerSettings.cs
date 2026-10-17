@@ -18,6 +18,7 @@ namespace WarpforgeRevival
         private static volatile int turnSeconds;          // 0 = the server did not say
         private static DateTime lastFetch = DateTime.MinValue;
         private static volatile bool fetching;
+        private static bool failNoted;
 
         private static volatile bool offenseCards;      // off until the server says otherwise
 
@@ -116,14 +117,32 @@ namespace WarpforgeRevival
                     using var reply = await Http.GetAsync(url);
                     if (!reply.IsSuccessStatusCode)
                     {
+                        // M-19 (0.13.72): a passing error (the server busy or restarting) is "no news": every setting
+                        // keeps its last value, so they never end up half reset (the turn timer and Offence cards
+                        // reset while Long Game and the rules version stayed). Only "not found" means the server
+                        // has no settings any more, and then all of them go back to the defaults together.
+                        if (reply.StatusCode != System.Net.HttpStatusCode.NotFound)
+                        {
+                            if (!failNoted) { failNoted = true; RevivalMod.Log.Warning($"[settings] the server did not send its settings ({(int)reply.StatusCode}); keeping the last ones"); }
+                            loaded = true;
+                            return;
+                        }
+                        if (loaded && (turnSeconds != 0 || longGameEvent != null || rules.Length > 0))
+                            RevivalMod.Log.Msg("[settings] the server no longer provides settings; using local values");
                         matchPort = 0;
-                        loaded = true;
-                        if (turnSeconds != 0) RevivalMod.Log.Msg("[settings] the server no longer provides settings; using local values");
                         turnSeconds = 0;
                         offenseCards = false;
                         offenceModes = null;
+                        rules = "";
+                        longGameEvent = null;
+                        modeHands = new System.Collections.Generic.Dictionary<string, (int, int)>();
+                        practiceClassicLife = 0;
+                        creatorUrl = null;
+                        MenuLayout.FromServer(null);
+                        loaded = true;
                         return;
                     }
+                    failNoted = false;
                     using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
                     int seconds = 0;
                     if (doc.RootElement.ValueKind == JsonValueKind.Object &&

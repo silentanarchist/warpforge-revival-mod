@@ -69,36 +69,8 @@ namespace WarpforgeRevival
         }
 
         // ---------------------------------------------------------------- reporting
-        // "Report message" on a player in the chat only went to the game's analytics service; send
-        // it to the server instead, where admins see it on the creator site.
-        [HarmonyPatch(typeof(ChatGlobalManager), nameof(ChatGlobalManager.ReportMessage))]
-        private static class Report
-        {
-            private static bool Prefix(ChatMessageData message)
-            {
-                try
-                {
-                    if (server == null || (object)message == null) return true;
-                    string player = message.playerId ?? "", text = message.msg ?? "";
-                    long stamp = message.timestamp;
-                    var body = Body(w => { w.WriteString("player", player); w.WriteString("msg", text); w.WriteNumber("timestamp", stamp); });
-                    Task.Run(async () =>
-                    {
-                        try
-                        {
-                            using var reply = await Post("/playfab/Revival/ChatReport", body);
-                            RevivalMod.Log.Msg(reply.IsSuccessStatusCode
-                                ? "[chat] message reported to the server admins"
-                                : "[chat] the server did not take the report (" + (int)reply.StatusCode + ")");
-                        }
-                        catch (Exception e) { RevivalMod.Log.Warning("[chat] could not send the report: " + e.Message); }
-                    });
-                }
-                catch (Exception e) { RevivalMod.Log.Warning("[chat] report: " + e.Message); }
-                return false;                         // nothing for the analytics service
-            }
-        }
-
+        // "Report message" on a player in the chat only went to the game's analytics service; it goes
+        // to the server instead, where admins see it on the creator site.
         // ChatGlobalManager.ReportMessage is a few instructions that jump straight into
         // GameAnalytics.SendReportMessage, and the hook above never ran in play (owner's test,
         // 2026-10-12: the game logged "SendReportMessage to analytics", the server got nothing).
@@ -627,19 +599,6 @@ namespace WarpforgeRevival
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[chat] could not show the chat button: " + e.Message); }
             }
-        }
-
-        [HarmonyPatch(typeof(ChatPreview), nameof(ChatPreview.OpenChat))]
-        private static class Opening
-        {
-            private static void Prefix() { RevivalMod.Log.Msg("[chat] opening the chat window"); }
-        }
-
-        [HarmonyPatch(typeof(ChatGlobalManager), nameof(ChatGlobalManager.ShareDeck))]
-        private static class Sharing
-        {
-            private static void Prefix(string deckString, string channelId) =>
-                RevivalMod.Log.Msg($"[chat] sharing a deck in {channelId} ({(deckString == null ? 0 : deckString.Length)} characters)");
         }
     }
 }

@@ -58,18 +58,42 @@ namespace WarpforgeRevival
             catch { return false; }
         }
 
-        // A deck's play mode is an optional value stored inside the deck (a flag at 0x70, the mode at
-        // 0x74). The generated wrapper for that field reads it wrongly, so it is read and written directly.
+        // A deck's play mode is an optional value stored inside the deck (CardDeck.gameMode, a PlayModes?: the
+        // "has a value" flag, then the mode 4 bytes on). The generated wrapper for that field reads it wrongly, so
+        // it is read and written directly. Its place is asked of the game once (M-21, 0.13.72: it was a fixed
+        // 0x70, never checked on the phone build), with 0x70 kept only if the game cannot say.
+        private static int modeField = -1;
+
+        private static int ModeField()
+        {
+            if (modeField >= 0) return modeField;
+            int at = 0x70;
+            try
+            {
+                var field = Il2CppInterop.Runtime.IL2CPP.GetIl2CppField(Il2CppInterop.Runtime.Il2CppClassPointerStore<CardDeck>.NativeClassPtr, "gameMode");
+                if (field != IntPtr.Zero)
+                {
+                    int found = (int)Il2CppInterop.Runtime.IL2CPP.il2cpp_field_get_offset(field);
+                    if (found > 0 && found < 0x1000) at = found;
+                }
+                RevivalMod.Log.Msg($"[long] a deck's play mode is kept at 0x{at:X}" + (at != 0x70 ? " (not 0x70 as on PC)" : ""));
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[long] deck play mode field: " + e.Message + "; using 0x70"); }
+            return modeField = at;
+        }
+
         private static bool TryStoredMode(CardDeck deck, out PlayModes mode)
         {
-            mode = (PlayModes)System.Runtime.InteropServices.Marshal.ReadInt32(deck.Pointer + 0x74);
-            return System.Runtime.InteropServices.Marshal.ReadByte(deck.Pointer + 0x70) != 0;
+            int at = ModeField();
+            mode = (PlayModes)System.Runtime.InteropServices.Marshal.ReadInt32(deck.Pointer + at + 4);
+            return System.Runtime.InteropServices.Marshal.ReadByte(deck.Pointer + at) != 0;
         }
 
         private static void StoreMode(CardDeck deck, PlayModes mode)
         {
-            System.Runtime.InteropServices.Marshal.WriteInt32(deck.Pointer + 0x74, (int)mode);
-            System.Runtime.InteropServices.Marshal.WriteByte(deck.Pointer + 0x70, 1);
+            int at = ModeField();
+            System.Runtime.InteropServices.Marshal.WriteInt32(deck.Pointer + at + 4, (int)mode);
+            System.Runtime.InteropServices.Marshal.WriteByte(deck.Pointer + at, 1);
         }
 
         /// <summary>A deck stored as a Long Game (Custom Test) deck, whatever page is open.</summary>
@@ -360,20 +384,6 @@ namespace WarpforgeRevival
             }
         }
 
-        [HarmonyPatch(typeof(DeckSelectionPopup), nameof(DeckSelectionPopup.TryOpen))]
-        private static class Popup
-        {
-            private static void Prefix(Il2CppSystem.Object data)
-            {
-                try
-                {
-                    var ctx = (object)data == null ? null : data.TryCast<DeckSelectionContext>();
-                    RevivalMod.Log.Msg($"[long] deck list popup opening: page={page}, asks for mode {((object)ctx == null ? "?" : ctx.GameMode.ToString())}, own list={((object)ctx != null && ctx.DeckList != null ? ctx.DeckList.Count.ToString() : "none")}");
-                }
-                catch (Exception ex) { RevivalMod.Log.Warning("[long] popup: " + ex); }
-            }
-        }
-
         [HarmonyPatch(typeof(RankedDeckSelector), nameof(RankedDeckSelector.OnDisable))]
         private static class PageClosed
         {
@@ -529,26 +539,9 @@ namespace WarpforgeRevival
             }
         }
 
-        [HarmonyPatch(typeof(PlayerHand), nameof(PlayerHand.GetBaseCardsInHandCount))]
-        private static class HandSize
-        {
-            private static void Prefix(PlayerHand __instance)
-            {
-                try { ApplyHand(__instance); } catch (Exception e) { RevivalMod.Log.Warning("[long] starting hand: " + e.Message); }
-            }
-        }
-
-        [HarmonyPatch(typeof(PlayerHand), nameof(PlayerHand.GetSecondExtraCardsCount))]
-        private static class HandExtra
-        {
-            private static void Prefix(PlayerHand __instance)
-            {
-                try { ApplyHand(__instance); } catch (Exception e) { RevivalMod.Log.Warning("[long] starting hand: " + e.Message); }
-            }
-        }
-
-        // The two getters above are folded into the dealing code by the compiler, so the values
-        // must be in place before the opening hands are dealt.
+        // PlayerHand.GetBaseCardsInHandCount / GetSecondExtraCardsCount are folded into the dealing code by
+        // the compiler (no call to either is left in the game, checked 2026-10-17), so the values must be in
+        // place before the opening hands are dealt. (The hooks on those two getters were removed in 0.13.72.)
         [HarmonyPatch(typeof(PlayerHand), nameof(PlayerHand.AddCardsToMulligan))]
         private static class HandDealt
         {

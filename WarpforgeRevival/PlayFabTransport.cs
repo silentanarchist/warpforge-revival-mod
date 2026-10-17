@@ -151,6 +151,10 @@ namespace WarpforgeRevival
         }
 
         private static readonly HashSet<string> DraftEntries = new HashSet<string> { "FreeDraftEntrance", "PayDraftEntrance" };
+        private static readonly byte[] DraftMark = Encoding.UTF8.GetBytes("DraftEntrance");
+
+        /// <summary>Whether the request's bytes contain this text (a quick test before reading the request as JSON).</summary>
+        internal static bool Has(byte[] payload, byte[] text) => payload != null && ((ReadOnlySpan<byte>)payload).IndexOf(text) >= 0;
 
         /// <summary>
         /// Entering a draft, the game sends the warlords it would offer. A revival server picks a
@@ -161,6 +165,8 @@ namespace WarpforgeRevival
             try
             {
                 if (payload.Length == 0 || payload.Length > 1 << 20) return payload;
+                // M-10 (0.13.72): only a draft entry is read in full; every other call is passed on without parsing
+                if (!Has(payload, DraftMark)) return payload;
                 var root = System.Text.Json.Nodes.JsonNode.Parse(payload) as System.Text.Json.Nodes.JsonObject;
                 string fn = root?["FunctionName"]?.GetValue<string>();
                 if (fn == null || !DraftEntries.Contains(fn)) return payload;

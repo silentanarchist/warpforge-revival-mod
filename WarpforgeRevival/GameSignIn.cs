@@ -53,7 +53,9 @@ namespace WarpforgeRevival
         /// <summary>Removes a saved game login the server no longer accepts.</summary>
         internal static void Forget()
         {
-            try { if (File.Exists(FilePath)) File.Delete(FilePath); } catch { }
+            // the saved game sign-in must not stay behind unnoticed (M-20): a file that cannot be deleted is logged
+            try { if (File.Exists(FilePath)) File.Delete(FilePath); }
+            catch (Exception e) { RevivalMod.Log.Warning("[sign-in] could not delete the saved game sign-in file: " + e.Message); }
         }
 
         /// <summary>

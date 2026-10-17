@@ -208,6 +208,8 @@ namespace WarpforgeRevival
             try { return battle.IsReplayMatch(); } catch { return false; }
         }
 
+        private static readonly byte[] SaveMark = System.Text.Encoding.UTF8.GetBytes("saveMatchRecording");
+
         /// <summary>
         /// Called with every cloud script call the game sends: the recording of the match just played
         /// gets the rules noted while it was dealt. Used once, and only within 3 hours of the deal.
@@ -215,6 +217,7 @@ namespace WarpforgeRevival
         internal static byte[] WithRules(byte[] payload)
         {
             if (noted == null || payload.Length == 0 || payload.Length > 1 << 20) return payload;
+            if (!PlayFabTransport.Has(payload, SaveMark)) return payload;      // M-10: not a recording, not parsed
             try
             {
                 var root = JsonNode.Parse(payload) as JsonObject;
