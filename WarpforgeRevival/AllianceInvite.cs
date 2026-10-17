@@ -29,7 +29,8 @@ namespace WarpforgeRevival
         private static readonly ConcurrentQueue<Action> MainThread = new ConcurrentQueue<Action>();
 
         private static AllianceView view;
-        private static TMP_Text membersLine;          // the General page's "Members: n/30" (AllianceMemberList.memberLabel)
+        private static TMP_Text membersLine;
+        private static Vector2 addSize;                // the Friends tab's add button, as drawn there          // the General page's "Members: n/30" (AllianceMemberList.memberLabel)
         private static GameObject holder;
         private static TMP_InputField box;
         private static Button button;
@@ -87,6 +88,7 @@ namespace WarpforgeRevival
                     box.onSubmit.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<string>>(new Action<string>(_ => Send())));
                 }
 
+                try { var ar = add.GetComponent<RectTransform>().rect; addSize = new Vector2(ar.width, ar.height); } catch { addSize = Vector2.zero; }
                 var btnGo = UnityEngine.Object.Instantiate(add.gameObject, holder.transform, false);
                 btnGo.name = "Invite";
                 (btnGo.GetComponent<LayoutElement>() ?? btnGo.AddComponent<LayoutElement>()).ignoreLayout = true;
@@ -176,11 +178,15 @@ namespace WarpforgeRevival
             else end = r.xMin + words;
             float x = end - r.center.x + 40f;                 // in the holder's coordinates (the line's centre)
             float h = Math.Max(48f, Math.Min(64f, r.height + 8f));
-            Lay(box.GetComponent<RectTransform>(), new Vector2(380f, h), new Vector2(0f, 0.5f), new Vector2(x, 0f));
-            Lay(button.GetComponent<RectTransform>(), new Vector2(170f, h), new Vector2(0f, 0.5f), new Vector2(x + 396f, 0f));
-            Lay(status.rectTransform, new Vector2(700f, 34f), new Vector2(0f, 1f), new Vector2(x, -h / 2f - 4f));
+            // raised a little so the result line under it stays above the member list
+            float y = h / 2f;
+            // the add button as big as on the Friends tab (square, its border round the icon)
+            var bs = addSize.x > 8f && addSize.y > 8f ? addSize : new Vector2(h + 16f, h + 16f);
+            Lay(box.GetComponent<RectTransform>(), new Vector2(380f, h), new Vector2(0f, 0.5f), new Vector2(x, y));
+            Lay(button.GetComponent<RectTransform>(), bs, new Vector2(0f, 0.5f), new Vector2(x + 396f, y));
+            Lay(status.rectTransform, new Vector2(700f, 34f), new Vector2(0f, 1f), new Vector2(x, y - h / 2f - 4f));
             if (!placedLogged)
-                RevivalMod.Log.Msg($"[alliances] invite box: \"{members.text}\" line {r.width:0}x{r.height:0}, words end at {end:0}, box at x {x:0}");
+                RevivalMod.Log.Msg($"[alliances] invite box: \"{members.text}\" line {r.width:0}x{r.height:0}, words end at {end:0}, box at x {x:0}, button {bs.x:0}x{bs.y:0}");
             if (!placedLogged) { placedLogged = true; RevivalMod.Log.Msg("[alliances] invite-by-friend-code box placed next to the members count"); }
         }
 
