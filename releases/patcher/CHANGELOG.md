@@ -3,6 +3,11 @@
 The Android app that patches the game on the device itself. Write "device", not "phone", unless something only applies to phones. Newest first. A heading ending in
 "(test build)" is published as a pre-release.
 
+## 0.2.8 - 2026-10-17
+
+### Changes
+- The app now looks for its updates in the merged Warpforge Revival repository (`silentanarchist/warpforge-revival-mod`), where new versions of the app are released from now on. Update to this version to keep getting updates.
+
 ## 0.2.7 - 2026-10-14
 
 ### Changes
