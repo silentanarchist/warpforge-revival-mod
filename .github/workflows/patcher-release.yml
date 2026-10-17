@@ -66,7 +66,7 @@ jobs:
               echo "**Install**"
               echo "1. Download \`$(basename "$apk")\` below on the device and open it. Allow installing apps from your browser when Android asks."
               echo "2. Open **Warpforge Patcher**, allow the two permissions it asks for, and press **Patch and install**."
-              echo "3. Start the game. The full guide is docs/android.md of this repository."
+              echo "3. Start the game. The full guide, with screenshots: https://wf-revival.silentanarchist.com/guides/phone (the website needs an account: sign in or make one at https://wf-revival.silentanarchist.com/login)."
               echo
               echo "Needs Android 8 or newer and about 2 GB free while patching. The app downloads the loader from the project's GitHub and the mod from the revival server, and checks both."
               echo

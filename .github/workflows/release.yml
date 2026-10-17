@@ -110,17 +110,17 @@ jobs:
               if [ ${#pc[@]} -gt 0 ]; then
                 echo
                 echo "**PC** (\`$(basename "${pc[0]}")\`)"
-                echo "1. Install MelonLoader 0.7.3 into the game folder and start the game once."
-                echo "2. Unzip, and copy the \`WarpforgeRevival\` folder into the game's \`Mods\` folder. Keep \`manifest.json\` next to the DLL."
-                echo "3. Start the game. The zip's README.txt has the full steps."
+                echo "Install guide: https://wf-revival.silentanarchist.com/guides/pc"
               fi
               if [ ${#android[@]} -gt 0 ]; then
                 echo
                 echo "**Android** (\`$(basename "${android[0]}")\`)"
-                echo "The game on the device has to be patched with the mod loader first: use the Warpforge Patcher app, which also"
-                echo "puts this mod in place. To update by hand, copy \`WarpforgeRevival.Android.dll\` on the device into"
-                echo "\`MelonLoader/com.Everguild.WarhammerWarpforge/Mods/\`."
+                echo "The game on the device has to be patched with the mod loader first: the Warpforge Patcher app does that and"
+                echo "also puts this mod in place. Install guides: https://wf-revival.silentanarchist.com/guides/phone (Patcher app),"
+                echo "https://wf-revival.silentanarchist.com/guides/android-pc (with a PC), https://wf-revival.silentanarchist.com/guides/mumu (MuMu Player)."
               fi
+              echo
+              echo "The guides are on the Revival website, which needs an account: sign in or make one at https://wf-revival.silentanarchist.com/login."
               echo
               echo "Games already running the mod update themselves from the server. The source for these builds is the code at this tag."
             } > notes.md

@@ -6,8 +6,8 @@ community-hosted server now that the game's own servers are closed.
 This repository is the complete source of both builds of the mod: `WarpforgeRevival.dll` for
 Windows and `WarpforgeRevival.Android.dll` for Android (the same source; the parts marked
 `ANDROID_PORT` are the Android differences). It also holds the PC patcher that puts the mod loader
-into the Android game, and the changes made to that loader. **Playing on a phone? See
-[docs/android.md](docs/android.md).** (Until 2026-10-17 the Android parts were in their own repository,
+into the Android game, and the changes made to that loader. **Installing? See the
+[guides on the website](https://wf-revival.silentanarchist.com/guides).** (Until 2026-10-17 the Android parts were in their own repository,
 [warpforge-revival-mod-android](https://github.com/silentanarchist/warpforge-revival-mod-android). It
 stays up so older copies of the Warpforge Patcher app can find their update; the app is released here now.)
 Versions are numbered `x.y.z.f-w` for Windows and `x.y.z.f-a` for Android: `x.y.z` is the shared code
@@ -65,40 +65,22 @@ The latest builds are [releases/WarpforgeRevival-0.14.0-w.zip](releases/Warpforg
 [releases/WarpforgeRevival.Android-0.14.0-a.zip](releases/WarpforgeRevival.Android-0.14.0-a.zip) (Android; see
 [docs/android.md](docs/android.md)); open one and press "Download raw file". They are built from the source in this
 repository and signed by the project owner (the mod installs only signed updates). The Windows zip holds the mod, the
-`manifest.json` it needs, and a README with the steps below.
+`manifest.json` it needs, and a short README.
 
-## Installing
+## Installing and making an account
 
-1. Install [MelonLoader 0.7.3](https://github.com/LavaGang/MelonLoader/releases/tag/v0.7.3) into the game folder and start the game once.
-2. Put `WarpforgeRevival.dll` in the game's `Mods` folder - either straight in `Mods`, or in
-   `Mods\WarpforgeRevival\` together with a `manifest.json` (MelonLoader only loads mods from a
-   sub-folder that has one).
-3. Start the game. Settings are created in `UserData\WarpforgeRevival.cfg`; set `ServerUrl` there
-   if you are not using the default server.
-4. Sign in, or make an account - see below.
+The step-by-step guides, with screenshots, are on the Revival website, the one place they are kept up to
+date. **The website needs an account:** sign in (or make a free account) at
+[wf-revival.silentanarchist.com](https://wf-revival.silentanarchist.com/login) to read them.
 
-## Signing in and making an account
+- [PC (Windows)](https://wf-revival.silentanarchist.com/guides/pc)
+- [Android device: the Warpforge Patcher app](https://wf-revival.silentanarchist.com/guides/phone) (the easiest way on Android)
+- [Android device: with a PC](https://wf-revival.silentanarchist.com/guides/android-pc) (the scripts in `patcher/`, with a cable)
+- [Android on a PC with MuMu Player](https://wf-revival.silentanarchist.com/guides/mumu)
 
-When the server needs an account, this window appears while the game loads:
-
-![The sign-in window: Name and Password boxes, then Sign in, Create account and Quit](docs/sign-in-window.png)
-
-**New player? Make your account right here - there is no separate form.**
-
-1. In **Name**, type the name you want (5 to 30 letters, digits, `.` `'` `-` or `_`, no spaces).
-2. In **Password**, type the password you want (at least 6 characters, no spaces; do not reuse one
-   from another site).
-3. Press **Create account**. The account is made with what you typed and the game signs in.
-
-Pressing **Create account** with the boxes empty only says "Enter a name and a password." - fill
-them in first, then press it.
-
-**Already have an account** (made here or on the server's website)? Type its name and password
-and press **Sign in**. The game remembers the sign-in, so it asks only once on each computer or
-phone. The same account works everywhere and keeps the same decks and progress.
-
-Afterwards, on the server's website (its profile page) you can make a **recovery code** in case you
-forget your password. **Sign out** in **Settings > Account** signs out this device only.
+No account yet? Make one on the [website](https://wf-revival.silentanarchist.com/login): you can read
+the guides straight away, even while the account waits for approval. You can also make one in the game's own
+sign-in window, which appears while the game loads. The same account works on PC and Android.
 
 ## Building
 
