@@ -465,7 +465,10 @@ namespace WarpforgeRevival
                     RuleSet rules = null;
                     if (outgoing != null && (opponent.Length == 0 || string.Equals(opponent, outgoingTo, StringComparison.OrdinalIgnoreCase))) rules = outgoing;
                     else if (incoming.TryGetValue(opponent, out var got)) rules = got.rules;
-                    else if (incoming.Count == 1 && opponent.Length == 0) rules = incoming.Values.First().rules;
+                    // No guess from a single waiting challenge here (mod code review M-18, 2026-10-16): with the
+                    // opponent not known yet this is the challenger's own send, and a friend's custom-rules challenge
+                    // still waiting would put its rules on an ordinary challenge to someone else, on this side only.
+                    // The accepting side's guess is FromIncoming, at the battle start.
                     RevivalMod.Log.Msg($"[challenge] challenge match starting with '{opponent}': {(rules == null ? "ordinary rules" : "custom rules")}");
                     // nothing is cleared here for an ordinary one: rules already noted stay until the battle
                     // (which only uses them in a friend match), a call-off, or 5 minutes

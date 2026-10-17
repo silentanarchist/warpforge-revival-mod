@@ -20,9 +20,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.13.47-a";
+        public const string Version = "0.13.48-a";
 #else
-        public const string Version = "0.13.47-w";
+        public const string Version = "0.13.48-w";
 #endif
 
         /// <summary>
@@ -159,16 +159,10 @@ namespace WarpforgeRevival
 #else
             Updater.Start(Config.ServerUrl, dataDir);
 #endif
-#if !ANDROID_PORT   // Windows only
-            CcdProbe.Start(dataDir); // background; falls back to the cached pack when the server is unreachable
-#endif
 
             if (Config.DiagnosticLogging)
                 Diagnostics.Install(HarmonyInstance);
-#if !ANDROID_PORT   // temporary: tracing the Point-Blank Shot freeze (PC test builds; phones keep their hook count down)
-            try { DeathTrace.Install(HarmonyInstance); } catch (Exception e) { Log.Warning("[deathtrace] " + e.Message); }
-#endif
-            // PlayFabTransport patches are applied automatically by MelonLoader ([HarmonyPatch]).
+            // PlayFabTransport's patches, like every [HarmonyPatch] class, are applied by SafePatch.All.
         }
 
         private float nextQuitCheck;
@@ -248,9 +242,6 @@ namespace WarpforgeRevival
 #endif
             FrameWatch.Tick();
             BugReport.Tick();
-#if !ANDROID_PORT
-            DeathTrace.Tick();               // temporary (Point-Blank Shot freeze)
-#endif
             ScreenCheck.Tick();
 #if ANDROID_PORT
             IntroVideo.Tick();
@@ -272,7 +263,6 @@ namespace WarpforgeRevival
             FriendsLive.Tick();
             GlobalChat.Tick();
             AlternateArts.Tick();
-            BattleDiagnostics.Tick();
 
             // Dev helper: creating UserData/WarpforgeRevival/quit closes the game cleanly
             // (lets the tester restart it without touching the game window).
