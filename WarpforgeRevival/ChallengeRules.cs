@@ -45,11 +45,11 @@ namespace WarpforgeRevival
             new Field("secondPlayerExtraCards", () => Loc.T("challenge.rule.secondPlayerExtraCards", "Extra cards for the second player"), 0, 3),
             new Field("drawCardsPerTurn", () => Loc.T("challenge.rule.drawCardsPerTurn", "Cards drawn per turn"), 0, 5),
             new Field("handLimit", () => Loc.T("challenge.rule.handLimit", "Hand limit"), 3, 20),
-            new Field("startingMana", () => Loc.T("challenge.rule.startingMana", "Starting mana (first player)"), 0, 10),
-            new Field("startingManaSecond", () => Loc.T("challenge.rule.startingManaSecond", "Starting mana (second player)"), 0, 10),
-            new Field("manaPerTurn", () => Loc.T("challenge.rule.manaPerTurn", "Mana gained per turn"), 0, 5),
+            new Field("startingMana", () => Loc.T("challenge.rule.startingMana", "Starting Energy (first player)"), 0, 10),
+            new Field("startingManaSecond", () => Loc.T("challenge.rule.startingManaSecond", "Starting Energy (second player)"), 0, 10),
+            new Field("manaPerTurn", () => Loc.T("challenge.rule.manaPerTurn", "Energy gained per turn"), 0, 5),
             // 0.13.33: unspent mana carried over to the next turn, at most this much (Skirmish: 1)
-            new Field("manaAccumulation", () => Loc.T("challenge.rule.manaAccumulation", "Unspent mana carried over (at most)"), 0, 5),
+            new Field("manaAccumulation", () => Loc.T("challenge.rule.manaAccumulation", "Unspent Energy carried over (at most)"), 0, 5),
             new Field("overtimeTurn", () => Loc.T("challenge.rule.overtimeTurn", "Overtime starts on turn"), 5, 60),
             new Field("turnSeconds", () => Loc.T("challenge.rule.turnSeconds", "Turn timer (seconds)"), 30, 300, 5),
             new Field("offenseCards", () => Loc.T("challenge.rule.offenseCards", "Offence cards"), 0, 1),
@@ -132,7 +132,7 @@ namespace WarpforgeRevival
                              ("multiplier", Show("warlordHealthMultiplier", G("warlordHealthMultiplier"))), ("change", (change >= 0 ? "+" : "") + change)) + "\n" +
                        Loc.T("challenge.sum.hand", "Starting hand: {hand} (+{extra} for the second player) · hand limit {limit}",
                              ("hand", G("startingHand")), ("extra", G("secondPlayerExtraCards")), ("limit", G("handLimit"))) + "\n" +
-                       Loc.T("challenge.sum.mana", "Mana: starts {first} / {second} (first / second player), +{perTurn} per turn, up to {carried} unspent carried over",
+                       Loc.T("challenge.sum.energy", "Energy: starts {first} / {second} (first / second player), +{perTurn} per turn, up to {carried} unspent carried over",
                              ("first", G("startingMana")), ("second", G("startingManaSecond")), ("perTurn", G("manaPerTurn")), ("carried", G("manaAccumulation"))) + "\n" +
                        Loc.T("challenge.sum.turns", "Cards drawn per turn: {draw} · overtime from turn {overtime} · turn timer {seconds} s",
                              ("draw", G("drawCardsPerTurn")), ("overtime", G("overtimeTurn")), ("seconds", G("turnSeconds"))) + "\n" +

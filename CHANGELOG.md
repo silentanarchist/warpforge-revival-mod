@@ -11,6 +11,9 @@ Changes made on the server take effect for everyone at once; the ones listed her
 ### New
 - **Translations (groundwork):** the mod's own texts can now be shown in the game's language (the language set in the game's Settings). Translations come from the server, so they can be added and corrected without a mod update; texts not yet translated stay in English. First texts: Friends / Requests, the alliance invite box and the Social > Challenge page. Words the game already has (Friends, Offline, On / Off, Random, OK, the card rarities) use the game's own translations, so they match the rest of the game.
 
+### Changed
+- **Social > Challenge:** the rules say **Energy** instead of mana, the game's own word for it (Starting Energy, Energy gained per turn, Unspent Energy carried over), also in the rules shown on the challenge popup.
+
 ## 0.14.0 - 2026-10-17
 
 ### New
