@@ -61,6 +61,21 @@ namespace WarpforgeRevival
         }
 
         private static readonly string[] Windows = { "Social", "Testers" };
+
+        /// <summary>A button label as shown, in the player's language: the built-in labels are translated (the game's
+        /// own word where it has one); any other label from the server is shown as written. The game shows these
+        /// tabs in capitals whatever the case here.</summary>
+        internal static string Shown(string label)
+        {
+            switch (label)
+            {
+                case "CHALLENGE": return Loc.T("menu.challenge", "Challenge");
+                case "PLAY": return Loc.Game("MainMenu/NavigationPanel/HomeButton", "PLAY");
+                case "DECKS": return Loc.T("menu.decks", "Decks");
+                case "CARDS": return Loc.Game("MenuShop/ShopItemType/Cards", "Cards");
+                default: return label;
+            }
+        }
         private static readonly string[] Icons = { "play" };
 
         // ---------------------------------------------------------------- the layout
@@ -254,7 +269,8 @@ namespace WarpforgeRevival
                     foreach (var t in a.Texts)
                     {
                         foreach (var loc in t.GetComponents<Il2CppI2.Loc.Localize>()) if (loc.enabled) loc.enabled = false;
-                        if (t.text != cfg.Label) t.text = cfg.Label;
+                        string shown = Shown(cfg.Label);
+                        if (t.text != shown) t.text = shown;
                     }
                     if (a.Texts.Count == 0) RevivalMod.Log.Warning($"[menu layout] {key}: '{cfg.Tab}' has no label to change");
                 }
@@ -384,8 +400,11 @@ namespace WarpforgeRevival
                         var go = a.Button.gameObject;
                         if (a.Visible.HasValue && go.activeSelf != a.Visible.Value) { Drift(a, "shown/hidden", go.activeSelf + " (set " + a.Visible.Value + ")"); go.SetActive(a.Visible.Value); }
                         if (a.Label != null)
+                        {
+                            string shown = Shown(a.Label);
                             foreach (var t in a.Texts)
-                                if (Ui.Alive(t) && t.text != a.Label) { Drift(a, "label", "'" + t.text + "'"); t.text = a.Label; }
+                                if (Ui.Alive(t) && t.text != shown) { Drift(a, "label", "'" + t.text + "'"); t.text = shown; }
+                        }
                         if ((object)a.Icon != null && Ui.Alive(a.IconImage) && (object)a.IconImage.sprite != null && a.IconImage.sprite.Pointer != a.Icon.Pointer)
                         { Drift(a, "icon", a.IconImage.sprite.name); a.IconImage.sprite = a.Icon; }
                         if (a.Index.HasValue && a.Button.GetSiblingIndex() != a.Index.Value)

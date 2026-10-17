@@ -65,5 +65,8 @@
   "friends.tabRequests": "Requests",
   "friends.tabRequestsCount": "Requests ({count})",
   "friends.titleRequests": "Your requests:",
-  "friends.typeCode": "Type a friend code first"
+  "friends.typeCode": "Type a friend code first",
+  "menu.challenge": "Challenge",
+  "menu.decks": "Decks",
+  "menu.testers": "Testers"
 }

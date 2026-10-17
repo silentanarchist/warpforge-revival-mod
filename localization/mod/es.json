@@ -65,5 +65,8 @@
   "friends.tabRequests": "Solicitudes",
   "friends.tabRequestsCount": "Solicitudes ({count})",
   "friends.titleRequests": "Tus solicitudes:",
-  "friends.typeCode": "Primero escribe un código de amigo"
+  "friends.typeCode": "Primero escribe un código de amigo",
+  "menu.challenge": "Desafío",
+  "menu.decks": "Mazos",
+  "menu.testers": "Testers"
 }

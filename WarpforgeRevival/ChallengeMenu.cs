@@ -57,6 +57,9 @@ namespace WarpforgeRevival
 
         private static string ModeName(string id)
         {
+            // the two presets carry the game's own mode names (the server's event titles are English only)
+            if (id == "RevivalClassic") return Loc.Game("MainMenu/GameMode/Classic", "Classic");
+            if (id == "RevivalSkirmish") return Loc.Game("MainMenu/GameMode/Skirmish", "Skirmish");
             var ev = ChallengeRules.FindEvent(id);
             return (object)ev == null ? id : TestersPage.Label(ev.TryCast<LiveOpsEvent>(), EventLabelReferenceType.Title, id);
         }

@@ -43,11 +43,31 @@ namespace WarpforgeRevival
         }
 
         private static float nextLook;
+        private static int version;                              // goes up whenever the texts in use change
+        private static int boundVersion;
+        private static readonly List<(Il2CppTMPro.TMP_Text text, Func<string> make)> bound = new List<(Il2CppTMPro.TMP_Text, Func<string>)>();
+
+        /// <summary>Shows a text on a label that stays up (a menu button), and shows it again in the new language when
+        /// the language or its texts change (the game's language setting, or the texts arriving from the server
+        /// after the label was made). Main thread.</summary>
+        internal static void Bind(Il2CppTMPro.TMP_Text label, Func<string> make)
+        {
+            if ((object)label == null) return;
+            try { label.text = make(); } catch { }
+            bound.RemoveAll(b => !Ui.Alive(b.text) || b.text.Pointer == label.Pointer);
+            bound.Add((label, make));
+        }
 
         /// <summary>Called every frame (main thread): reads the game's language once a second and loads its texts
         /// when it changes. T itself never calls into the game, so it is safe on any thread.</summary>
         internal static void Tick()
         {
+            if (boundVersion != System.Threading.Volatile.Read(ref version))
+            {
+                boundVersion = System.Threading.Volatile.Read(ref version);
+                bound.RemoveAll(b => !Ui.Alive(b.text));
+                foreach (var (text, make) in bound) try { string s = make(); if (text.text != s) text.text = s; } catch { }
+            }
             float now = UnityEngine.Time.realtimeSinceStartup;
             if (now < nextLook) return;
             nextLook = now + 1f;
@@ -59,6 +79,7 @@ namespace WarpforgeRevival
             RevivalMod.Log.Msg("[lang] game language: " + code);
             if (code == "en") { table = null; tableLang = "en"; }
             else Load(code);
+            System.Threading.Interlocked.Increment(ref version);
         }
 
         /// <summary>The game's language code as last seen ("en" until then).</summary>
@@ -108,7 +129,7 @@ namespace WarpforgeRevival
             try
             {
                 var kept = File.Exists(CachePath(code)) ? Parse(File.ReadAllBytes(CachePath(code))) : null;
-                if (kept != null) { table = kept; tableLang = code; }
+                if (kept != null) { table = kept; tableLang = code; System.Threading.Interlocked.Increment(ref version); }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[lang] kept " + code + " texts could not be read: " + e.Message); }
             if (string.IsNullOrEmpty(server)) { loadingLang = null; return; }
@@ -147,7 +168,7 @@ namespace WarpforgeRevival
                     if (fresh == null) return;
                     Directory.CreateDirectory(cacheDir);
                     File.WriteAllBytes(CachePath(code), data);
-                    if (wantLang == code) { table = fresh; tableLang = code; }
+                    if (wantLang == code) { table = fresh; tableLang = code; System.Threading.Interlocked.Increment(ref version); }
                     RevivalMod.Log.Msg($"[lang] {fresh.Count} {code} texts loaded from the server");
                 }
                 catch (Exception e) { RevivalMod.Log.Warning($"[lang] {code} texts could not be loaded: " + e.Message); }

@@ -63,7 +63,7 @@ namespace WarpforgeRevival
             var panel = Box(shade, "Panel", Panel, 0.12f, 0.1f, 0.88f, 0.9f);
             Box(panel, "TopLine", Line, 0, 0.995f, 1, 1);
 
-            Text(panel, "Title", "Testers", 46, TextAlignmentOptions.Left, Color.white, 0.04f, 0.86f, 0.6f, 0.97f);
+            Text(panel, "Title", Loc.T("menu.testers", "Testers"), 46, TextAlignmentOptions.Left, Color.white, 0.04f, 0.86f, 0.6f, 0.97f);
             Text(panel, "Note", "Modes and tools for testers. Not shown to other players.", 22, TextAlignmentOptions.Left, Dim, 0.04f, 0.8f, 0.8f, 0.87f);
             var close = Button(panel, "Close", "Close", 0.82f, 0.88f, 0.97f, 0.96f, Tile);
             OnClick(close, Close);

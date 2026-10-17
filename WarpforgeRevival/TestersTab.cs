@@ -95,7 +95,7 @@ namespace WarpforgeRevival
             foreach (var c in copy.GetComponentsInChildren<OpenWindowButton>(true)) UnityEngine.Object.DestroyImmediate(c);
             foreach (var c in copy.GetComponentsInChildren<NavigationPanelToggle>(true)) UnityEngine.Object.DestroyImmediate(c);
             foreach (var c in copy.GetComponentsInChildren<Il2CppI2.Loc.Localize>(true)) c.enabled = false;
-            foreach (var t in copy.GetComponentsInChildren<Il2CppTMPro.TMP_Text>(true)) t.text = "Testers";
+            foreach (var t in copy.GetComponentsInChildren<Il2CppTMPro.TMP_Text>(true)) Loc.Bind(t, () => Loc.T("menu.testers", "Testers"));
 
             var toggle = copy.GetComponent<UnityEngine.UI.Toggle>();
             if ((object)toggle != null)
