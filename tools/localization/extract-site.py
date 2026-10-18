@@ -5,7 +5,9 @@ The site (creator.html in the server repo) marks its texts two ways: on elements
 text is the English; data-t-title / data-t-placeholder for those attributes), and in scripts as
 T("key", "English", ...). This finds them all and writes localization/site/en.json (key -> English, sorted), the file
 the translators work from. It fails when one key has two different English texts, or a marked element has markup
-inside it (only plain text can be swapped).
+inside it (only plain text can be swapped) other than children marked data-t-part="name", which stand in the English
+as {name} (a link inside a sentence, say). Elements marked data-t-rich="key" keep <strong>, <em>, <code> and <br>
+in their English (and translations may use those, nothing else). Runs of spaces and line breaks become one space.
 
     python3 tools/localization/extract-site.py [path/to/creator.html]          write localization/site/en.json
     python3 tools/localization/extract-site.py --check [path/to/creator.html]  only check it is up to date
@@ -20,25 +22,39 @@ OUT = os.path.join(ROOT, "localization", "site", "en.json")
 PAGE = os.path.join(os.path.dirname(ROOT), "warpforge-revival-server", "content", "files", "creator.html")
 CALL = re.compile(r'\bT\(\s*"([a-zA-Z0-9_.]+)"\s*,\s*"((?:[^"\\]|\\.)*)"')
 KEY_ONLY = re.compile(r'\bT\(\s*"([a-zA-Z0-9_.]+)"')
+RICH = {"strong", "em", "code", "br", "b", "i"}            # the tags a data-t-rich text (and its translations) may hold
 VOID = {"br", "img", "input", "meta", "link", "hr", "wbr", "source", "col", "area", "base", "embed", "param", "track"}
 
 class Marks(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.found, self.bad, self.open = [], [], []     # open: [key, text, depth] for data-t elements being read
+        self.found, self.bad, self.open = [], [], []     # open: [key, text, depth, inner, skip] for data-t elements being read
         self.depth = 0
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         for attr in ("title", "placeholder"):
             if a.get("data-t-" + attr):
                 self.found.append((a["data-t-" + attr], a.get(attr) or ""))
-        for o in self.open:
-            o[3] = True                                   # markup inside a marked element
         if tag in VOID:
+            for o in self.open:
+                if o[4]: continue
+                if o[5] and tag == "br": o[1] += "<br>"
+                else: o[3] = True
             return
         self.depth += 1
+        for o in self.open:
+            if o[4]:
+                continue                                  # inside a part: that part's own business
+            if a.get("data-t-part") and (o[5] or self.depth == o[2] + 1):
+                o[1] += "{" + a["data-t-part"] + "}"; o[4] = self.depth
+            elif o[5] and tag in RICH:
+                o[1] += "<" + tag + ">"
+            else:
+                o[3] = True                               # markup inside a marked element
         if a.get("data-t"):
-            self.open.append([a["data-t"], "", self.depth, False])
+            self.open.append([a["data-t"], "", self.depth, False, 0, False, tag])
+        if a.get("data-t-rich"):
+            self.open.append([a["data-t-rich"], "", self.depth, False, 0, True, tag])
     def handle_startendtag(self, tag, attrs):
         a = dict(attrs)
         for attr in ("title", "placeholder"):
@@ -46,12 +62,18 @@ class Marks(HTMLParser):
                 self.found.append((a["data-t-" + attr], a.get(attr) or ""))
     def handle_data(self, data):
         for o in self.open:
-            o[1] += data
+            if not o[4]:
+                o[1] += html.escape(data, quote=False) if o[5] else data
     def handle_endtag(self, tag):
         if tag in VOID:
             return
+        for o in self.open:
+            if o[4] == self.depth:
+                o[4] = 0                                  # the part ends
+            elif not o[4] and o[5] and tag in RICH and o[2] != self.depth:
+                o[1] += "</" + tag + ">"
         if self.open and self.open[-1][2] == self.depth:
-            key, text, _, inner = self.open.pop()
+            key, text, _, inner, _, _, _ = self.open.pop()
             if inner:
                 self.bad.append(f'data-t="{key}": the element has markup inside; mark a plain-text element instead')
             self.found.append((key, text))
@@ -73,7 +95,7 @@ def main():
     for m in CALL.finditer(script):
         items.append((m.group(1), json.loads('"' + m.group(2) + '"'), "T()"))
     for key, english, how in items:
-        english = english.strip()
+        english = re.sub(r"\s+", " ", english).strip()
         if key in found and found[key] != english:
             bad.append(f"{key}: two different English texts ({found[key]!r} and {english!r})")
         found[key] = english
