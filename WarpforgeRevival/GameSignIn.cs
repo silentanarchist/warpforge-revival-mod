@@ -336,11 +336,12 @@ namespace WarpforgeRevival
                 float x = (w - pw) / 2, y = Mathf.Max(10, (h - ph) / 2 - 60);
                 GUI.Box(R(x, y, pw, ph), "", box);
                 float cx = x + 40, cw = pw - 80, cy = y + 24;
-                // the game's language, here too (new players meet this window before they can reach Settings)
+                // the game's language, here too (new players meet this window before they can reach Settings):
+                // a button in the window's bottom right corner, beside the server's name
                 string langName = LanguageName(Loc.Language());
-                if (GUI.Button(R(x + pw - 40 - 190, cy - 6, 190, 40), langName + "  \u25BE", button)) picking = !picking;
-                if (picking) { DrawLanguages(x, y + 64, pw, ph - 64); return; }
-                GUI.Label(R(cx, cy, cw - 200, 34), creating ? Loc.T("signin.createOn", "Create an account on {server}", ("server", ServerName())) : Loc.T("signin.signInTo", "Sign in to {server}", ("server", ServerName())), label); cy += 40;
+                if (GUI.Button(R(x + pw - 40 - 190, y + ph - 52, 190, 40), langName + "  \u25BE", button)) picking = !picking;
+                if (picking) { DrawLanguages(x, y + 24, pw, ph - 84); return; }
+                GUI.Label(R(cx, cy, cw, 34), creating ? Loc.T("signin.createOn", "Create an account on {server}", ("server", ServerName())) : Loc.T("signin.signInTo", "Sign in to {server}", ("server", ServerName())), label); cy += 40;
                 GUI.Label(R(cx, cy, cw, 48), creating ? Loc.T("signin.createRules", "Pick a username (5 to 30 letters, digits, . ' - or _) and a password (at least 6 characters, no spaces).")
                                                       : Loc.T("signin.intro", "Use the account you made on the server's website, or create one here."), small); cy += 50;
 
