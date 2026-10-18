@@ -26,8 +26,10 @@ Machine drafts not yet checked by a speaker of the language: **all of them** (ev
 
 Game terms follow the game's own translations (its words for Troop, Stratagem, Warlord, Energy, Health, Armour,
 rarities, races, keywords, game modes and menus). Keywords in running text are written as the game's word with the
-English in brackets, e.g. "Refuerzo (Rally)", because the Card Creator lists them in English. Screens that exist only in
-English (the Patcher app, the mod's own windows, Settings > Mod, the Card Creator's controls) are named by their exact
+English in brackets, e.g. "Refuerzo (Rally)", because the Card Creator lists them in English. Screens the mod has
+translated (Friends, Social > Challenge, the Testers window, Settings > Account and Settings > Mod, the sign-in window)
+are named by their exact translated label from `mod/<code>.json`. Screens that exist only in English (the Card Creator's
+controls until they are translated, the Patcher app until its translated version is out) are named by their exact
 English label with a short translation in brackets.
 
 ## How it reaches players
@@ -52,3 +54,10 @@ changing the site, run
     python3 tools/localization/extract-site.py [path/to/creator.html]
 
 (default: `../warpforge-revival-server/content/files/creator.html`) to update `site/en.json`. Before copying to the server, run `tools/localization/build-index.py`.
+
+Before committing or copying translations, check them:
+
+    python3 tools/localization/check.py site        # or mod, guides, patcher; add language codes to check only those
+
+It lists missing or left-over keys, changed `{placeholders}`, HTML tags that differ from the English or are not
+allowed, changed text inside `<code>`, and empty texts.
