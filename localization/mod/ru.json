@@ -110,6 +110,7 @@
   "modTab.title": "Mod",
   "modTab.updating": "Обновление...",
   "modTab.watchReplay": "Смотреть повтор по коду",
+  "mode.classicDraft": "Классический драфт",
   "recovery.code": "Код восстановления: {code}",
   "recovery.copied": "Код восстановления скопирован",
   "recovery.copy": "Копировать",

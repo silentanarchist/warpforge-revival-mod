@@ -110,6 +110,7 @@
   "modTab.title": "Mod",
   "modTab.updating": "업데이트 중...",
   "modTab.watchReplay": "리플레이 코드 보기",
+  "mode.classicDraft": "클래식 드래프트",
   "recovery.code": "복구 코드: {code}",
   "recovery.copied": "복구 코드 복사됨",
   "recovery.copy": "복사",

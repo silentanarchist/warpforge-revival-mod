@@ -110,6 +110,7 @@
   "modTab.title": "Mod",
   "modTab.updating": "アップデート中...",
   "modTab.watchReplay": "リプレイコードを見る",
+  "mode.classicDraft": "クラシックドラフト",
   "recovery.code": "復旧コード：{code}",
   "recovery.copied": "復旧コードをコピーしました",
   "recovery.copy": "コピー",

@@ -8,8 +8,9 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 namespace WarpforgeRevival
 {
     /// <summary>
-    /// Event titles are localization keys. The revival server can also send plain text ("text:Classic"),
-    /// and a key with no translation falls back to its last segment instead of showing nothing.
+    /// Event titles are localization keys. The revival server can also send plain English ("text:Classic"), which is
+    /// shown in the player's language when the mod knows it (see Plain), and a key with no translation falls back to
+    /// its last segment instead of showing nothing.
     /// </summary>
     internal static class EventLabels
     {
@@ -23,12 +24,28 @@ namespace WarpforgeRevival
                 string key = LiveOpsAssetUtility.GetLabelKey(data, type);
                 if (string.IsNullOrEmpty(key)) return;
                 string before = __result;
-                if (key.StartsWith("text:", StringComparison.Ordinal)) __result = key.Substring(5);
+                if (key.StartsWith("text:", StringComparison.Ordinal)) __result = Plain(key.Substring(5));
                 else if (string.IsNullOrEmpty(__result)) __result = key.Substring(key.LastIndexOf('/') + 1);
                 if (logged.Add(data.eventId + "/" + type))
                     RevivalMod.Log.Msg($"[labels] {data.eventId} {type}: key '{key}' game gave '{before}' -> '{__result}'");
             }
             catch (Exception e) { RevivalMod.Log.Warning("[labels] " + e.Message); }
+        }
+
+        /// <summary>
+        /// The server's plain-text titles in the player's language: the game's own mode names where it has them,
+        /// the mod's translations otherwise. Any other text stays as the server sent it.
+        /// </summary>
+        private static string Plain(string text)
+        {
+            switch (text)
+            {
+                case "Classic": return Loc.Game("MainMenu/GameMode/Classic", text);
+                case "Skirmish": return Loc.Game("MainMenu/GameMode/Skirmish", text);
+                case "Practice": return Loc.Game("MainMenu/GameMode/Practice", text);
+                case "Classic Draft": return Loc.T("mode.classicDraft", "Classic Draft");
+                default: return text;
+            }
         }
 
         [HarmonyPatch(typeof(LiveOpsAssetUtility), nameof(LiveOpsAssetUtility.GetLabel),

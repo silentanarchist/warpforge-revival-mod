@@ -110,6 +110,7 @@
   "modTab.title": "Mod",
   "modTab.updating": "Aggiornamento in corso...",
   "modTab.watchReplay": "Guarda un codice replay",
+  "mode.classicDraft": "Draft classico",
   "recovery.code": "Codice di recupero: {code}",
   "recovery.copied": "Codice di recupero copiato",
   "recovery.copy": "Copia",
