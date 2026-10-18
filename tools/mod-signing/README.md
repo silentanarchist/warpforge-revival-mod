@@ -11,10 +11,10 @@ On the owner's computer, `C:\modding\warpforge revival\mod-signing\`:
 |---|---|
 | `keys\` | `mod-signing-key.txt` (the everyday key; never shared), `public-keys.txt` (built into the mod; not secret), `make signing keys.bat` / `make-keys.ps1` (run once; refuses to run again). The spare key `backup-signing-key.txt` belongs off the computer. |
 | `to-sign\` | Claude puts the builds that passed testing here (`WarpforgeRevival.dll`, `WarpforgeRevival.Android.dll`). |
-| `signed\` | `sign builds.bat` writes the signed copies here. |
-| `sign builds.bat` / `sign-mod.ps1` | Signs what is in `to-sign\` into `signed\`. `sign-mod.ps1 -Check` checks `signed\` against `keys\public-keys.txt`. |
-| `install signed mods.bat` | Checks the signatures, then installs the signed PC mod into the game and copies the signed Android mod to `..\android patch\mods` (for `3 - put mod on phone.bat`). Your own game then has the same file the server hands out. |
-| `push signed mods to server.bat` | Checks the signatures, asks, then copies the signed builds to `W:\mod`. |
+| `signed\` | `1 - sign builds.bat` writes the signed copies here. |
+| `1 - sign builds.bat` / `sign-mod.ps1` | Signs what is in `to-sign\` into `signed\`. `sign-mod.ps1 -Check` checks `signed\` against `keys\public-keys.txt`. |
+| `2 - install signed mods.bat` | Checks the signatures, then installs the signed PC mod into the game and copies the signed Android mod to `..\android patch\mods` (for `3 - put mod on phone.bat`). Your own game then has the same file the server hands out. |
+| `3 - push signed mods to server.bat` | Checks the signatures, asks, then copies the signed builds to `W:\mod`. |
 
 The key files are never committed or sent anywhere (`.gitignore` has `*signing-key*.txt`).
 

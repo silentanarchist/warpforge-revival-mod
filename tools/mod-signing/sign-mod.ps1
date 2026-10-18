@@ -2,10 +2,10 @@
 # Folder layout (C:\modding\warpforge revival\mod-signing):
 #   keys\       mod-signing-key.txt (never share it), public-keys.txt, make signing keys.bat
 #   to-sign\    Claude puts the builds that are ready to publish here
-#   signed\     the signed builds land here: install them with "install signed mods.bat",
-#               publish them with "push signed mods to server.bat"
+#   signed\     the signed builds land here: install them with "2 - install signed mods.bat",
+#               publish them with "3 - push signed mods to server.bat"
 #
-#   sign-mod.ps1            signs every DLL in to-sign\ into signed\ (run by "sign builds.bat")
+#   sign-mod.ps1            signs every DLL in to-sign\ into signed\ (run by "1 - sign builds.bat")
 #   sign-mod.ps1 -Check     checks every DLL in signed\ carries a good signature (needs only public-keys.txt);
 #                           exit code 1 when one does not (the push and install scripts stop then)
 # The signature goes on the end of the file (see ModSignature.cs in the mod for the format); nothing else changes.

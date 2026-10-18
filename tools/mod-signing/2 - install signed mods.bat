@@ -19,22 +19,34 @@ if errorlevel 1 (
 )
 echo.
 
+rem (No paths inside ( ) blocks: the game's folder has "(x86)" in it, and its ")" would end the block early -
+rem that is what skipped the Android copy before.)
 if not exist "signed\WarpforgeRevival.dll" goto android
 :check
 tasklist /FI "IMAGENAME eq Warpforge.exe" 2>nul | find /I "Warpforge.exe" >nul
-if not errorlevel 1 (
-  echo The game is running. Close it, then press a key to carry on.
-  pause >nul
-  goto check
-)
+if errorlevel 1 goto pccopy
+echo The game is running. Close it, then press a key to carry on.
+pause >nul
+goto check
+:pccopy
 if not exist "%PCMOD%" mkdir "%PCMOD%"
 copy /y "signed\WarpforgeRevival.dll" "%PCMOD%\WarpforgeRevival.dll" >nul
-if errorlevel 1 (echo COULD NOT COPY the PC mod to %PCMOD% - try Run as administrator.) else (echo PC mod installed in %PCMOD%)
+if errorlevel 1 goto pcfailed
+echo PC mod installed in "%PCMOD%"
+goto android
+:pcfailed
+echo COULD NOT COPY the PC mod to "%PCMOD%" - try Run as administrator.
 
 :android
-if exist "signed\WarpforgeRevival.Android.dll" (
-  copy /y "signed\WarpforgeRevival.Android.dll" "%ANDROID%\WarpforgeRevival.Android.dll" >nul
-  if errorlevel 1 (echo COULD NOT COPY the Android mod to %ANDROID%) else (echo Android mod copied to %ANDROID%)
-)
+if not exist "signed\WarpforgeRevival.Android.dll" goto done
+if not exist "%ANDROID%" mkdir "%ANDROID%"
+copy /y "signed\WarpforgeRevival.Android.dll" "%ANDROID%\WarpforgeRevival.Android.dll" >nul
+if errorlevel 1 goto androidfailed
+echo Android mod copied to "%ANDROID%"
+goto done
+:androidfailed
+echo COULD NOT COPY the Android mod to "%ANDROID%"
+
+:done
 echo.
 pause

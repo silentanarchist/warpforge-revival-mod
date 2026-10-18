@@ -1,5 +1,5 @@
 # Makes the two keys that sign Warpforge Revival mod builds (run once, by "make signing keys.bat").
-#   mod-signing-key.txt     the everyday key: stays in this folder, used by "sign builds.bat"
+#   mod-signing-key.txt     the everyday key: stays in this folder, used by "1 - sign builds.bat"
 #   backup-signing-key.txt  the spare: MOVE IT OFF THIS COMPUTER (a USB stick or a password manager), then delete it here
 #   public-keys.txt         the two public keys, built into the mod. Not secret: Claude reads this file.
 # Never share or upload a *-signing-key.txt file. Whoever holds one can sign mods that every player's game installs.
