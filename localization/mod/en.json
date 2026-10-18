@@ -55,6 +55,7 @@
   "friends.already": "{name} is already your friend",
   "friends.cancelled": "Request to {name} cancelled",
   "friends.declined": "Declined {name}'s request",
+  "friends.enterCode": "Enter friend code",
   "friends.incoming": "Waiting for your answer",
   "friends.none": "No friend requests. Add someone with their friend code above; they will see it here.",
   "friends.nowFriends": "You and {name} are now friends",

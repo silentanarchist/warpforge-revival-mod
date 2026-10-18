@@ -53,7 +53,7 @@ namespace WarpforgeRevival
         internal static void Bind(Il2CppTMPro.TMP_Text label, Func<string> make)
         {
             if ((object)label == null) return;
-            try { label.text = make(); } catch { }
+            try { Ui.SetText(label, make()); } catch { }
             bound.RemoveAll(b => !Ui.Alive(b.text) || b.text.Pointer == label.Pointer);
             bound.Add((label, make));
         }
@@ -81,6 +81,9 @@ namespace WarpforgeRevival
             else Load(code);
             System.Threading.Interlocked.Increment(ref version);
         }
+
+        /// <summary>Goes up whenever the language or its texts change: a page drawn from texts can compare it and draw again.</summary>
+        internal static int Version => System.Threading.Volatile.Read(ref version);
 
         /// <summary>The game's language code as last seen ("en" until then).</summary>
         internal static string Language() => wantLang;

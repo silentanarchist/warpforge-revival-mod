@@ -55,6 +55,7 @@
   "friends.already": "{name} ya es tu amigo",
   "friends.cancelled": "Solicitud a {name} cancelada",
   "friends.declined": "Has rechazado la solicitud de {name}",
+  "friends.enterCode": "Introduce el código de amigo",
   "friends.incoming": "Esperando tu respuesta",
   "friends.none": "No hay solicitudes de amistad. Añade a alguien con su código de amigo arriba; lo verá aquí.",
   "friends.nowFriends": "{name} y tú ahora sois amigos",

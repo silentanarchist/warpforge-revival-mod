@@ -67,9 +67,12 @@ namespace WarpforgeRevival
         /// <summary>True for the Challenge tab (the copy), not the real Alliances tab.</summary>
         internal static bool IsChallengeTab(UnityEngine.Object t) => Ui.Alive(tab) && (object)t != null && t.Pointer == tab.Pointer;
 
-        /// <summary>Called every frame: redraws the page after a click on it (picking a friend, a mode, a rule).</summary>
+        private static int drawnLoc;
+
+        /// <summary>Called every frame: redraws the page after a click on it (picking a friend, a mode, a rule) or a change of language.</summary>
         internal static void Tick()
         {
+            if (drawnLoc != Loc.Version) { drawnLoc = Loc.Version; dirty = true; }     // the language changed: draw it again in the new one
             if (!dirty) return;
             try
             {

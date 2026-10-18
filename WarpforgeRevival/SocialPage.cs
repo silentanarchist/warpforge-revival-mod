@@ -39,19 +39,16 @@ namespace WarpforgeRevival
                     var ph = input.placeholder;
                     if ((object)ph != null)
                     {
-                        var loc = ph.GetComponent<Il2CppI2.Loc.Localize>();
-                        if ((object)loc != null) loc.enabled = false;
                         var text = ph.TryCast<TMP_Text>();
-                        if ((object)text != null) text.text = "Enter friend code";
+                        if ((object)text != null) Loc.Bind(text, () => Loc.T("friends.enterCode", "Enter friend code"));
                     }
                     var panel = input.transform.parent;
                     var title = (object)panel != null ? panel.Find("Search Player") : null;
                     if ((object)title != null)
                     {
-                        var loc = title.GetComponent<Il2CppI2.Loc.Localize>();
-                        if ((object)loc != null) loc.enabled = false;
                         var text = title.GetComponent<TMP_Text>();
-                        if ((object)text != null) text.text = "Add friend";
+                        // the game's own "Add as a friend"
+                        if ((object)text != null) Loc.Bind(text, () => Loc.Game("MainMenu/Chat/Add", "Add friend"));
                     }
                 }
                 var duel = tab.instantDuelButton;

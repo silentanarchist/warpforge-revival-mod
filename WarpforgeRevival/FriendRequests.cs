@@ -96,6 +96,9 @@ namespace WarpforgeRevival
             friendsButton = Copy(general, arect, hrt, Loc.Game("SocialMenu/Friends", "Friends"));
             requestsButton = Copy(trophies, arect, hrt, Loc.T("friends.tabRequests", "Requests"));
             requestsLabel = requestsButton.GetComponentInChildren<TMP_Text>(true);
+            // both labels follow a change of language (the count too)
+            Loc.Bind(friendsButton.GetComponentInChildren<TMP_Text>(true), () => Loc.Game("SocialMenu/Friends", "Friends"));
+            Loc.Bind(requestsLabel, () => shownWaiting > 0 ? Loc.T("friends.tabRequestsCount", "Requests ({count})", ("count", shownWaiting)) : Loc.T("friends.tabRequests", "Requests"));
 
             // room for the buttons: the add-friend box and the list move down, and a gold line goes under the buttons
             // (a copy of the list's own line), as on the alliance page
@@ -120,6 +123,8 @@ namespace WarpforgeRevival
             // "Your friends:" becomes "Your requests:" on the Requests page
             title = (object)list != null ? list.Find("Friends Title")?.GetComponent<TMP_Text>() : null;
             titleText = (object)title != null ? title.text : null;
+            // the list's title in the current language: the game's "Your friends:", or "Your requests:" on the Requests page
+            if ((object)title != null) Loc.Bind(title, () => showingRequests ? Loc.T("friends.titleRequests", "Your requests:") : Loc.Game("Demo/FriendsMenu/YourFriends", titleText ?? "Your friends:"));
             friendsButton.onValueChanged.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<bool>>(new Action<bool>(on => { if (on) ShowFriends(true); })));
             requestsButton.onValueChanged.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<bool>>(new Action<bool>(on => { if (on) ShowRequests(); })));
 
@@ -207,7 +212,7 @@ namespace WarpforgeRevival
         private static void ShowFriends(bool redraw)
         {
             showingRequests = false;
-            if ((object)title != null && Ui.Alive(title) && titleText != null) title.text = titleText;
+            if ((object)title != null && Ui.Alive(title)) Ui.SetText(title, Loc.Game("Demo/FriendsMenu/YourFriends", titleText ?? "Your friends:"));
             if ((object)friendsButton != null) friendsButton.SetIsOnWithoutNotify(true);
             if ((object)requestsButton != null) requestsButton.SetIsOnWithoutNotify(false);
             ClearRows();
