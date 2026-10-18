@@ -12,7 +12,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Translations (groundwork):** the mod's own texts can now be shown in the game's language (the language set in the game's Settings). Translations come from the server, so they can be added and corrected without a mod update; texts not yet translated stay in English. First texts: Friends / Requests, the alliance invite box, the Social > Challenge page (its mode names too), the Challenge tab and the Testers button and window tabs. Words the game already has (Friends, Offline, On / Off, Random, OK, the card rarities) use the game's own translations, so they match the rest of the game. First translations, made by machine and waiting for players who speak each language to check them, are up for all 12 languages the game has besides English.
 
 ### Changed
-- **Social > Challenge:** the page's text is a little larger, and larger again when the game's **Settings > Graphics > Large font size** is on (it follows the setting when you change it). A text too long for its place shrinks back to fit.
+- **Social > Challenge:** the page's text is larger. A text too long for its place shrinks back to fit.
 - **Social > Challenge:** the rules say **Energy** instead of mana, the game's own word for it (Starting Energy, Energy gained per turn, Unspent Energy carried over), also in the rules shown on the challenge popup.
 
 ### Fixes

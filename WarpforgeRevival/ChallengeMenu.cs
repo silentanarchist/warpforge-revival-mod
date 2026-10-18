@@ -68,22 +68,13 @@ namespace WarpforgeRevival
         internal static bool IsChallengeTab(UnityEngine.Object t) => Ui.Alive(tab) && (object)t != null && t.Pointer == tab.Pointer;
 
         private static int drawnLoc;
-        private static bool drawnLarge;
-        private static float nextSizeLook;
-
-        /// <summary>The game's own Settings > Graphics > Large font size (GameStaticData.smallScreenUI).</summary>
-        private static bool LargeText()
-        {
-            try { return GameStaticData.smallScreenUI; } catch { return false; }
-        }
-
         /// <summary>
-        /// The page's text a little larger than first drawn (x1.15), and larger again (x1.35) with the game's Large font
-        /// size on. A text that would not fit its place shrinks back, down to its first size at the least.
+        /// The page's text larger than first drawn (x1.35). A text that would not fit its place shrinks back, down to its
+        /// first size at the least.
         /// </summary>
         private static void Enlarge(Transform panel)
         {
-            float scale = drawnLarge ? 1.35f : 1.15f;
+            const float scale = 1.35f;
             foreach (var t in panel.GetComponentsInChildren<TMP_Text>(true))
             {
                 float size = t.fontSize;
@@ -98,12 +89,6 @@ namespace WarpforgeRevival
         internal static void Tick()
         {
             if (drawnLoc != Loc.Version) { drawnLoc = Loc.Version; dirty = true; }     // the language changed: draw it again in the new one
-            if (Time.realtimeSinceStartup >= nextSizeLook)
-            {
-                nextSizeLook = Time.realtimeSinceStartup + 1f;
-                bool large = LargeText();
-                if (large != drawnLarge) { drawnLarge = large; dirty = true; }       // Settings > Graphics > Large font size changed
-            }
             if (!dirty) return;
             try
             {
@@ -289,7 +274,6 @@ namespace WarpforgeRevival
             TestersPage.OnClick(send, () => Send(mode, ev));
             if (!string.IsNullOrEmpty(status))
                 TestersPage.Text(area, "Status", status, 22, TextAlignmentOptions.Left, TestersPage.Dim, x0, 0.0f, x1, by - 0.08f);
-            drawnLarge = LargeText();
             Enlarge(go.transform);
             if (!builtLogged) { builtLogged = true; RevivalMod.Log.Msg($"[challenge] menu built: {friends.Count} friend(s), presets {string.Join(", ", presets)}"); }
         }
