@@ -85,6 +85,9 @@ namespace WarpforgeRevival
         /// <summary>Goes up whenever the language or its texts change: a page drawn from texts can compare it and draw again.</summary>
         internal static int Version => System.Threading.Volatile.Read(ref version);
 
+        /// <summary>Reads the game's language at the next Tick instead of within a second (after the mod changed it).</summary>
+        internal static void LookNow() => nextLook = 0f;
+
         /// <summary>The game's language code as last seen ("en" until then).</summary>
         internal static string Language() => wantLang;
 

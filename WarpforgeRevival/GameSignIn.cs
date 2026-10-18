@@ -336,7 +336,11 @@ namespace WarpforgeRevival
                 float x = (w - pw) / 2, y = Mathf.Max(10, (h - ph) / 2 - 60);
                 GUI.Box(R(x, y, pw, ph), "", box);
                 float cx = x + 40, cw = pw - 80, cy = y + 24;
-                GUI.Label(R(cx, cy, cw, 34), creating ? Loc.T("signin.createOn", "Create an account on {server}", ("server", ServerName())) : Loc.T("signin.signInTo", "Sign in to {server}", ("server", ServerName())), label); cy += 40;
+                // the game's language, here too (new players meet this window before they can reach Settings)
+                string langName = LanguageName(Loc.Language());
+                if (GUI.Button(R(x + pw - 40 - 190, cy - 6, 190, 40), langName + "  \u25BE", button)) picking = !picking;
+                if (picking) { DrawLanguages(x, y + 64, pw, ph - 64); return; }
+                GUI.Label(R(cx, cy, cw - 200, 34), creating ? Loc.T("signin.createOn", "Create an account on {server}", ("server", ServerName())) : Loc.T("signin.signInTo", "Sign in to {server}", ("server", ServerName())), label); cy += 40;
                 GUI.Label(R(cx, cy, cw, 48), creating ? Loc.T("signin.createRules", "Pick a username (5 to 30 letters, digits, . ' - or _) and a password (at least 6 characters, no spaces).")
                                                       : Loc.T("signin.intro", "Use the account you made on the server's website, or create one here."), small); cy += 50;
 
@@ -457,6 +461,51 @@ namespace WarpforgeRevival
                     else Say(why, true);
                 });
             });
+        }
+
+        // ---- choosing the game's language from this window (0.14.9)
+        private static bool picking;
+        private static readonly string[,] Languages =
+        {
+            { "en", "English" }, { "es", "Español" }, { "ru", "Русский" }, { "fr", "Français" }, { "de", "Deutsch" },
+            { "pt-BR", "Português (Brasil)" }, { "it", "Italiano" }, { "ko", "한국어" }, { "zh-CN", "简体中文" },
+            { "ja", "日本語" }, { "pl", "Polski" }, { "cs", "Čeština" }, { "tr", "Türkçe" },
+        };
+
+        private static string LanguageName(string code)
+        {
+            for (int i = 0; i < Languages.GetLength(0); i++) if (Languages[i, 0] == code) return Languages[i, 1];
+            return code;
+        }
+
+        /// <summary>The languages as a grid of buttons over the form; a click sets the game's own language.</summary>
+        private static void DrawLanguages(float x, float y, float pw, float ph)
+        {
+            int n = Languages.GetLength(0), cols = 2;
+            float gap = 10, bw = (pw - 80 - gap) / cols, bh = 40;
+            for (int i = 0; i < n; i++)
+            {
+                float bx = x + 40 + (i % cols) * (bw + gap), by = y + (i / cols) * (bh + 6);
+                if (GUI.Button(R(bx, by, bw, bh), Languages[i, 1], button)) { SetGameLanguage(Languages[i, 0]); picking = false; }
+            }
+        }
+
+        /// <summary>
+        /// Sets the game's own language, as Settings > General > Language does: I2's language, kept for the next start
+        /// (the game's Settings shows it too), and the mod's texts follow.
+        /// </summary>
+        private static void SetGameLanguage(string code)
+        {
+            try
+            {
+                string name = Il2CppI2.Loc.LocalizationManager.GetLanguageFromCode(code, true);
+                if (string.IsNullOrEmpty(name)) name = Il2CppI2.Loc.LocalizationManager.GetLanguageFromCode(code, false);
+                if (string.IsNullOrEmpty(name)) { RevivalMod.Log.Warning("[signin] the game has no language " + code); return; }
+                Il2CppI2.Loc.LocalizationManager.SetLanguageAndCode(name, code, true, true);
+                Loc.LookNow();
+                RevivalMod.Log.Msg($"[signin] language set to {name} ({code}) from the sign-in window");
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[signin] language: " + e.Message); }
         }
 
         private static string NoMatch => Loc.T("signin.noMatch", "The two passwords do not match.");
