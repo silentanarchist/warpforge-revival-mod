@@ -36,6 +36,8 @@ namespace WarpforgeRevival
         private static FriendsTab tab;
         private static Toggle friendsButton, requestsButton;
         private static TMP_Text requestsLabel, status, title;
+        private static RectTransform tabsLine, listLine;             // the gold line under the buttons, and the list's own line it matches
+        private static float nextLineCheck;
         private static string titleText;
         private const float Shift = 100f;          // how far the add-friend box and the list move down for the buttons
         private static bool showingRequests, busy, hierarchyLogged;
@@ -119,6 +121,8 @@ namespace WarpforgeRevival
                 lrt.pivot = new Vector2(0.5f, 1f);
                 lrt.sizeDelta = new Vector2(root.rect.width - 40f, Math.Max(3f, divisor.GetComponent<RectTransform>().rect.height));
                 lrt.anchoredPosition = new Vector2(0f, bottom);
+                tabsLine = lrt;
+                listLine = divisor.GetComponent<RectTransform>();      // its left and right ends are set from this line (MatchLine)
             }
             // "Your friends:" becomes "Your requests:" on the Requests page
             title = (object)list != null ? list.Find("Friends Title")?.GetComponent<TMP_Text>() : null;
@@ -218,6 +222,29 @@ namespace WarpforgeRevival
             ClearRows();
             Refresh(friendsButton); Refresh(requestsButton);
             if (redraw && Ui.Alive(tab)) { try { tab.FillInFriendsContainer(); } catch (Exception e) { RevivalMod.Log.Warning("[friends] " + e.Message); } }
+        }
+
+        /// <summary>The gold line under the buttons starts and ends where the list's own line does (as on the alliance
+        /// page), clear of the menu ribbon on the left. Checked twice a second while the page shows: the list's line has
+        /// its size only once the game has laid the page out.</summary>
+        private static void MatchLine()
+        {
+            float now = Time.realtimeSinceStartup;
+            if (now < nextLineCheck) return;
+            nextLineCheck = now + 0.5f;
+            try
+            {
+                if (!Ui.Alive(tabsLine) || !Ui.Alive(listLine) || !tabsLine.gameObject.activeInHierarchy) return;
+                var (_, _, left, right) = Ui.WorldBox(listLine);
+                if (right - left < 1f) return;
+                var parent = tabsLine.parent.GetComponent<RectTransform>();
+                float l = parent.InverseTransformPoint(new Vector3(left, 0f, 0f)).x, rgt = parent.InverseTransformPoint(new Vector3(right, 0f, 0f)).x;
+                float width = rgt - l, centre = (l + rgt) / 2f - parent.rect.center.x;
+                if (Math.Abs(tabsLine.sizeDelta.x - width) < 0.5f && Math.Abs(tabsLine.anchoredPosition.x - centre) < 0.5f) return;
+                tabsLine.sizeDelta = new Vector2(width, tabsLine.sizeDelta.y);
+                tabsLine.anchoredPosition = new Vector2(centre, tabsLine.anchoredPosition.y);
+            }
+            catch { }
         }
 
         private static void ShowRequests()
@@ -496,6 +523,7 @@ namespace WarpforgeRevival
         internal static void Tick()
         {
             while (MainThread.TryDequeue(out var a)) { try { a(); } catch (Exception e) { RevivalMod.Log.Warning("[friends] " + e.Message); } }
+            MatchLine();
             int now = Waiting;
             if (now == shownWaiting || (object)requestsLabel == null) return;
             bool more = now > shownWaiting && shownWaiting >= 0;
