@@ -20,7 +20,7 @@ that language. Translations are done on Weblate; you do not need to edit these f
 - A text without a translation is shown in English, so a half-done language is fine.
 - First drafts made by machine are marked "needs editing" on Weblate until someone who speaks the language checks them.
 
-Machine drafts not yet checked by a speaker of the language: **Spanish** (`mod/es.json`).
+Machine drafts not yet checked by a speaker of the language: **all of them** (every file in `mod/` except `en.json`). They use the game's own words for its terms (its word for Energy, Warlord, Deck...) taken from the game's translations.
 
 ## How it reaches players
 
