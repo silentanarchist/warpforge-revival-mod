@@ -60,7 +60,8 @@ FIRST SETUP
 
 CONNECT GITHUB
 --------------
-5. In Weblate: your admin menu > Manage > SSH keys > "Generate Ed25519 SSH key" (if none is shown) and copy the
+5. In Weblate: your admin menu > Manage > SSH keys. Under "Add host key" enter github.com (port empty) and
+   submit, so Weblate trusts GitHub. Then "Generate Ed25519 SSH key" (if none is shown) and copy the
    public key.
 6. On GitHub: warpforge-revival-mod > Settings > Deploy keys > Add deploy key: paste it, tick "Allow write
    access". (Only this repo; Weblate never gets your account.)
@@ -79,7 +80,7 @@ THE PROJECT AND ITS COMPONENTS
      File format:             JSON file
      Monolingual base language file / Template for new translations: the en.json below
      Edit base file:          OFF   (the English comes from the code)
-     Language filter:         ^(?!en$).*$
+     Language filter:         ^(?!en$)[^.]+$
    and per component:
      Name          File mask                          Base file
      Mod           localization/mod/*.json            localization/mod/en.json
@@ -92,7 +93,7 @@ THE PROJECT AND ITS COMPONENTS
 9. Mark the machine drafts as drafts, in each component: Tools > Bulk edit, search  state:translated ,
    new state "Needs editing". Translators then see every draft as something to check.
 
-10. Texts with {name} in braces: in each component, Settings > Translation > "Translation flags": add
+10. Texts with {name} in braces: after the component is made, Operations > Settings > Translation > "Translation flags": add
       placeholders:r"\{\w+\}"
     so Weblate warns when a translation loses or changes one. For Website and Guides also add  safe-html
     (they may hold <strong>, <code>, <a> and nothing else).
