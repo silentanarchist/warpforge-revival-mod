@@ -15,8 +15,11 @@ namespace WarpforgeRevival
     /// </summary>
     internal static class SupportPage
     {
-        private const string TabName = "Mod", ButtonText = "Open", CheckText = "Check for updates", CheckName = "WFR Check for updates";
-        private static string Intro => $"Warpforge Revival mod {RevivalMod.Version}. The website: design your own cards, manage your account and share decks.";
+        private const string CheckName = "WFR Check for updates";
+        private static string TabName => Loc.T("modTab.title", "Mod");
+        private static string ButtonText => Loc.T("modTab.open", "Open");
+        private static string CheckText => Loc.T("modTab.checkUpdates", "Check for updates");
+        private static string Intro => Loc.T("modTab.intro", "Warpforge Revival mod {version}. The website: design your own cards, manage your account and share decks.", ("version", RevivalMod.Version));
 
         private static bool reported;
 
@@ -105,13 +108,13 @@ namespace WarpforgeRevival
                 bool isIntro = (object)intro != null && label.Pointer == intro.Pointer;
                 seen.Add($"{label.name}='{label.text}'" + (inFaq ? " [button]" : isIntro ? " [intro]" : "")
                     + (label.gameObject.activeInHierarchy ? "" : " (not shown)"));
-                if (inFaq) { Ui.SetText(label, ButtonText); continue; }
-                if (isIntro) { Ui.SetText(label, Intro); continue; }
+                if (inFaq) { Loc.Bind(label, () => ButtonText); continue; }
+                if (isIntro) { Loc.Bind(label, () => Intro); continue; }
                 if ((object)title == null && (object)label.GetComponentInParent<EverguildButton>() == null)
                 {
                     title = label;
                     oldTitle = label.text;
-                    Ui.SetText(label, TabName);
+                    Loc.Bind(label, () => TabName);
                     continue;
                 }
                 Hide(label);
@@ -170,7 +173,7 @@ namespace WarpforgeRevival
                     var loc = label.GetComponent<Il2CppI2.Loc.Localize>();
                     bool same = label.text == oldTitle || ((object)loc != null && !string.IsNullOrEmpty(term) && loc.mTerm == term);
                     if (!same) continue;
-                    Ui.SetText(label, TabName);
+                    Loc.Bind(label, () => TabName);
                     renamed++;
                 }
             }
@@ -206,6 +209,7 @@ namespace WarpforgeRevival
             if ((object)old != null) { check = old; return; }        // set up already (the page was set up again)
             var go = CopyButton(faq, parent, CheckName, CheckText, OnCheck, "update", out checkLabel);
             if ((object)go == null) return;
+            Loc.Bind(checkLabel, () => CheckText);
             check = go.transform;
             check.SetSiblingIndex(faqT.GetSiblingIndex() + 1);
             // no layout group to stack them: put the copy below by hand
@@ -227,15 +231,15 @@ namespace WarpforgeRevival
         {
             if (checking) return;
             checking = true;
-            Label("Checking...");
+            Label(Loc.T("modTab.checking", "Checking..."));
             System.Threading.Tasks.Task.Run(async () =>
             {
                 string answer;
                 try { answer = await RevivalMod.CheckForUpdates(); }
-                catch (Exception e) { RevivalMod.Log.Warning("[update] check button: " + e.Message); answer = "Could not reach the server."; }
+                catch (Exception e) { RevivalMod.Log.Warning("[update] check button: " + e.Message); answer = Loc.T("common.unreachableDot", "Could not reach the server."); }
                 PlayFabTransport.OnMainThread(() =>
                 {
-                    Label(answer ?? "Updating...");
+                    Label(answer ?? Loc.T("modTab.updating", "Updating..."));
                     if (answer != null) RevivalMod.Log.Msg("[update] check button: " + answer);
                     var at = Time.realtimeSinceStartup;
                     resetAt = answer != null ? at + 4f : 0f;
@@ -257,8 +261,9 @@ namespace WarpforgeRevival
             if ((object)parent == null || (object)check == null) return;
             var old = parent.Find(ReportName);
             if ((object)old != null) { report = old; return; }
-            var go = CopyButton(faq, parent, ReportName, "Report a bug", BugReport.Request, "report", out _);
+            var go = CopyButton(faq, parent, ReportName, Loc.T("modTab.reportBug", "Report a bug"), BugReport.Request, "report", out var reportLabel);
             if ((object)go == null) return;
+            Loc.Bind(reportLabel, () => Loc.T("modTab.reportBug", "Report a bug"));
             report = go.transform;
             report.SetSiblingIndex(check.GetSiblingIndex() + 1);
             if ((object)parent.GetComponent<UnityEngine.UI.LayoutGroup>() == null)
@@ -272,7 +277,8 @@ namespace WarpforgeRevival
 
         // ---- Export card art: the card pictures from this copy of the game, as a zip for the website
         // (CardArtExport). Under Check for updates and Report a bug; the button's text shows the progress.
-        private const string ExportName = "WFR Export card art", ExportText = "Export card art";
+        private const string ExportName = "WFR Export card art";
+        private static string ExportText => Loc.T("modTab.exportArt", "Export card art");
         private static Transform export;
         private static TMP_Text exportLabel;
 
@@ -282,8 +288,9 @@ namespace WarpforgeRevival
             if ((object)parent == null || (object)check == null) return;
             var old = parent.Find(ExportName);
             if ((object)old != null) { export = old; exportLabel = old.GetComponentInChildren<TMP_Text>(true); return; }
-            var go = CopyButton(faq, parent, ExportName, CardArtExport.Running ? "Exporting card art..." : ExportText, OnExport, "export", out exportLabel);
+            var go = CopyButton(faq, parent, ExportName, CardArtExport.Running ? Loc.T("modTab.exporting", "Exporting card art...") : ExportText, OnExport, "export", out exportLabel);
             if ((object)go == null) return;
+            Loc.Bind(exportLabel, () => CardArtExport.Running ? exportLabel.text : ExportText);
             export = go.transform;
             var after = (object)report != null && report.Pointer != IntPtr.Zero ? report : check;
             export.SetSiblingIndex(after.GetSiblingIndex() + 1);
@@ -298,7 +305,8 @@ namespace WarpforgeRevival
         // ---- Watch a replay code (0.13.37): the first button of a second column, right of the website
         // button. Plays the replay whose code is on the clipboard (ReplayCodes); the button's text says
         // what is happening.
-        private const string WatchName = "WFR Watch replay code", WatchText = "Watch a replay code";
+        private const string WatchName = "WFR Watch replay code";
+        private static string WatchText => Loc.T("modTab.watchReplay", "Watch a replay code");
         private static Transform watch;
         private static TMP_Text watchLabel;
         private static float watchResetAt;
@@ -317,6 +325,7 @@ namespace WarpforgeRevival
             }, "watch", out watchLabel);
             if ((object)go == null) return;
             watch = go.transform;
+            Loc.Bind(watchLabel, () => WatchText);
             var le = go.GetComponent<UnityEngine.UI.LayoutElement>() ?? go.AddComponent<UnityEngine.UI.LayoutElement>();
             le.ignoreLayout = true;                     // not stacked with the first column
             PlaceWatch(faqT);
@@ -358,7 +367,7 @@ namespace WarpforgeRevival
         // ---- "Compress Card Art" tick box under the export button (0.13.27): on (the default) the art is
         // 512 x 512 as before; off it is written at the game's own size, which takes much longer.
         private const string CompressName = "WFR Compress card art";
-        private const string CompressWarning = "Warning: Slower devices may take 5 minutes or longer if you disable this option.";
+        private static string CompressWarning => Loc.T("modTab.compressWarning", "Warning: Slower devices may take 5 minutes or longer if you disable this option.");
         private static bool compressArt = true;
         private static Transform compressRow;
         private static UnityEngine.UI.Image compressTick;
@@ -444,7 +453,7 @@ namespace WarpforgeRevival
             lrt.offsetMin = new Vector2(boxS + 16f, 0f); lrt.offsetMax = Vector2.zero;
             var lt = label.AddComponent<TextMeshProUGUI>();
             if ((object)font != null) lt.font = font;
-            lt.text = "Compress Card Art"; lt.fontSize = size * 0.85f; lt.color = Color.white;
+            Loc.Bind(lt, () => Loc.T("modTab.compress", "Compress Card Art")); lt.fontSize = size * 0.85f; lt.color = Color.white;
             lt.alignment = TextAlignmentOptions.MidlineLeft; lt.enableWordWrapping = false; lt.raycastTarget = false;
 
             var warn = new GameObject("Warning");
@@ -454,7 +463,7 @@ namespace WarpforgeRevival
             wrt.offsetMin = new Vector2(4f, 0f); wrt.offsetMax = Vector2.zero;
             var wt = warn.AddComponent<TextMeshProUGUI>();
             if ((object)font != null) wt.font = font;
-            wt.text = CompressWarning; wt.fontSize = size * 0.55f; wt.color = new Color(1f, 0.8f, 0.45f, 1f);
+            Loc.Bind(wt, () => CompressWarning); wt.fontSize = size * 0.55f; wt.color = new Color(1f, 0.8f, 0.45f, 1f);
             wt.alignment = TextAlignmentOptions.TopLeft; wt.enableWordWrapping = true; wt.raycastTarget = false;
 
             ShowTick();

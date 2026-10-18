@@ -77,7 +77,7 @@ namespace WarpforgeRevival
             try
             {
                 var cards = Gather();
-                if (cards.Count == 0) { Say("No cards loaded yet: open the Collection once, then try again."); return; }
+                if (cards.Count == 0) { Say(Loc.T("export.noCards", "No cards loaded yet: open the Collection once, then try again.")); return; }
                 zipPath = FilePath;
                 partPath = zipPath + ".part";
                 Directory.CreateDirectory(Path.GetDirectoryName(zipPath));
@@ -92,7 +92,7 @@ namespace WarpforgeRevival
                 running = true;
                 int ids = 0; foreach (var a in cards) ids += a.Cards.Count;
                 RevivalMod.Log.Msg($"[art export] started: {ids} cards with art, {total} pictures, {(compress ? "compressed to 512 x 512" : "full size")}, writing {zipPath}");
-                Say($"Exporting card art... 0 / {total}");
+                Say(Loc.T("export.progress", "Exporting card art... {done} / {total}", ("done", 0), ("total", total)));
             }
             catch (Exception e) { Fail(e); }
         }
@@ -164,7 +164,7 @@ namespace WarpforgeRevival
                         if (missing.Count > 200) throw new Exception("too many pictures failed", e);
                     }
                     done++;
-                    if (done % 25 == 0 || done == total) Say($"Exporting card art... {done} / {total}");
+                    if (done % 25 == 0 || done == total) Say(Loc.T("export.progress", "Exporting card art... {done} / {total}", ("done", done), ("total", total)));
                 }
                 if (loading.Count == 0 && todo.Count == 0) StartFinish();
             }
@@ -449,14 +449,14 @@ namespace WarpforgeRevival
         {
             finishing = true;
             ReleaseAnchor();
-            Say("Exporting card frames...");
+            Say(Loc.T("export.frames", "Exporting card frames..."));
             Frames();
         }
 
         private static void Finish()
         {
             finishing = false;
-            Say("Exporting card text...");
+            Say(Loc.T("export.text", "Exporting card text..."));
             try { Texts(); }
             catch (Exception e) { RevivalMod.Log.Warning("[art export] card text: " + e.Message); }
             var info = new StringBuilder();
@@ -475,7 +475,7 @@ namespace WarpforgeRevival
             long size = new FileInfo(zipPath).Length;
             RevivalMod.Log.Msg($"[art export] done in {clock.Elapsed.TotalSeconds:0} s: {written} card pictures, {masks} masks, {frames} frames, " +
                                $"{missing.Count} missing, {size / 1048576.0:0.0} MB -> {zipPath}");
-            Say($"Card art saved ({size / 1048576.0:0} MB)");
+            Say(Loc.T("export.saved", "Card art saved ({size} MB)", ("size", (size / 1048576.0).ToString("0"))));
 #if !ANDROID_PORT
             try { Application.OpenURL("file:///" + Path.GetDirectoryName(zipPath).Replace('\\', '/')); } catch { }
 #endif
@@ -493,7 +493,7 @@ namespace WarpforgeRevival
             try { lock (ZipGate) zip?.Dispose(); } catch { }
             zip = null;
             try { if (partPath != null && File.Exists(partPath)) File.Delete(partPath); } catch { }
-            Say("Card art export failed (see the log)");
+            Say(Loc.T("export.failed", "Card art export failed (see the log)"));
         }
 
         private static void Say(string text)

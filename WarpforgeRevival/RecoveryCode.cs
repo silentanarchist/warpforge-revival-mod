@@ -88,14 +88,17 @@ namespace WarpforgeRevival
                     passBox.interactable = true;
                     passBox.SetTextWithoutNotify("");
                     var ph = passBox.placeholder?.TryCast<TMP_Text>();
-                    if ((object)ph != null) ph.text = "Password (for a recovery code)";
+                    if ((object)ph != null) Loc.Bind(ph, () => Loc.T("recovery.passwordHint", "Password (for a recovery code)"));
                 }
                 passT = go.transform;
 
-                makeT = CloneButton(rowButton, row, MakeName, "Create recovery code", Make).transform;
-                var show = CloneButton(rowButton, row, ShowName, "Show", Toggle);
+                var make = CloneButton(rowButton, row, MakeName, Loc.T("recovery.create", "Create recovery code"), Make);
+                makeT = make.transform;
+                Loc.Bind(make.GetComponentInChildren<TMP_Text>(true), () => Loc.T("recovery.create", "Create recovery code"));
+                var show = CloneButton(rowButton, row, ShowName, Loc.T("recovery.show", "Show"), Toggle);
                 showLabel = show.GetComponentInChildren<TMP_Text>(true);
-                CloneButton(rowButton, row, CopyName, "Copy", Copy);
+                var copy = CloneButton(rowButton, row, CopyName, Loc.T("recovery.copy", "Copy"), Copy);
+                Loc.Bind(copy.GetComponentInChildren<TMP_Text>(true), () => Loc.T("recovery.copy", "Copy"));
 
                 var tgo = new GameObject(TextName);
                 var trt = tgo.AddComponent<RectTransform>();
@@ -148,12 +151,12 @@ namespace WarpforgeRevival
                 {
                     string text = status;
                     if (code != null)
-                        text = $"Recovery code: <b>{(shown ? code : Masked(code))}</b>\n" +
-                               (savedTo != null ? $"Saved to {savedTo}\n" : "") +
-                               "It is shown only on this screen. Anyone with it can take over your account; no admin will ever ask for it.";
+                        text = Loc.T("recovery.code", "Recovery code: {code}", ("code", "<b>" + (shown ? code : Masked(code)) + "</b>")) + "\n" +
+                               (savedTo != null ? Loc.T("recovery.savedTo", "Saved to {path}", ("path", savedTo)) + "\n" : "") +
+                               Loc.T("recovery.onlyHere", "It is shown only on this screen. Anyone with it can take over your account; no admin will ever ask for it.");
                     line.text = text;
                 }
-                if ((object)showLabel != null && showLabel.Pointer != IntPtr.Zero) showLabel.text = shown ? "Hide" : "Show";
+                if ((object)showLabel != null && showLabel.Pointer != IntPtr.Zero) showLabel.text = shown ? Loc.T("recovery.hide", "Hide") : Loc.T("recovery.show", "Show");
             }
             catch { }
         }
@@ -164,17 +167,17 @@ namespace WarpforgeRevival
         {
             if (code == null) return;
             GUIUtility.systemCopyBuffer = code;
-            try { UIMessageController.Instance?.ShowMessage("Recovery code copied", false); } catch { }
+            try { UIMessageController.Instance?.ShowMessage(Loc.T("recovery.copied", "Recovery code copied"), false); } catch { }
         }
 
         private static void Make()
         {
             if (busy) return;
             string pass = (object)passBox != null ? passBox.text : "";
-            if (string.IsNullOrEmpty(pass)) { status = "Enter your account's password first."; Refresh(); return; }
+            if (string.IsNullOrEmpty(pass)) { status = Loc.T("recovery.needPassword", "Enter your account's password first."); Refresh(); return; }
             string ticket = PlayFabTransport.SessionTicket;
-            if (string.IsNullOrEmpty(ticket)) { status = "Not signed in to the server yet."; Refresh(); return; }
-            busy = true; status = "Making a recovery code…"; Refresh();
+            if (string.IsNullOrEmpty(ticket)) { status = Loc.T("account.notSignedInYet", "Not signed in to the server yet."); Refresh(); return; }
+            busy = true; status = Loc.T("recovery.making", "Making a recovery code…"); Refresh();
             System.Threading.Tasks.Task.Run(async () =>
             {
                 string made = null, name = null, at = null, error = null;
@@ -191,14 +194,14 @@ namespace WarpforgeRevival
                     }
                     else error = reply.Error;
                 }
-                catch (Exception e) { error = "Could not reach the server."; RevivalMod.Log.Warning("[account] recovery code: " + e.Message); }
+                catch (Exception e) { error = Loc.T("common.unreachableDot", "Could not reach the server."); RevivalMod.Log.Warning("[account] recovery code: " + e.Message); }
                 PlayFabTransport.OnMainThread(() =>
                 {
                     busy = false;
                     if (made == null)
                     {
                         RevivalMod.Log.Msg("[account] recovery code refused: " + error);
-                        status = error ?? "No recovery code was made.";
+                        status = error ?? Loc.T("recovery.notMade", "No recovery code was made.");
                         Refresh();
                         return;
                     }
@@ -220,10 +223,11 @@ namespace WarpforgeRevival
         {
             string safe = System.Text.RegularExpressions.Regex.Replace(name, @"[^\w.'-]+", "_");
             string file = $"warpforge-recovery-{safe}.txt";
-            string text = "Warpforge Revival - account recovery code\r\n\r\n" +
-                          $"Username: {name}\r\nRecovery code: {c}\r\nMade: {(at.Length >= 10 ? at.Substring(0, 10) : at)}\r\n\r\n" +
-                          "If you forget your password: open the website, choose \"Forgot your password?\" and enter your username, this code and a new password.\r\n" +
-                          "The code works once. Making a new one cancels this one. Anyone with it can take over your account, so keep this file private.\r\n";
+            string text = Loc.T("recovery.fileTitle", "Warpforge Revival - account recovery code") + "\r\n\r\n" +
+                          Loc.T("recovery.fileUser", "Username: {name}", ("name", name)) + "\r\n" + Loc.T("recovery.code", "Recovery code: {code}", ("code", c)) + "\r\n" +
+                          Loc.T("recovery.fileMade", "Made: {date}", ("date", at.Length >= 10 ? at.Substring(0, 10) : at)) + "\r\n\r\n" +
+                          Loc.T("recovery.fileHow", "If you forget your password: open the website, choose \"Forgot your password?\" and enter your username, this code and a new password.") + "\r\n" +
+                          Loc.T("recovery.fileOnce", "The code works once. Making a new one cancels this one. Anyone with it can take over your account, so keep this file private.") + "\r\n";
             foreach (var dir in Places())
             {
                 try

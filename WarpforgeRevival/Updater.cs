@@ -69,7 +69,7 @@ namespace WarpforgeRevival
                         return;
                     }
                     RevivalMod.Log.Msg($"[update] server has mod {m.Value.label} (installed {RevivalMod.Version})");
-                    await Run("A newer Warpforge Revival mod is available from the server. Downloading it...", false, m);
+                    await Run(Loc.T("update.newer", "A newer Warpforge Revival mod is available from the server. Downloading it..."), false, m);
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[update] update check failed: " + e.Message); }
             });
@@ -94,7 +94,7 @@ namespace WarpforgeRevival
         }
 
         /// <summary>The server refused to sign in because this mod is out of date: update now.</summary>
-        internal static Task<bool> UpdateNow() => Run("This server needs a newer Warpforge Revival mod. Downloading it...");
+        internal static Task<bool> UpdateNow() => Run(Loc.T("update.needed", "This server needs a newer Warpforge Revival mod. Downloading it..."));
 
         /// <summary>
         /// The "Check for updates" button (Settings > Mod): asks the server now, even with AutoUpdate Off.
@@ -103,12 +103,12 @@ namespace WarpforgeRevival
         /// </summary>
         internal static async Task<string> CheckNow()
         {
-            if (server == null) return "Not connected to a server.";
+            if (server == null) return Loc.T("update.noServer", "Not connected to a server.");
             var m = await Manifest();
-            if (m == null) return "The server has no mod to offer.";
-            if (!m.Value.newer) return $"You have the latest mod ({RevivalMod.Version}).";
+            if (m == null) return Loc.T("update.noMod", "The server has no mod to offer.");
+            if (!m.Value.newer) return Loc.T("update.latest", "You have the latest mod ({version}).", ("version", RevivalMod.Version));
             RevivalMod.Log.Msg($"[update] check button: server has mod {m.Value.label} (installed {RevivalMod.Version})");
-            _ = Run($"Updating the mod to {m.Value.label}...", true, m);
+            _ = Run(Loc.T("update.updating", "Updating the mod to {version}...", ("version", m.Value.label)), true, m);
             return null;
         }
 
@@ -190,7 +190,7 @@ namespace WarpforgeRevival
             File.Move(fresh, dll, true);
             RevivalMod.Log.Msg($"[update] mod {remote} installed at {dll}; it is used from the next start of the game");
             // the sign-in window counts down and closes the app for real (CloseApp)
-            GameSignIn.Updated($"Updated to {remote}. Open the game again to use it.", 5f);
+            GameSignIn.Updated(Loc.T("update.doneReopen", "Updated to {version}. Open the game again to use it.", ("version", remote)), 5f);
         }
 #else
         /// <summary>Windows: written next to the old one, and swapped by a small script once the game has closed.</summary>
@@ -238,7 +238,7 @@ namespace WarpforgeRevival
             });
             RevivalMod.Log.Msg($"[update] mod {remote} downloaded; the game closes and starts again to use it");
             // the sign-in window counts down and closes the game; the script then starts it again
-            GameSignIn.Updated($"Updated to {remote}. The game closes and starts again to use it.", 3f);
+            GameSignIn.Updated(Loc.T("update.doneRestart", "Updated to {version}. The game closes and starts again to use it.", ("version", remote)), 3f);
         }
 #endif
     }

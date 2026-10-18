@@ -269,7 +269,7 @@ namespace WarpforgeRevival
         private static void Ask(string index, TMP_Text label)
         {
             string ticket = PlayFabTransport.SessionTicket;
-            if (string.IsNullOrEmpty(ticket)) { Notice("Sign in first"); return; }
+            if (string.IsNullOrEmpty(ticket)) { Notice(Loc.T("replay.signInFirst", "Sign in first")); return; }
             Flash(label, "...", 0);
             System.Threading.Tasks.Task.Run(async () =>
             {
@@ -280,7 +280,7 @@ namespace WarpforgeRevival
                         JsonSerializer.Serialize(new Dictionary<string, string> { ["recordingIndex"] = index }),
                         TimeSpan.FromSeconds(Math.Max(20, RevivalMod.Config.TimeoutSeconds)), retry: true);     // the same code again: no harm
                     if (reply.Ok && reply.Data.ValueKind == JsonValueKind.Object && reply.Data.TryGetProperty("code", out var c)) code = c.GetString();
-                    else error = reply.Unreachable ? "could not reach the server" : reply.Error;
+                    else error = reply.Unreachable ? Loc.T("replay.unreachable", "could not reach the server") : reply.Error;
                 }
                 catch (Exception e) { error = "could not reach the server"; RevivalMod.Log.Warning("[replay code] " + e.Message); }
                 PlayFabTransport.OnMainThread(() =>
@@ -290,13 +290,13 @@ namespace WarpforgeRevival
                         GUIUtility.systemCopyBuffer = code;
                         RevivalMod.Log.Msg($"[replay code] {code} copied for match {index}");
                         Flash(label, "COPIED", 2.5f);
-                        Notice($"Replay code {code} copied");
+                        Notice(Loc.T("replay.copied", "Replay code {code} copied", ("code", code)));
                     }
                     else
                     {
                         RevivalMod.Log.Warning($"[replay code] no code for match {index}: {error}");
                         Flash(label, "NO CODE", 3f);
-                        Notice("No replay code: " + error);
+                        Notice(Loc.T("replay.noCode", "No replay code: {error}", ("error", error)));
                     }
                 });
             });
@@ -312,7 +312,7 @@ namespace WarpforgeRevival
             string code = Normalize(text);
             if (code.Length == 0)
             {
-                WatchStatus("Copy a replay code first");
+                WatchStatus(Loc.T("replay.copyFirst", "Copy a replay code first"));
                 
                 return;
             }
@@ -322,8 +322,8 @@ namespace WarpforgeRevival
         internal static void Watch(string code)
         {
             var pd = PlayerDataManager.singletonManager;
-            if ((object)pd == null) { WatchStatus("Not signed in yet.");  return; }
-            WatchStatus($"Loading {Show(code)}...");
+            if ((object)pd == null) { WatchStatus(Loc.T("replay.notSignedIn", "Not signed in yet."));  return; }
+            WatchStatus(Loc.T("replay.loading", "Loading {code}...", ("code", Show(code))));
             
             RevivalMod.Log.Msg($"[replay code] watching {code}");
             Action<BattleRecordData> found = record =>
@@ -332,22 +332,22 @@ namespace WarpforgeRevival
                 {
                     if ((object)record == null)
                     {
-                        WatchStatus($"No replay for {Show(code)}");
+                        WatchStatus(Loc.T("replay.none", "No replay for {code}", ("code", Show(code))));
                         
                         return;
                     }
                     WatchStatus("");
                     
                     var mm = Il2CppEverguild.MatchMakerManager.Instance;
-                    if ((object)mm == null) { WatchStatus("Replay could not start");  return; }
+                    if ((object)mm == null) { WatchStatus(Loc.T("replay.cannotStart", "Replay could not start"));  return; }
                     mm.StartReplayMatch(record, 1f);
                 }
-                catch (Exception e) { RevivalMod.Log.Warning("[replay code] start: " + e); WatchStatus("Replay could not start");  }
+                catch (Exception e) { RevivalMod.Log.Warning("[replay code] start: " + e); WatchStatus(Loc.T("replay.cannotStart", "Replay could not start"));  }
             };
             Action<string> failed = e =>
             {
                 RevivalMod.Log.Warning($"[replay code] {code}: {e}");
-                WatchStatus($"No replay for {Show(code)}");
+                WatchStatus(Loc.T("replay.none", "No replay for {code}", ("code", Show(code))));
                 
             };
             pd.RecoverMatchRecording(code, DelegateSupport.ConvertDelegate<Il2CppSystem.Action<BattleRecordData>>(found),

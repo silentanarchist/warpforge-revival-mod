@@ -19,8 +19,8 @@ namespace WarpforgeRevival
         {
             var pd = PlayerDataManager.singletonManager;
             string wanted = string.Join(" ", (typed ?? "").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
-            if (wanted.Length < MinName || wanted.Length > MaxName) { done(false, $"Display name must be {MinName}-{MaxName} characters long."); return; }
-            if (wanted == CurrentName(pd)) { done(false, "That is already your name."); return; }
+            if (wanted.Length < MinName || wanted.Length > MaxName) { done(false, Loc.T("account.nameLength", "Display name must be {min}-{max} characters long.", ("min", MinName), ("max", MaxName))); return; }
+            if (wanted == CurrentName(pd)) { done(false, Loc.T("account.nameSame", "That is already your name.")); return; }
             Action<bool, Il2CppPlayFab.PlayFabError> answered = (ok, error) =>
             {
                 try
@@ -30,13 +30,13 @@ namespace WarpforgeRevival
                         pd.playerName = wanted;
                         try { PlayerDataManager.OnPlayerNameChanged?.Invoke(wanted); } catch { }
                         RevivalMod.Log.Msg($"[account] display name changed to '{wanted}'");
-                        done(true, "Name saved.");
+                        done(true, Loc.T("account.nameSaved", "Name saved."));
                     }
                     else
                     {
                         string why = (object)error != null ? error.ErrorMessage : null;
                         RevivalMod.Log.Msg($"[account] name change refused: {why}");
-                        done(false, string.IsNullOrEmpty(why) ? "The server did not accept that name." : why);
+                        done(false, string.IsNullOrEmpty(why) ? Loc.T("account.nameRefused", "The server did not accept that name.") : why);
                     }
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[account] " + e.Message); }
@@ -126,7 +126,7 @@ namespace WarpforgeRevival
             System.Threading.Tasks.Task.Delay(wait * 1000).ContinueWith(_ => PlayFabTransport.OnMainThread(() => StatusWithRetry(attempt + 1)));
         });
 
-        private const string Unreachable = "Could not reach the server.";
+        private static string Unreachable => Loc.T("common.unreachableDot", "Could not reach the server.");
 
         private static string Inner(Exception e)
         {
@@ -138,7 +138,7 @@ namespace WarpforgeRevival
         private static void Send(string op, string name, string passphrase, Action<bool, string> done)
         {
             string ticket = PlayFabTransport.SessionTicket;
-            if (string.IsNullOrEmpty(ticket)) { done?.Invoke(false, "Not signed in to the server yet."); return; }
+            if (string.IsNullOrEmpty(ticket)) { done?.Invoke(false, Loc.T("account.notSignedInYet", "Not signed in to the server yet.")); return; }
             System.Threading.Tasks.Task.Run(async () =>
             {
                 bool ok = false;
@@ -162,15 +162,15 @@ namespace WarpforgeRevival
                                         a.TryGetProperty("tester", out var t) && t.ValueKind == System.Text.Json.JsonValueKind.True;
                         if (data.TryGetProperty("signedOut", out var so) && so.ValueKind == System.Text.Json.JsonValueKind.True)
                             GameSignIn.SignedOut(op == "unlink" && linked.Length > 0
-                                ? "Signed out of " + linked + " on this device. Start the game again to sign in - with this account or another one."
-                                : "This game was unlinked from its account. Start the game again and sign in.");
+                                ? Loc.T("account.signedOutOf", "Signed out of {name} on this device. Start the game again to sign in - with this account or another one.", ("name", linked))
+                                : Loc.T("account.unlinked", "This game was unlinked from its account. Start the game again and sign in."));
                         if (data.TryGetProperty("recovery", out var rc) && (rc.ValueKind == System.Text.Json.JsonValueKind.True || rc.ValueKind == System.Text.Json.JsonValueKind.False))
                             hasRecovery = linked.Length > 0 && rc.ValueKind == System.Text.Json.JsonValueKind.True;
                         bool changed = linked != linkedName || isTester != tester;
                         linkedName = linked;
                         tester = isTester;
                         ok = true;
-                        message = linked.Length > 0 ? "Linked to " + linked + (isTester ? " (in-game tester)." : ".") : "Not linked to a site account.";
+                        message = linked.Length > 0 ? (isTester ? Loc.T("account.linkedTester", "Linked to {name} - in-game tester.", ("name", linked)) : Loc.T("account.linked", "Linked to {name}.", ("name", linked))) : Loc.T("account.notLinked", "Not linked to a site account.");
                         if (changed)
                         {
                             RevivalMod.Log.Msg("[account] " + message);
@@ -210,14 +210,14 @@ namespace WarpforgeRevival
                     user.characterLimit = 30;
                     user.readOnly = linked;
                     user.interactable = !linked;
-                    SetPlaceholder(user, "Site username");
+                    SetPlaceholder(user, Loc.T("account.siteUsername", "Site username"));
                     if (linked) user.SetTextWithoutNotify(linkedName);
                     user.ForceLabelUpdate();
                     var form = user.transform.parent;
                     if ((object)form != null)
                     {
-                        Label(form, "EmailText", "Username");
-                        Label(form, "PasswordText", linked ? "" : "Password");
+                        Label(form, "EmailText", Loc.Game("MenuLogin/Login/Username", "Username"));
+                        Label(form, "PasswordText", linked ? "" : Loc.Game("MenuLogin/Login/Password", "Password"));
                     }
                 }
                 if ((object)pass != null)
@@ -226,7 +226,7 @@ namespace WarpforgeRevival
                     pass.contentType = TMP_InputField.ContentType.Password;
                     pass.characterLimit = 200;
                     pass.interactable = true;
-                    SetPlaceholder(pass, "Password");
+                    SetPlaceholder(pass, Loc.Game("MenuLogin/Login/Password", "Password"));
                     pass.ForceLabelUpdate();
                 }
 
@@ -244,7 +244,7 @@ namespace WarpforgeRevival
                     var label = button.GetComponentInChildren<TMP_Text>(true);
                     if ((object)label != null)
                     {
-                        Ui.SetText(label, !linked ? "Link account" : SignedInWithAccount ? "Sign out" : "Unlink account");
+                        Ui.SetText(label, !linked ? Loc.T("account.link", "Link account") : SignedInWithAccount ? Loc.Game("Settings/Account/Logout", "Sign out") : Loc.T("account.unlink", "Unlink account"));
                     }
                 }
 
@@ -292,7 +292,7 @@ namespace WarpforgeRevival
                 var label = go.GetComponentInChildren<TMP_Text>(true);
                 if ((object)label != null)
                 {
-                    Ui.SetText(label, "Open profile on website");
+                    Loc.Bind(label, () => Loc.T("account.openProfile", "Open profile on website"));
                     label.enableAutoSizing = true;
                 }
                 RevivalMod.Log.Msg("[account] Open profile button added");
@@ -378,9 +378,9 @@ namespace WarpforgeRevival
 
         private static string Status()
         {
-            if (linkedName == null) return "Checking the link...";
-            if (linkedName.Length == 0) return "Optional: link an account made on the Revival site. Enter its username and password.";
-            return "Linked to " + linkedName + (tester ? " - in-game tester." : ".");
+            if (linkedName == null) return Loc.T("account.checking", "Checking the link...");
+            if (linkedName.Length == 0) return Loc.T("account.optional", "Optional: link an account made on the Revival site. Enter its username and password.");
+            return tester ? Loc.T("account.linkedTester", "Linked to {name} - in-game tester.", ("name", linkedName)) : Loc.T("account.linked", "Linked to {name}.", ("name", linkedName));
         }
 
         private static void Say(AccountTab tab, string text, bool problem = false)
@@ -420,6 +420,8 @@ namespace WarpforgeRevival
         /// quite differently from a PC - and that can undo the changes made above. So each time the
         /// tab comes into view, wait two frames for the layout to finish and apply them once more.
         /// </summary>
+        private static int seenLoc;
+
         internal static void Tick()
         {
             if ((object)seen == null) return;
@@ -432,6 +434,7 @@ namespace WarpforgeRevival
             {
                 if (!Ui.Alive(seen)) { seen = null; return; }
                 if (!seen.gameObject.activeInHierarchy) { seenFrames = 0; return; }
+                if (seenLoc != Loc.Version && seenFrames < 0) { seenLoc = Loc.Version; Apply(seen); if (!busy) Say(seen, Status()); }   // the language changed while open
                 if (seenFrames < 0) return;
                 if (++seenFrames < 3) return;
                 seenFrames = -1;
@@ -507,12 +510,12 @@ namespace WarpforgeRevival
                     {
                         name = (tab.emailInput.text ?? "").Trim();
                         pass = tab.passwordInput.text ?? "";
-                        if (name.Length == 0 || pass.Length == 0) { Say(tab, "Enter your site username and password.", true); return false; }
+                        if (name.Length == 0 || pass.Length == 0) { Say(tab, Loc.T("account.enterBoth", "Enter your site username and password."), true); return false; }
                     }
                     busy = true;
                     Apply(tab);
                     bool signOut = linked && SignedInWithAccount;
-                    Say(tab, !linked ? "Linking..." : signOut ? "Signing out..." : "Unlinking...");
+                    Say(tab, !linked ? Loc.T("account.linking", "Linking...") : signOut ? Loc.T("account.signingOut", "Signing out...") : Loc.T("account.unlinking", "Unlinking..."));
                     Send(linked ? "unlink" : "link", name, pass, (ok, message) =>
                     {
                         busy = false;
@@ -527,7 +530,7 @@ namespace WarpforgeRevival
                 {
                     busy = false;
                     RevivalMod.Log.Warning("[account] " + e);
-                    Say(tab, "Could not do that.", true);
+                    Say(tab, Loc.T("account.failed", "Could not do that."), true);
                 }
                 return false;
             }
