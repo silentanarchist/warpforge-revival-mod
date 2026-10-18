@@ -73,7 +73,6 @@
   "nav.uploads": "Uploaded artwork",
   "nav.whichGuide": "Which guide?",
   "profile.artBadFile": "Could not use that file: {error}.",
-  "profile.artChecking": "Checking…",
   "profile.artDone": "Card art loaded from your game's export. It stays in this browser.",
   "profile.artExported": "exported {date}",
   "profile.artFromGame": "from game {version}",
