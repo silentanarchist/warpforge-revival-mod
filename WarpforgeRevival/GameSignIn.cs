@@ -72,14 +72,33 @@ namespace WarpforgeRevival
                 string message = root.TryGetProperty("errorMessage", out var m) ? m.GetString() : null;
                 switch (error)
                 {
-                    case "AccountRequired": return message ?? Loc.T("signin.required", "This server needs you to sign in.");
-                    case "InvalidGameLoginFile": Forget(); return message ?? Loc.T("signin.invalidSaved", "Your saved sign-in is no longer valid. Sign in again.");
-                    case "AccountNotApproved": Forget(); return message ?? Loc.T("signin.notApproved", "Your account is waiting for an admin to approve it.");
+                    // the mod's own words (in the player's language) rather than the server's English; the window
+                    // draws them in the language of the moment (see Known)
+                    case "AccountRequired": return KnownMark + error;
+                    case "InvalidGameLoginFile": Forget(); return KnownMark + error;
+                    case "AccountNotApproved": Forget(); return KnownMark + error;
                 }
             }
             catch { }
             return null;
         }
+
+        private const string KnownMark = "\u0001";
+
+        /// <summary>The window's text for one of the server's reasons, in the current language.</summary>
+        private static string Known(string code)
+        {
+            switch (code)
+            {
+                case "AccountRequired": return Loc.T("signin.required", "This server needs you to sign in with an account from its website.");
+                case "InvalidGameLoginFile": return Loc.T("signin.invalidSaved", "Your saved sign-in is no longer valid. Sign in again.");
+                case "AccountNotApproved": return Loc.T("signin.notApproved", "Your account is waiting for an admin to approve it.");
+                default: return code;
+            }
+        }
+
+        /// <summary>The message line as shown: a reason from the server is put in words at drawing time.</summary>
+        private static string Shown(string text) => text != null && text.StartsWith(KnownMark) ? Known(text.Substring(KnownMark.Length)) : text ?? "";
 
         // ------------------------------------------------------------------ the window
         private static volatile bool open;
@@ -278,7 +297,18 @@ namespace WarpforgeRevival
             tcs?.TrySetResult(token);
         }
 
-        private static GUIStyle box, label, small, field, button;
+        private static GUIStyle box, label, small, field, button, nowrap;
+
+        /// <summary>
+        /// How wide a text is in this style, in the 1280 x 720 page's units. Measured by Unity where it can; where the
+        /// game's build lacks that (or it fails), estimated from the number of letters.
+        /// </summary>
+        private static float Width(GUIStyle style, string text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0f;
+            try { return style.CalcSize(new GUIContent(text)).x / Mathf.Max(0.01f, sc); }
+            catch { return text.Length * 22f * 0.6f; }
+        }
         private static Texture2D shade, panel;
 
 
@@ -294,6 +324,7 @@ namespace WarpforgeRevival
             small.fontSize = Mathf.RoundToInt(16 * sc);
             field.fontSize = Mathf.RoundToInt(24 * sc);
             button.fontSize = Mathf.RoundToInt(22 * sc);
+            nowrap.fontSize = Mathf.RoundToInt(22 * sc);
             return sc;
         }
 
@@ -310,6 +341,7 @@ namespace WarpforgeRevival
             small.normal.textColor = new Color(0.6f, 0.75f, 0.7f);
             field = new GUIStyle(GUI.skin.textField) { fontSize = 24 };
             button = new GUIStyle(GUI.skin.button) { fontSize = 22 };
+            nowrap = new GUIStyle(label) { wordWrap = false };          // the field labels: one line, the column made to fit
         }
 
         /// <summary>Called from the mod's OnGUI.</summary>
@@ -332,28 +364,31 @@ namespace WarpforgeRevival
                 GUI.DrawTexture(R(0, 0, w, h), shade);
 
                 bool showTerms = creating || termsAsked;
-                float pw = 640, ph = (creating ? 560 : 440) + (termsAsked && !creating ? 64 : 0);
+                float pw = 720, ph = (creating ? 560 : 440) + (termsAsked && !creating ? 64 : 0);
                 float x = (w - pw) / 2, y = Mathf.Max(10, (h - ph) / 2 - 60);
                 GUI.Box(R(x, y, pw, ph), "", box);
                 float cx = x + 40, cw = pw - 80, cy = y + 24;
                 // the game's language, here too (new players meet this window before they can reach Settings):
                 // a button in the window's bottom right corner, beside the server's name
                 string langName = LanguageName(Loc.Language());
-                if (GUI.Button(R(x + pw - 40 - 190, y + ph - 52, 190, 40), langName + "  \u25BE", button)) picking = !picking;
+                if (GUI.Button(R(x + pw - 40 - 220, y + ph - 52, 220, 40), langName, button)) picking = !picking;     // no arrow: not every phone's font has one
                 if (picking) { DrawLanguages(x, y + 24, pw, ph - 84); return; }
                 GUI.Label(R(cx, cy, cw, 34), creating ? Loc.T("signin.createOn", "Create an account on {server}", ("server", ServerName())) : Loc.T("signin.signInTo", "Sign in to {server}", ("server", ServerName())), label); cy += 40;
                 GUI.Label(R(cx, cy, cw, 48), creating ? Loc.T("signin.createRules", "Pick a username (5 to 30 letters, digits, . ' - or _) and a password (at least 6 characters, no spaces).")
                                                       : Loc.T("signin.intro", "Use the account you made on the server's website, or create one here."), small); cy += 50;
 
-                GUI.Label(R(cx, cy, 140, 40), Loc.T("signin.username", "Username"), label);
+                // the label column as wide as the longest label in this language (some do not fit 140)
+                string tUser = Loc.T("signin.username", "Username"), tPass = Loc.T("signin.password", "Password"), tAgain = Loc.T("signin.again", "Again");
+                float lw = Mathf.Clamp(Mathf.Max(Width(label, tUser), Width(label, tPass), creating ? Width(label, tAgain) : 0f) + 12f, 140f, cw * 0.45f);
+                GUI.Label(R(cx, cy, lw, 42), tUser, nowrap);
                 GUI.SetNextControlName("wfrName");
-                userName = GUI.TextField(R(cx + 150, cy, cw - 150, 42), userName ?? "", 30, field); cy += 54;
-                GUI.Label(R(cx, cy, 140, 40), Loc.T("signin.password", "Password"), label);
-                password = GUI.PasswordField(R(cx + 150, cy, cw - 150, 42), password ?? "", '*', 200, field); cy += 54;
+                userName = GUI.TextField(R(cx + lw + 10, cy, cw - lw - 10, 42), userName ?? "", 30, field); cy += 54;
+                GUI.Label(R(cx, cy, lw, 42), tPass, nowrap);
+                password = GUI.PasswordField(R(cx + lw + 10, cy, cw - lw - 10, 42), password ?? "", '*', 200, field); cy += 54;
                 if (creating)
                 {
-                    GUI.Label(R(cx, cy, 150, 40), Loc.T("signin.again", "Again"), label);
-                    password2 = GUI.PasswordField(R(cx + 150, cy, cw - 150, 42), password2 ?? "", '*', 200, field); cy += 54;
+                    GUI.Label(R(cx, cy, lw, 42), tAgain, nowrap);
+                    password2 = GUI.PasswordField(R(cx + lw + 10, cy, cw - lw - 10, 42), password2 ?? "", '*', 200, field); cy += 54;
                 }
                 if (showTerms)
                 {
@@ -367,26 +402,31 @@ namespace WarpforgeRevival
 
                 var keepColor = GUI.color;
                 if (problem) GUI.color = new Color(1f, 0.55f, 0.5f);
-                GUI.Label(R(cx, cy, cw, 52), busy ? (creating ? Loc.T("signin.creating", "Creating the account...") : Loc.T("signin.signingIn", "Signing in...")) : message, small);
+                GUI.Label(R(cx, cy, cw, 52), busy ? (creating ? Loc.T("signin.creating", "Creating the account...") : Loc.T("signin.signingIn", "Signing in...")) : Shown(message), small);
                 GUI.color = keepColor;
                 cy += 58;
 
                 GUI.enabled = !busy;
+                // the buttons as wide as their words (and at least as wide as before), Quit at the right
+                string tCreate = Loc.T("signin.createAccount", "Create account"), tQuit = Loc.T("signin.quit", "Quit");
+                string tFirst = creating ? tCreate : Loc.T("signin.signIn", "Sign in"), tSecond = creating ? Loc.T("signin.back", "Back") : tCreate;
+                float w1 = Mathf.Max(creating ? 230f : 170f, Width(button, tFirst) + 30f), w2 = Mathf.Max(creating ? 140f : 230f, Width(button, tSecond) + 30f),
+                      w3 = Mathf.Max(140f, Width(button, tQuit) + 30f);
                 if (creating)
                 {
                     bool match = (password ?? "").Length > 0 && password == password2;
                     GUI.enabled = !busy && agreed && match;
-                    if (GUI.Button(R(cx, cy, 230, 50), Loc.T("signin.createAccount", "Create account"), button)) Submit(true);
+                    if (GUI.Button(R(cx, cy, w1, 50), tFirst, button)) Submit(true);
                     GUI.enabled = !busy;
-                    if (GUI.Button(R(cx + 245, cy, 140, 50), Loc.T("signin.back", "Back"), button)) { creating = false; password2 = ""; agreed = false; Say("", false); }
+                    if (GUI.Button(R(cx + w1 + 12, cy, w2, 50), tSecond, button)) { creating = false; password2 = ""; agreed = false; Say("", false); }
                     if (!busy && message.Length == 0 && (password2 ?? "").Length > 0 && !match) Say(NoMatch, true);
                 }
                 else
                 {
-                    if (GUI.Button(R(cx, cy, 170, 50), Loc.T("signin.signIn", "Sign in"), button)) Submit(false);
-                    if (GUI.Button(R(cx + 185, cy, 230, 50), Loc.T("signin.createAccount", "Create account"), button)) { creating = true; agreed = false; password2 = ""; Say("", false); }
+                    if (GUI.Button(R(cx, cy, w1, 50), tFirst, button)) Submit(false);
+                    if (GUI.Button(R(cx + w1 + 12, cy, w2, 50), tSecond, button)) { creating = true; agreed = false; password2 = ""; Say("", false); }
                 }
-                if (GUI.Button(R(cx + cw - 140, cy, 140, 50), Loc.T("signin.quit", "Quit"), button)) RevivalMod.QuitGame();
+                if (GUI.Button(R(cx + cw - w3, cy, w3, 50), tQuit, button)) RevivalMod.QuitGame();
                 GUI.enabled = true;
                 cy += 62;
                 GUI.Label(R(cx, cy, cw, 30), serverNote ?? (RevivalMod.Config.Secure ? ServerName() : Loc.T("signin.notEncrypted", "{server}  -  this connection is NOT encrypted", ("server", ServerName()))), small);

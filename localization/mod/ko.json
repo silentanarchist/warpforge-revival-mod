@@ -156,7 +156,7 @@
   "signin.quit": "종료",
   "signin.read": "읽기",
   "signin.refused": "서버가 받아들이지 않았습니다.",
-  "signin.required": "이 서버는 로그인이 필요합니다.",
+  "signin.required": "이 서버에 들어가려면 서버 웹사이트의 계정으로 로그인해야 합니다.",
   "signin.signIn": "로그인",
   "signin.signInTo": "로그인: {server}",
   "signin.signedOutByServer": "서버에 의해 로그아웃되었습니다.",

@@ -156,7 +156,7 @@
   "signin.quit": "Esci",
   "signin.read": "Leggi",
   "signin.refused": "Il server non ha accettato la richiesta.",
-  "signin.required": "Questo server richiede di accedere.",
+  "signin.required": "Questo server richiede l'accesso con un account creato sul suo sito web.",
   "signin.signIn": "Accedi",
   "signin.signInTo": "Accedi a {server}",
   "signin.signedOutByServer": "Sei stato disconnesso dal server.",

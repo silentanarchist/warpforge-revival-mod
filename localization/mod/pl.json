@@ -156,7 +156,7 @@
   "signin.quit": "Wyjdź z gry",
   "signin.read": "Przeczytaj",
   "signin.refused": "Serwer tego nie zaakceptował.",
-  "signin.required": "Ten serwer wymaga zalogowania.",
+  "signin.required": "Ten serwer wymaga zalogowania się kontem z jego strony internetowej.",
   "signin.signIn": "Zaloguj się",
   "signin.signInTo": "Zaloguj się na serwerze {server}",
   "signin.signedOutByServer": "Serwer cię wylogował.",

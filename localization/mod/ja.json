@@ -156,7 +156,7 @@
   "signin.quit": "終了",
   "signin.read": "読む",
   "signin.refused": "サーバーが受け付けませんでした。",
-  "signin.required": "このサーバーではサインインが必要です。",
+  "signin.required": "このサーバーでは、サーバーのウェブサイトのアカウントでサインインする必要があります。",
   "signin.signIn": "サインイン",
   "signin.signInTo": "サインイン：{server}",
   "signin.signedOutByServer": "サーバーによってサインアウトされました。",

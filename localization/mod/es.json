@@ -156,7 +156,7 @@
   "signin.quit": "Salir",
   "signin.read": "Leer",
   "signin.refused": "El servidor no lo ha aceptado.",
-  "signin.required": "Este servidor requiere que inicies sesión.",
+  "signin.required": "Este servidor necesita que inicies sesión con una cuenta de su sitio web.",
   "signin.signIn": "Iniciar sesión",
   "signin.signInTo": "Iniciar sesión en {server}",
   "signin.signedOutByServer": "El servidor ha cerrado tu sesión.",

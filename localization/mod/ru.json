@@ -156,7 +156,7 @@
   "signin.quit": "Выйти из игры",
   "signin.read": "Прочитать",
   "signin.refused": "Сервер это не принял.",
-  "signin.required": "Этот сервер требует входа.",
+  "signin.required": "Этот сервер требует войти с аккаунтом с его сайта.",
   "signin.signIn": "Войти",
   "signin.signInTo": "Вход на сервер {server}",
   "signin.signedOutByServer": "Сервер завершил ваш сеанс.",

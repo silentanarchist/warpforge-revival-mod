@@ -156,7 +156,7 @@
   "signin.quit": "退出",
   "signin.read": "阅读",
   "signin.refused": "服务器未接受该请求。",
-  "signin.required": "此服务器需要你登录。",
+  "signin.required": "此服务器需要你使用其网站上的账户登录。",
   "signin.signIn": "登录",
   "signin.signInTo": "登录 {server}",
   "signin.signedOutByServer": "服务器已将你退出登录。",

@@ -156,7 +156,7 @@
   "signin.quit": "Çık",
   "signin.read": "Oku",
   "signin.refused": "Sunucu bunu kabul etmedi.",
-  "signin.required": "Bu sunucu oturum açmanı gerektiriyor.",
+  "signin.required": "Bu sunucu, web sitesindeki bir hesapla oturum açmanı gerektiriyor.",
   "signin.signIn": "Oturum aç",
   "signin.signInTo": "Oturum aç - {server}",
   "signin.signedOutByServer": "Sunucu oturumunu kapattı.",

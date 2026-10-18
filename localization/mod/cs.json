@@ -156,7 +156,7 @@
   "signin.quit": "Ukončit hru",
   "signin.read": "Přečíst",
   "signin.refused": "Server to nepřijal.",
-  "signin.required": "Tento server vyžaduje přihlášení.",
+  "signin.required": "Tento server vyžaduje přihlášení účtem z jeho webu.",
   "signin.signIn": "Přihlásit se",
   "signin.signInTo": "Přihlásit se na server {server}",
   "signin.signedOutByServer": "Server tě odhlásil.",
