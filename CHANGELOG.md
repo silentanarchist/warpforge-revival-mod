@@ -11,11 +11,11 @@ Changes made on the server take effect for everyone at once; the ones listed her
 ### New
 - **Translations (groundwork):** the mod's own texts can now be shown in the game's language (the language set in the game's Settings). Translations come from the server, so they can be added and corrected without a mod update; texts not yet translated stay in English. First texts: Friends / Requests, the alliance invite box, the Social > Challenge page (its mode names too), the Challenge tab and the Testers button and window tabs. Words the game already has (Friends, Offline, On / Off, Random, OK, the card rarities) use the game's own translations, so they match the rest of the game. A first Spanish translation is up for testing.
 
-### Fixes
-- **Social > Friends:** the gold line under the Friends / Requests buttons is as long as on the alliance page, instead of running over the menu on the left.
-
 ### Changed
 - **Social > Challenge:** the rules say **Energy** instead of mana, the game's own word for it (Starting Energy, Energy gained per turn, Unspent Energy carried over), also in the rules shown on the challenge popup.
+
+### Fixes
+- **Social > Friends:** the gold line under the Friends / Requests buttons is as long as on the alliance page, instead of running over the menu on the left.
 
 ## 0.14.0 - 2026-10-17
 
