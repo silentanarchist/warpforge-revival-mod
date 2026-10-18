@@ -8,7 +8,7 @@ server when you say so.
 
 This folder:
   docker-compose.yml, environment   Weblate's own files (unchanged, from github.com/WeblateOrg/docker-compose)
-  docker-compose.override.yml       our changes: the port and our settings file
+  docker-compose.override.yml       our changes: the local port, the Caddy network, our settings file
   weblate.env                       our settings - FILL IN THE CHANGE-ME LINES. Private: it holds passwords.
   1 - start weblate.bat             starts it (Docker Desktop must be running)
   2 - stop weblate.bat              stops it (nothing is lost)
@@ -25,14 +25,37 @@ FIRST SETUP
      - the e-mail lines: an SMTP server for sign-up mails (port 587, TLS). A Gmail account with an
        "app password" works. Without e-mail, set WEBLATE_REGISTRATION_OPEN=0 and invite people yourself.
      - POSTGRES_PASSWORD: any long random text (you never type it again).
-   If you use another address than translate.silentanarchist.com, change it in the three lines that name it.
+   If you use another address than wf-translate.silentanarchist.com, change it in the three lines that
+   name it.
 
 3. Run "1 - start weblate.bat". The first start takes a few minutes. Then open http://127.0.0.1:8090 on this
    computer and sign in with the admin account.
 
-4. Public address: point translate.silentanarchist.com at this computer the same way as the game site, and in
-   your reverse proxy / tunnel forward it to http://127.0.0.1:8090 (HTTPS is done by the proxy / tunnel, as for
-   the game site). Weblate only listens on this computer, so it is reachable only through that.
+4. Public address through Caddy (your Caddy container: host ports 443 and 80 go to 8443 and 8081 inside it).
+   a) DNS: an A record for wf-translate.silentanarchist.com to the same public IP as the game site.
+   b) Put Caddy on the shared network "wf-proxy" (the start batch creates it). In Caddy's docker-compose.yml:
+          services:
+            caddy:
+              networks:
+                - default
+                - wf-proxy
+          networks:
+            wf-proxy:
+              external: true
+      (or once, without editing:  docker network connect wf-proxy <name of the caddy container> )
+   c) Add to the Caddyfile:
+          wf-translate.silentanarchist.com {
+              reverse_proxy wf-weblate:8080
+          }
+      Caddy fetches the HTTPS certificate itself. Because it listens on 8443/8081 inside the container, its
+      Caddyfile needs (probably has already) at the top:
+          {
+              http_port  8081
+              https_port 8443
+          }
+   d) Reload Caddy:  docker exec <caddy container> caddy reload --config /etc/caddy/Caddyfile
+      Then https://wf-translate.silentanarchist.com shows Weblate.
+   Weblate itself is not opened to the internet: only Caddy reaches it, over wf-proxy.
 
 
 CONNECT GITHUB

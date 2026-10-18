@@ -3,10 +3,15 @@
 # and weblate.env hold everything of ours. "docker compose" reads all of them together.
 services:
   weblate:
-    # Only this computer can reach it (127.0.0.1): the public address goes through your reverse proxy / tunnel,
-    # which forwards https://translate.silentanarchist.com to http://127.0.0.1:8090.
+    # 127.0.0.1:8090 is for you on this computer only. The public address goes through Caddy, which runs in its own
+    # container: both join the Docker network "wf-proxy", where Caddy reaches Weblate as wf-weblate:8080.
     ports:
       - 127.0.0.1:8090:8080
+    networks:
+      default:
+      wf-proxy:
+        aliases:
+          - wf-weblate
     env_file:
       - ./environment
       - ./weblate.env
@@ -14,3 +19,6 @@ services:
     env_file:
       - ./environment
       - ./weblate.env
+networks:
+  wf-proxy:
+    external: true
