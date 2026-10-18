@@ -69,12 +69,12 @@ namespace WarpforgeRevival
 
         private static int drawnLoc;
         /// <summary>
-        /// The page's text larger than first drawn (x1.35). A text that would not fit its place shrinks back, down to its
+        /// The page's text larger than first drawn (x1.7). A text that would not fit its place shrinks back, down to its
         /// first size at the least.
         /// </summary>
         private static void Enlarge(Transform panel)
         {
-            const float scale = 1.35f;
+            const float scale = 1.7f;
             foreach (var t in panel.GetComponentsInChildren<TMP_Text>(true))
             {
                 float size = t.fontSize;
@@ -348,7 +348,7 @@ namespace WarpforgeRevival
             var parent = w.GetComponent<RectTransform>();
             if ((object)parent == null) return;
             var pr = parent.rect;
-            float left = pr.xMin + 360, right = pr.xMax - 60, top = pr.yMax - pr.height * 0.17f, bottom = pr.yMin + pr.height * 0.05f;
+            float left = pr.xMin + 360, right = pr.xMax - 60, top = pr.yMax - pr.height * 0.09f, bottom = pr.yMin + pr.height * 0.015f;   // 0.14.7: taller, for the larger text
             try
             {
                 var rib = w.Components?.TabButtons?.GetComponent<RectTransform>();
