@@ -72,9 +72,9 @@ namespace WarpforgeRevival
                 string message = root.TryGetProperty("errorMessage", out var m) ? m.GetString() : null;
                 switch (error)
                 {
-                    case "AccountRequired": return message ?? "This server needs you to sign in.";
-                    case "InvalidGameLoginFile": Forget(); return message ?? "Your saved sign-in is no longer valid. Sign in again.";
-                    case "AccountNotApproved": Forget(); return message ?? "Your account is waiting for an admin to approve it.";
+                    case "AccountRequired": return message ?? Loc.T("signin.required", "This server needs you to sign in.");
+                    case "InvalidGameLoginFile": Forget(); return message ?? Loc.T("signin.invalidSaved", "Your saved sign-in is no longer valid. Sign in again.");
+                    case "AccountNotApproved": Forget(); return message ?? Loc.T("signin.notApproved", "Your account is waiting for an admin to approve it.");
                 }
             }
             catch { }
@@ -114,7 +114,7 @@ namespace WarpforgeRevival
                 termsAsked = false;
                 drawn = false;
                 askedAt = Time.realtimeSinceStartup;
-                serverNote = ServerName() + (RevivalMod.Config.Secure ? "" : "  -  this connection is NOT encrypted");
+                serverNote = null;          // drawn in the current language when shown
                 open = true;
                 RevivalMod.Log.Msg("[signin] the server asks for an account: " + message);
             });
@@ -140,7 +140,7 @@ namespace WarpforgeRevival
             catch (Exception e)
             {
                 RevivalMod.Log.Warning("[signin] could not open the terms page: " + e.Message);
-                Say("Open " + url + " in a browser to read them.", false);
+                Say(Loc.T("signin.openTerms", "Open {url} in a browser to read them.", ("url", url)), false);
             }
         }
 
@@ -155,7 +155,7 @@ namespace WarpforgeRevival
         // or it was banned) the game cannot carry on: the window says why and the game closes.
         // The next start asks to sign in again.
         private static volatile bool closing;
-        private static string closingWhy = "", closingTitle = "Signed out";
+        private static string closingWhy = "", closingTitle;
         private static bool closingButton = true;
         private static float closeAt;
         private const float CloseAfter = 20f;
@@ -168,7 +168,7 @@ namespace WarpforgeRevival
             Forget();
             PlayFabTransport.OnMainThread(() =>
             {
-                closingWhy = string.IsNullOrEmpty(why) ? "You were signed out by the server." : why;
+                closingWhy = string.IsNullOrEmpty(why) ? Loc.T("signin.signedOutByServer", "You were signed out by the server.") : why;
                 closeAt = Time.realtimeSinceStartup + CloseAfter;
                 RevivalMod.Log.Msg("[signin] signed out by the server: " + closingWhy);
             });
@@ -194,7 +194,7 @@ namespace WarpforgeRevival
             closing = true;
             PlayFabTransport.OnMainThread(() =>
             {
-                closingTitle = "Updating the mod";
+                closingTitle = Loc.T("signin.updatingTitle", "Updating the mod");
                 closingWhy = text;
                 closingButton = false;
                 closeAt = 0f;
@@ -207,7 +207,7 @@ namespace WarpforgeRevival
             closing = true;
             PlayFabTransport.OnMainThread(() =>
             {
-                closingTitle = "Mod updated";
+                closingTitle = Loc.T("signin.updatedTitle", "Mod updated");
                 closingWhy = text;
                 closingButton = false;          // "Close now" froze the game on every system; the countdown closes it
                 closeAt = Time.realtimeSinceStartup + seconds;
@@ -243,11 +243,11 @@ namespace WarpforgeRevival
             GUI.DrawTexture(R(0, 0, w, h), shade);
             float pw = 640, ph = 300, x = (w - pw) / 2, y = (h - ph) / 2;
             GUI.Box(R(x, y, pw, ph), "", box);
-            GUI.Label(R(x + 40, y + 24, pw - 80, 34), closingTitle, label);
+            GUI.Label(R(x + 40, y + 24, pw - 80, 34), closingTitle ?? Loc.T("signin.signedOutTitle", "Signed out"), label);
             GUI.Label(R(x + 40, y + 70, pw - 80, 90), closingWhy, small);
             if (closeAt > 0)
-                GUI.Label(R(x + 40, y + 160, pw - 80, 30), "The game closes in " + Mathf.CeilToInt(left) + " s.", small);
-            if (closingButton && GUI.Button(R(x + 40, y + 210, 220, 50), "Close now", button)) RevivalMod.QuitGame();
+                GUI.Label(R(x + 40, y + 160, pw - 80, 30), Loc.T("signin.closesIn", "The game closes in {seconds} s.", ("seconds", Mathf.CeilToInt(left))), small);
+            if (closingButton && GUI.Button(R(x + 40, y + 210, 220, 50), Loc.T("signin.closeNow", "Close now"), button)) RevivalMod.QuitGame();
         }
 
         private static float lastFrame;
@@ -336,33 +336,33 @@ namespace WarpforgeRevival
                 float x = (w - pw) / 2, y = Mathf.Max(10, (h - ph) / 2 - 60);
                 GUI.Box(R(x, y, pw, ph), "", box);
                 float cx = x + 40, cw = pw - 80, cy = y + 24;
-                GUI.Label(R(cx, cy, cw, 34), (creating ? "Create an account on " : "Sign in to ") + ServerName(), label); cy += 40;
-                GUI.Label(R(cx, cy, cw, 48), creating ? "Pick a username (5 to 30 letters, digits, . ' - or _) and a password (at least 6 characters, no spaces)."
-                                                      : "Use the account you made on the server's website, or create one here.", small); cy += 50;
+                GUI.Label(R(cx, cy, cw, 34), creating ? Loc.T("signin.createOn", "Create an account on {server}", ("server", ServerName())) : Loc.T("signin.signInTo", "Sign in to {server}", ("server", ServerName())), label); cy += 40;
+                GUI.Label(R(cx, cy, cw, 48), creating ? Loc.T("signin.createRules", "Pick a username (5 to 30 letters, digits, . ' - or _) and a password (at least 6 characters, no spaces).")
+                                                      : Loc.T("signin.intro", "Use the account you made on the server's website, or create one here."), small); cy += 50;
 
-                GUI.Label(R(cx, cy, 140, 40), "Username", label);
+                GUI.Label(R(cx, cy, 140, 40), Loc.T("signin.username", "Username"), label);
                 GUI.SetNextControlName("wfrName");
                 userName = GUI.TextField(R(cx + 150, cy, cw - 150, 42), userName ?? "", 30, field); cy += 54;
-                GUI.Label(R(cx, cy, 140, 40), "Password", label);
+                GUI.Label(R(cx, cy, 140, 40), Loc.T("signin.password", "Password"), label);
                 password = GUI.PasswordField(R(cx + 150, cy, cw - 150, 42), password ?? "", '*', 200, field); cy += 54;
                 if (creating)
                 {
-                    GUI.Label(R(cx, cy, 150, 40), "Again", label);
+                    GUI.Label(R(cx, cy, 150, 40), Loc.T("signin.again", "Again"), label);
                     password2 = GUI.PasswordField(R(cx + 150, cy, cw - 150, 42), password2 ?? "", '*', 200, field); cy += 54;
                 }
                 if (showTerms)
                 {
                     // a button drawn as a tick box: plain buttons work on every build of the game
                     if (GUI.Button(R(cx, cy, 44, 44), agreed ? "X" : "", button)) agreed = !agreed;
-                    if (GUI.Button(R(cx + 52, cy, cw - 52 - 130, 44), "I am 16 or older and agree to the Terms and Privacy notice", small)) agreed = !agreed;
-                    if (GUI.Button(R(cx + cw - 120, cy, 120, 44), "Read", button)) OpenTerms();
+                    if (GUI.Button(R(cx + 52, cy, cw - 52 - 130, 44), Loc.T("signin.agree", "I am 16 or older and agree to the Terms and Privacy notice"), small)) agreed = !agreed;
+                    if (GUI.Button(R(cx + cw - 120, cy, 120, 44), Loc.T("signin.read", "Read"), button)) OpenTerms();
                     cy += 54;
                 }
                 cy += 4;
 
                 var keepColor = GUI.color;
                 if (problem) GUI.color = new Color(1f, 0.55f, 0.5f);
-                GUI.Label(R(cx, cy, cw, 52), busy ? (creating ? "Creating the account..." : "Signing in...") : message, small);
+                GUI.Label(R(cx, cy, cw, 52), busy ? (creating ? Loc.T("signin.creating", "Creating the account...") : Loc.T("signin.signingIn", "Signing in...")) : message, small);
                 GUI.color = keepColor;
                 cy += 58;
 
@@ -371,21 +371,21 @@ namespace WarpforgeRevival
                 {
                     bool match = (password ?? "").Length > 0 && password == password2;
                     GUI.enabled = !busy && agreed && match;
-                    if (GUI.Button(R(cx, cy, 230, 50), "Create account", button)) Submit(true);
+                    if (GUI.Button(R(cx, cy, 230, 50), Loc.T("signin.createAccount", "Create account"), button)) Submit(true);
                     GUI.enabled = !busy;
-                    if (GUI.Button(R(cx + 245, cy, 140, 50), "Back", button)) { creating = false; password2 = ""; agreed = false; Say("", false); }
-                    if (!busy && message.Length == 0 && (password2 ?? "").Length > 0 && !match) Say("The two passwords do not match.", true);
+                    if (GUI.Button(R(cx + 245, cy, 140, 50), Loc.T("signin.back", "Back"), button)) { creating = false; password2 = ""; agreed = false; Say("", false); }
+                    if (!busy && message.Length == 0 && (password2 ?? "").Length > 0 && !match) Say(NoMatch, true);
                 }
                 else
                 {
-                    if (GUI.Button(R(cx, cy, 170, 50), "Sign in", button)) Submit(false);
-                    if (GUI.Button(R(cx + 185, cy, 230, 50), "Create account", button)) { creating = true; agreed = false; password2 = ""; Say("", false); }
+                    if (GUI.Button(R(cx, cy, 170, 50), Loc.T("signin.signIn", "Sign in"), button)) Submit(false);
+                    if (GUI.Button(R(cx + 185, cy, 230, 50), Loc.T("signin.createAccount", "Create account"), button)) { creating = true; agreed = false; password2 = ""; Say("", false); }
                 }
-                if (GUI.Button(R(cx + cw - 140, cy, 140, 50), "Quit", button)) RevivalMod.QuitGame();
+                if (GUI.Button(R(cx + cw - 140, cy, 140, 50), Loc.T("signin.quit", "Quit"), button)) RevivalMod.QuitGame();
                 GUI.enabled = true;
                 cy += 62;
-                GUI.Label(R(cx, cy, cw, 30), serverNote, small);
-                if (problem && message == "The two passwords do not match." && password == password2) Say("", false);
+                GUI.Label(R(cx, cy, cw, 30), serverNote ?? (RevivalMod.Config.Secure ? ServerName() : Loc.T("signin.notEncrypted", "{server}  -  this connection is NOT encrypted", ("server", ServerName()))), small);
+                if (problem && message == NoMatch && password == password2) Say("", false);
 
                 var e = Event.current;
                 if (!busy && !creating && e != null && e.type == EventType.KeyDown && (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)) Submit(false);
@@ -400,9 +400,9 @@ namespace WarpforgeRevival
         private static void Submit(bool create)
         {
             string name = (userName ?? "").Trim(), pass = password ?? "";
-            if (name.Length == 0 || pass.Length == 0) { Say("Enter your username and password.", true); return; }
-            if (create && pass != password2) { Say("The two passwords do not match.", true); return; }
-            if ((create || termsAsked) && !agreed) { Say("Tick the box to agree to the Terms and Privacy notice.", true); return; }
+            if (name.Length == 0 || pass.Length == 0) { Say(Loc.T("signin.needBoth", "Enter your username and password."), true); return; }
+            if (create && pass != password2) { Say(NoMatch, true); return; }
+            if ((create || termsAsked) && !agreed) { Say(Loc.T("signin.tickTerms", "Tick the box to agree to the Terms and Privacy notice."), true); return; }
             bool agree = (create || termsAsked) && agreed;
             busy = true;
             Task.Run(async () =>
@@ -428,12 +428,12 @@ namespace WarpforgeRevival
                     else
                     {
                         error = reply.Code;
-                        why = reply.Error ?? "The server did not accept that.";
+                        why = reply.Error ?? Loc.T("signin.refused", "The server did not accept that.");
                     }
                 }
                 catch (Exception e)
                 {
-                    why = "Could not reach the server.";
+                    why = Loc.T("common.unreachableDot", "Could not reach the server.");
                     RevivalMod.Log.Warning("[signin] " + e.GetType().Name + ": " + e.Message);
                 }
                 PlayFabTransport.OnMainThread(() =>
@@ -452,12 +452,14 @@ namespace WarpforgeRevival
                     {
                         termsAsked = true;
                         agreed = false;
-                        Say("The Terms and Privacy notice have changed. Read them, tick the box and sign in again.", true);
+                        Say(Loc.T("signin.termsChanged", "The Terms and Privacy notice have changed. Read them, tick the box and sign in again."), true);
                     }
                     else Say(why, true);
                 });
             });
         }
+
+        private static string NoMatch => Loc.T("signin.noMatch", "The two passwords do not match.");
 
         private static void Say(string text, bool bad)
         {
