@@ -10,6 +10,8 @@
   "footer.noGame": "The game itself is not provided by this project: players install their own copy. The project runs a replacement server and a mod so the game keeps working now that its official servers are closed. The project makes no money.",
   "footer.takedown": "If any of your work appears here without your permission, let us know at {email} and we'll take it down. Questions are welcome there too.",
   "footer.unofficial": "Warpforge Revival is an unofficial, non-commercial fan project. It is not affiliated with, endorsed or supported by Games Workshop or Everguild Ltd. Warhammer 40,000, Warhammer 40,000: Warpforge and all related names, images and game content belong to their owners.",
+  "guides.loadFailed": "Could not load the guides: {error}",
+  "guides.loading": "Loading the guides…",
   "header.language": "Language",
   "header.openProfile": "Open your profile",
   "header.signOut": "Sign out",

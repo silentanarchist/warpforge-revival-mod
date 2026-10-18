@@ -10,6 +10,8 @@
   "footer.noGame": "Sama gra nie jest udostępniana przez ten projekt: gracze instalują własną kopię. Projekt utrzymuje zastępczy serwer i moda, dzięki którym gra nadal działa po zamknięciu oficjalnych serwerów. Projekt nie przynosi żadnych zysków.",
   "footer.takedown": "Jeśli znajdziesz tu swoją pracę użytą bez twojej zgody, napisz do nas na {email}, a usuniemy ją. Tam też chętnie odpowiemy na pytania.",
   "footer.unofficial": "Warpforge Revival to nieoficjalny, niekomercyjny projekt fanowski. Nie jest powiązany z Games Workshop ani Everguild Ltd, ani przez nie zatwierdzony czy wspierany. Warhammer 40,000, Warhammer 40,000: Warpforge oraz wszystkie powiązane nazwy, grafiki i treści gry należą do ich właścicieli.",
+  "guides.loadFailed": "Nie udało się wczytać poradników: {error}",
+  "guides.loading": "Wczytywanie poradników…",
   "header.language": "Język",
   "header.openProfile": "Otwórz swój profil",
   "header.signOut": "Wyloguj",

@@ -10,6 +10,8 @@
   "footer.noGame": "이 프로젝트는 게임 자체를 제공하지 않습니다. 플레이어는 각자 소유한 게임을 설치합니다. 공식 서버가 종료된 뒤에도 게임이 계속 작동하도록 이 프로젝트는 대체 서버와 모드를 운영합니다. 이 프로젝트는 수익을 얻지 않습니다.",
   "footer.takedown": "본인의 작업물이 허락 없이 여기에 게시되어 있다면 {email}로 알려 주세요. 바로 삭제하겠습니다. 질문도 이 주소로 보내 주세요.",
   "footer.unofficial": "Warpforge Revival은 비공식 비상업적 팬 프로젝트입니다. Games Workshop 또는 Everguild Ltd와 제휴 관계가 없으며 이들의 승인이나 지원을 받지 않습니다. Warhammer 40,000, Warhammer 40,000: Warpforge 및 관련된 모든 명칭, 이미지, 게임 콘텐츠는 각 소유자에게 있습니다.",
+  "guides.loadFailed": "가이드를 불러올 수 없습니다: {error}",
+  "guides.loading": "가이드를 불러오는 중…",
   "header.language": "언어",
   "header.openProfile": "내 프로필 열기",
   "header.signOut": "로그아웃",

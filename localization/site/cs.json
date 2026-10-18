@@ -10,6 +10,8 @@
   "footer.noGame": "Samotnou hru tento projekt neposkytuje: hráči si instalují vlastní kopii. Projekt provozuje náhradní server a mod, aby hra fungovala i po uzavření oficiálních serverů. Projekt nevydělává žádné peníze.",
   "footer.takedown": "Pokud se tu objevuje tvoje dílo bez tvého svolení, dej nám vědět na {email} a odstraníme ho. Rádi tam odpovíme i na dotazy.",
   "footer.unofficial": "Warpforge Revival je neoficiální, nekomerční fanouškovský projekt. Není spojen se společnostmi Games Workshop ani Everguild Ltd, ani jimi schválen či podporován. Warhammer 40,000, Warhammer 40,000: Warpforge a všechny související názvy, obrázky a herní obsah patří jejich vlastníkům.",
+  "guides.loadFailed": "Návody se nepodařilo načíst: {error}",
+  "guides.loading": "Načítání návodů…",
   "header.language": "Jazyk",
   "header.openProfile": "Otevřít profil",
   "header.signOut": "Odhlásit se",

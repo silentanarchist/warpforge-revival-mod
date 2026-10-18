@@ -10,6 +10,8 @@
   "footer.noGame": "Oyunun kendisi bu proje tarafından sağlanmaz: oyuncular kendi kopyalarını kurar. Proje, resmi sunucular kapandığı için oyunun çalışmaya devam etmesini sağlayan yedek bir sunucu ve bir mod işletir. Proje hiçbir gelir elde etmez.",
   "footer.takedown": "Burada iznin olmadan kullanılan bir çalışman varsa {email} adresinden bize bildir, kaldıralım. Soruların için de oraya yazabilirsin.",
   "footer.unofficial": "Warpforge Revival resmi olmayan, ticari amaç gütmeyen bir hayran projesidir. Games Workshop veya Everguild Ltd ile bağlantılı değildir ve onlar tarafından onaylanmamış ya da desteklenmemektedir. Warhammer 40,000, Warhammer 40,000: Warpforge ve ilgili tüm adlar, görseller ve oyun içeriği sahiplerine aittir.",
+  "guides.loadFailed": "Rehberler yüklenemedi: {error}",
+  "guides.loading": "Rehberler yükleniyor…",
   "header.language": "Dil",
   "header.openProfile": "Profilini aç",
   "header.signOut": "Çıkış yap",

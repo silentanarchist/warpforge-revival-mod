@@ -10,6 +10,8 @@
   "footer.noGame": "本项目不提供游戏本身：玩家需安装自己拥有的游戏副本。官方服务器关闭后，本项目运行替代服务器和模组，让游戏得以继续运行。本项目不以任何方式盈利。",
   "footer.takedown": "如果你的作品未经许可出现在这里，请通过 {email} 告诉我们，我们会将其删除。也欢迎通过该邮箱提问。",
   "footer.unofficial": "Warpforge Revival 是一个非官方、非商业的粉丝项目，与 Games Workshop 或 Everguild Ltd 没有任何关联，也未获得其认可或支持。Warhammer 40,000、Warhammer 40,000: Warpforge 以及所有相关名称、图像和游戏内容均归其各自所有者所有。",
+  "guides.loadFailed": "无法加载指南：{error}",
+  "guides.loading": "正在加载指南…",
   "header.language": "语言",
   "header.openProfile": "打开你的个人资料",
   "header.signOut": "退出登录",
