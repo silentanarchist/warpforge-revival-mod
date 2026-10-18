@@ -1,0 +1,94 @@
+WARPFORGE REVIVAL - WEBLATE (the translation site), self-hosted
+===============================================================
+
+Weblate is where players translate the mod, the website, the guides and the Patcher app. It reads the
+translation files from the mod repo on GitHub (warpforge-revival-mod, folder localization/) and writes the
+approved translations back to a branch called "weblate". From there they are merged and copied to the game
+server when you say so.
+
+This folder:
+  docker-compose.yml, environment   Weblate's own files (unchanged, from github.com/WeblateOrg/docker-compose)
+  docker-compose.override.yml       our changes: the port and our settings file
+  weblate.env                       our settings - FILL IN THE CHANGE-ME LINES. Private: it holds passwords.
+  1 - start weblate.bat             starts it (Docker Desktop must be running)
+  2 - stop weblate.bat              stops it (nothing is lost)
+  3 - update weblate.bat            newest version, keeps everything
+  4 - show weblate log.bat          what it is doing, when something is wrong
+
+
+FIRST SETUP
+-----------
+1. Install Docker Desktop for Windows (it sets up WSL 2 itself). Start it once.
+
+2. Open weblate.env in Notepad and fill in every CHANGE-ME:
+     - WEBLATE_ADMIN_EMAIL / WEBLATE_ADMIN_PASSWORD: your admin login.
+     - the e-mail lines: an SMTP server for sign-up mails (port 587, TLS). A Gmail account with an
+       "app password" works. Without e-mail, set WEBLATE_REGISTRATION_OPEN=0 and invite people yourself.
+     - POSTGRES_PASSWORD: any long random text (you never type it again).
+   If you use another address than translate.silentanarchist.com, change it in the three lines that name it.
+
+3. Run "1 - start weblate.bat". The first start takes a few minutes. Then open http://127.0.0.1:8090 on this
+   computer and sign in with the admin account.
+
+4. Public address: point translate.silentanarchist.com at this computer the same way as the game site, and in
+   your reverse proxy / tunnel forward it to http://127.0.0.1:8090 (HTTPS is done by the proxy / tunnel, as for
+   the game site). Weblate only listens on this computer, so it is reachable only through that.
+
+
+CONNECT GITHUB
+--------------
+5. In Weblate: your admin menu > Manage > SSH keys > "Generate Ed25519 SSH key" (if none is shown) and copy the
+   public key.
+6. On GitHub: warpforge-revival-mod > Settings > Deploy keys > Add deploy key: paste it, tick "Allow write
+   access". (Only this repo; Weblate never gets your account.)
+
+
+THE PROJECT AND ITS COMPONENTS
+------------------------------
+7. Add a project: name "Warpforge Revival", URL slug "warpforge-revival".
+
+8. Add one component for each area (Add new translation component > From version control). Same for all:
+     Version control system:  Git
+     Source code repository:  git@github.com:silentanarchist/warpforge-revival-mod.git
+     Repository branch:       main
+     Repository push URL:     git@github.com:silentanarchist/warpforge-revival-mod.git
+     Push branch:             weblate
+     File format:             JSON file
+     Monolingual base language file / Template for new translations: the en.json below
+     Edit base file:          OFF   (the English comes from the code)
+     Language filter:         ^(?!en$).*$
+   and per component:
+     Name          File mask                          Base file
+     Mod           localization/mod/*.json            localization/mod/en.json
+     Website       localization/site/*.json           localization/site/en.json
+     Guides        localization/guides/*.json         localization/guides/en.json
+     Patcher       localization/patcher/*.json        localization/patcher/en.json   (once the patcher
+                                                       translations are merged into main)
+   For the 2nd component on, "Source code repository" can be  weblate://warpforge-revival/mod  (shares one copy).
+
+9. Mark the machine drafts as drafts, in each component: Tools > Bulk edit, search  state:translated ,
+   new state "Needs editing". Translators then see every draft as something to check.
+
+10. Texts with {name} in braces: in each component, Settings > Translation > "Translation flags": add
+      placeholders:r"\{\w+\}"
+    so Weblate warns when a translation loses or changes one. For Website and Guides also add  safe-html
+    (they may hold <strong>, <code>, <a> and nothing else).
+
+
+TRANSLATORS
+-----------
+- Give each community editor their language: Manage > Users / Teams (per-language "Translate" or "Review").
+- Turn on reviews (Project settings > Workflow > "Enable reviews") if you want a reviewer to approve changes.
+
+
+GETTING TRANSLATIONS INTO THE GAME
+----------------------------------
+Weblate commits to the "weblate" branch. Tell Claude to pull translations: it merges them into main, checks
+them and copies them to the server (W:\content\files\localization). Nothing reaches players before that.
+Later this can run by itself.
+
+
+BACKUPS
+-------
+Translations also live in the GitHub repo, but accounts, reviews and history are only in Weblate:
+Manage > Backups can save them regularly (to a folder or a backup service).

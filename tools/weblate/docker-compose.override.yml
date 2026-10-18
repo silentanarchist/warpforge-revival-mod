@@ -1,0 +1,16 @@
+# Warpforge Revival's settings for Weblate (the translation site). docker-compose.yml and environment next to this
+# file are Weblate's own (github.com/WeblateOrg/docker-compose, commit 36f6f3c) and are left as they are; this file
+# and weblate.env hold everything of ours. "docker compose" reads all of them together.
+services:
+  weblate:
+    # Only this computer can reach it (127.0.0.1): the public address goes through your reverse proxy / tunnel,
+    # which forwards https://translate.silentanarchist.com to http://127.0.0.1:8090.
+    ports:
+      - 127.0.0.1:8090:8080
+    env_file:
+      - ./environment
+      - ./weblate.env
+  database:
+    env_file:
+      - ./environment
+      - ./weblate.env
