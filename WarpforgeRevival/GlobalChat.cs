@@ -49,6 +49,7 @@ namespace WarpforgeRevival
             forcedChannel = false;
             toldConnected = false;
             since = -1;                               // a new sign-in starts from the history again
+            Held.Clear();                             // and the held alliance messages come again with it
             friendShown = null;                       // the new chat manager's status table is filled again
         }
 
@@ -424,7 +425,37 @@ namespace WarpforgeRevival
             t == ChatMessageType.Message || t == ChatMessageType.DeckShare || t == ChatMessageType.ReplayShare ||
             t == ChatMessageType.RewardShare || t == ChatMessageType.Announcement;
 
+        // Alliance messages that came before their channel was open. The game only learns which alliance the player
+        // is in once the alliance data is loaded (in play: when Alliances is first opened), well after the history
+        // arrives at sign-in, and it drops messages for a channel it has not opened. They wait here and are handed
+        // over when the channel opens (SyncAllianceChannel), so the alliance chat and its preview show them.
+        private static readonly List<Incoming> Held = new List<Incoming>();
+        private const int HeldMax = 100;
+
+        private static bool IsOpen(ChatGlobalManager m, string channel)
+        {
+            var channels = m.subscribedChannels;
+            if ((object)channels == null) return false;
+            for (int i = 0; i < channels.Count; i++)
+            {
+                var c = channels[i];
+                if ((object)c != null && c.ChannelId == channel) return true;
+            }
+            return false;
+        }
+
         private static void Deliver(ChatGlobalManager m, Incoming msg)
+        {
+            if (msg.Channel != null && IsAllianceChannel(msg.Channel) && !IsOpen(m, msg.Channel))
+            {
+                Held.Add(msg);
+                if (Held.Count > HeldMax) Held.RemoveAt(0);
+                return;
+            }
+            Show(m, msg);
+        }
+
+        private static void Show(ChatGlobalManager m, Incoming msg)
         {
             var data = m.ParseChatMessage(msg.Message);
             if ((object)data == null) return;
@@ -539,6 +570,15 @@ namespace WarpforgeRevival
                                    new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<bool>(new[] { true }));
                     if (allianceChannel != want) RevivalMod.Log.Msg("[chat] alliance chat opened");
                     allianceChannel = want;
+                    int shown = 0;
+                    foreach (var msg in Held)
+                        if (msg.Channel == want)
+                        {
+                            try { Show(m, msg); shown++; }
+                            catch (Exception e) { RevivalMod.Log.Warning("[chat] could not show a held alliance message: " + e.Message); }
+                        }
+                    Held.RemoveAll(x => x.Channel == want);
+                    if (shown > 0) RevivalMod.Log.Msg($"[chat] {shown} alliance message(s) that came before the channel was open shown");
                 }
             }
             catch (Exception e) { RevivalMod.Log.Warning("[chat] alliance chat: " + e.Message); }
