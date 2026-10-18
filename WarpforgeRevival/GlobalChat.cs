@@ -149,6 +149,63 @@ namespace WarpforgeRevival
             }
         }
 
+        // ---------------------------------------------------------------- longer messages (0.14.15)
+        // The game allows 200 characters: the chat box's characterLimit (set in its prefab) and a hard-coded check
+        // at the top of ChatGlobalManager.SendChatMessage(string, string) that silently drops anything longer.
+        // Raised to 600 on request (owner, 2026-10-18). Nothing checks the length on the receiving side, so players
+        // on older versions still see the longer messages; the server takes chat messages up to 8000 characters.
+        internal const int MaxMessage = 600;
+
+        [HarmonyPatch(typeof(ChatPanel), nameof(ChatPanel.Start))]
+        private static class LongerBox
+        {
+            private static void Postfix(ChatPanel __instance)
+            {
+                try
+                {
+                    var input = (object)__instance == null ? null : __instance.inputField;
+                    if ((object)input != null && input.characterLimit != MaxMessage)
+                    {
+                        input.characterLimit = MaxMessage;
+                        RevivalMod.Log.Msg($"[chat] chat box takes up to {MaxMessage} characters");
+                    }
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[chat] longer messages: " + e.Message); }
+            }
+        }
+
+        /// <summary>
+        /// A message of 201..600 characters is built and sent the way the game builds a normal one (type Message,
+        /// sender's id, name and avatar, the text, the server time), straight to the overload that publishes it;
+        /// the game's own function would drop it. Shorter ones go the game's way unchanged.
+        /// </summary>
+        [HarmonyPatch(typeof(ChatGlobalManager), nameof(ChatGlobalManager.SendChatMessage), new[] { typeof(string), typeof(string) })]
+        private static class LongerSend
+        {
+            private static bool Prefix(ChatGlobalManager __instance, string chatMessage, string channelId)
+            {
+                if (chatMessage == null || chatMessage.Length <= 200 || chatMessage.Length > MaxMessage) return true;
+                try
+                {
+                    var pd = __instance.playerData;
+                    if ((object)pd == null) pd = PlayerDataManager.singletonManager;
+                    var avatars = SingletonBehaviour<PlayerAvatarDataManager>.Instance;
+                    string avatar = (object)avatars == null ? "" : avatars.PlayerAvatarID ?? "";
+                    string border = (object)avatars == null ? "" : avatars.PlayerAvatarBorderID ?? "";
+                    var msg = new ChatMessageData(ChatMessageType.Message, pd.playFabId, pd.playerName, avatar, border, "", "", chatMessage);
+                    msg.timestamp = pd.currentServerTime;
+                    __instance.SendChatMessage(msg, channelId);
+                    RevivalMod.Log.Msg($"[chat] long message ({chatMessage.Length} characters) sent past the game's 200 limit");
+                    return false;
+                }
+                catch (Exception e)
+                {
+                    RevivalMod.Log.Warning("[chat] long message: " + e.Message);
+                    return true;
+                }
+            }
+        }
+
         /// <summary>
         /// The chat window shows "x ago" from the message's timestamp, which must be Unix
         /// milliseconds; the game's server clock is not that on the Revival server.
