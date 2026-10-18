@@ -371,7 +371,9 @@ namespace WarpforgeRevival
                 // the game's language, here too (new players meet this window before they can reach Settings):
                 // a button in the window's bottom right corner, beside the server's name
                 string langName = LanguageName(Loc.Language());
-                if (GUI.Button(R(x + pw - 40 - 220, y + ph - 52, 220, 40), langName, button)) picking = !picking;     // no arrow: not every phone's font has one
+                if (GUI.Button(R(x + pw - 40 - 220, y + ph - 52, 220, 40), langName + "      ", button)) picking = !picking;
+                // the arrow is drawn, not typed: a phone's font may not have the sign (it showed a box)
+                GUI.DrawTexture(R(x + pw - 40 - 34, y + ph - 52 + 15, 14, 10), picking ? ArrowUp : ArrowDown);
                 if (picking) { DrawLanguages(x, y + 24, pw, ph - 84); return; }
                 GUI.Label(R(cx, cy, cw, 34), creating ? Loc.T("signin.createOn", "Create an account on {server}", ("server", ServerName())) : Loc.T("signin.signInTo", "Sign in to {server}", ("server", ServerName())), label); cy += 40;
                 GUI.Label(R(cx, cy, cw, 48), creating ? Loc.T("signin.createRules", "Pick a username (5 to 30 letters, digits, . ' - or _) and a password (at least 6 characters, no spaces).")
@@ -547,6 +549,27 @@ namespace WarpforgeRevival
                 RevivalMod.Log.Msg($"[signin] language set to {name} ({code}) from the sign-in window");
             }
             catch (Exception e) { RevivalMod.Log.Warning("[signin] language: " + e.Message); }
+        }
+
+        private static Texture2D arrowDown, arrowUp;
+        private static Texture2D ArrowDown => arrowDown != null ? arrowDown : (arrowDown = Arrow(false));
+        private static Texture2D ArrowUp => arrowUp != null ? arrowUp : (arrowUp = Arrow(true));
+
+        /// <summary>A small light triangle pointing down (or up), 28 x 20, transparent around it.</summary>
+        private static Texture2D Arrow(bool up)
+        {
+            const int w = 28, h = 20;
+            var t = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            var on = new Color(0.85f, 0.95f, 0.9f, 1f); var off = new Color(0f, 0f, 0f, 0f);
+            for (int py = 0; py < h; py++)
+            {
+                float row = up ? py : h - 1 - py;                // texture rows go up from the bottom
+                float half = (w / 2f) * (1f - row / (h - 1f));   // wide at the top of a down arrow, a point at its bottom
+                for (int px = 0; px < w; px++) t.SetPixel(px, py, Mathf.Abs(px + 0.5f - w / 2f) <= half ? on : off);
+            }
+            t.Apply();
+            t.hideFlags = HideFlags.HideAndDontSave;
+            return t;
         }
 
         private static string NoMatch => Loc.T("signin.noMatch", "The two passwords do not match.");
