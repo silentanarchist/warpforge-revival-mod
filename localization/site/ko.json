@@ -31,7 +31,7 @@
   "creator.addEntryTitle": "키워드 또는 능력 추가",
   "creator.advancedHelp": "고급 옵션 표시 – 일부 공식 카드만 사용하는 설정 (타이밍, 잔여 효과, 카드 설정). 끄면 편집기는 선택한 내용에 대해 게임이 사용하는 것만 표시합니다.",
   "creator.affects": "영향 대상",
-  "creator.agreeRules": "이 카드는 {link}을(를) 모두 따릅니다.",
+  "creator.agreeRules": "이 카드는 {link}을 모두 따릅니다.",
   "creator.allCards": "모든 카드",
   "creator.allFactions": "모든 팩션",
   "creator.allKinds": "모든 종류",
