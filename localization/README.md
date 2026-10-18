@@ -55,6 +55,25 @@ changing the site, run
 
 (default: `../warpforge-revival-server/content/files/creator.html`) to update `site/en.json`. Before copying to the server, run `tools/localization/build-index.py`.
 
+The Card Creator (keys `creator.*`, `creatorHelp.*`, `home.*`) adds two things the extractor knows about:
+
+- A call whose key is computed, `T("creator.kind." + id, label)`, is allowed when the literal part ends in a
+  dot. Its keys are then listed as plain calls in a function next to it (`creatorKindKeys()`,
+  `creatorTemplateKeys()`, `creatorTrigGroupKeys()`, `creatorWhoKeys()`, `creatorRarityKeys()`…), so the
+  extractor still sees every key with its English.
+- Texts the creator shows from its content files are collected from those files, which sit next to the page in
+  the server repo: `creator-help.json` gives `creatorHelp.trigger.<id>.name` / `.text` (triggers the game
+  never fires are left out) and `creatorHelp.keywordName.<id>` / `creatorHelp.keyword.<id>` for the keywords it names and describes; `keywords.json`
+  gives `creatorHelp.keyword.<id>` for the others and `creatorHelp.rulebook.<id>` (the cheat sheet);
+  `stratagem-types.json` gives `creatorHelp.stratagemType.<id>`. Changing a text in those files changes the
+  English, so run the extractor afterwards.
+
+What stays English on purpose: a card's own name and rules text, the generated "Suggest text" wording (it is
+written onto the card), the creator rules (`creator-rules.txt`), the game's own identifiers (trigger ids,
+`activeAbility`…) and faction and stratagem type names. Keyword names are shown as the game's word with the
+English in brackets, taken live from the player's own export (`Card_Trait/<id>`), so no game text is shipped
+here. The `creatorHelp.*` descriptions are a convenience: the English is the binding wording.
+
 Before committing or copying translations, check them:
 
     python3 tools/localization/check.py site        # or mod, guides, patcher; add language codes to check only those

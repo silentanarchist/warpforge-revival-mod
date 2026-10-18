@@ -9,6 +9,14 @@ inside it (only plain text can be swapped) other than children marked data-t-par
 as {name} (a link inside a sentence, say). Elements marked data-t-rich="key" keep <strong>, <em>, <code> and <br>
 in their English (and translations may use those, nothing else). Runs of spaces and line breaks become one space.
 
+A script call whose key is computed, T("creator.kind." + id, label), is allowed when the literal part ends in a dot;
+its keys must then come from somewhere this script can see: either a function that lists them as plain calls
+(creatorKindKeys() in the page) or the Card Creator's content files next to the page, which give the creatorHelp.*
+keys: creator-help.json (creatorHelp.trigger.<id>.name / .text, and creatorHelp.keywordName.<id> / creatorHelp.keyword.<id>
+for the keywords it names and describes), keywords.json (creatorHelp.keyword.<id> for the others, and creatorHelp.rulebook.<id or name> for
+the cheat sheet) and stratagem-types.json (creatorHelp.stratagemType.<id>). Triggers the game never fires (status dead) are
+left out. Only the creator's own wording is collected; a card's name and rules text stay as written.
+
     python3 tools/localization/extract-site.py [path/to/creator.html]          write localization/site/en.json
     python3 tools/localization/extract-site.py --check [path/to/creator.html]  only check it is up to date
 
@@ -79,6 +87,40 @@ class Marks(HTMLParser):
             self.found.append((key, text))
         self.depth -= 1
 
+def content_keys(folder):
+    """The creatorHelp.* keys: texts the Card Creator shows from its content files (see the module doc)."""
+    def load(name):
+        path = os.path.join(folder, name)
+        if not os.path.exists(path):
+            print(f"note: {name} not found next to the page; its creatorHelp keys are left out")
+            return None
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    out = []
+    help_ = load("creator-help.json") or {"triggers": {}, "keywords": {}}
+    for tid, t in help_["triggers"].items():
+        if t.get("status") == "dead":
+            continue
+        if t.get("name"): out.append((f"creatorHelp.trigger.{tid}.name", t["name"], "creator-help.json"))
+        if t.get("text"): out.append((f"creatorHelp.trigger.{tid}.text", t["text"], "creator-help.json"))
+    described = set()
+    for kid, k in help_["keywords"].items():
+        if k.get("name"): out.append((f"creatorHelp.keywordName.{kid}", k["name"], "creator-help.json"))
+        if k.get("text"):
+            out.append((f"creatorHelp.keyword.{kid}", k["text"], "creator-help.json")); described.add(kid)
+    keywords = load("keywords.json") or {"keywords": []}
+    for k in keywords["keywords"]:
+        if not k.get("text") or not (k.get("id") or k.get("name")):
+            continue
+        out.append((f"creatorHelp.rulebook.{k.get('id') or k['name']}", k["text"], "keywords.json"))   # no id: keyed by its name
+        if k.get("id") and k["id"] not in described:
+            out.append((f"creatorHelp.keyword.{k['id']}", k["text"], "keywords.json"))
+    types = load("stratagem-types.json") or {"types": []}
+    for t in types["types"]:
+        if t.get("id") and t.get("text"):
+            out.append((f"creatorHelp.stratagemType.{t['id']}", t["text"], "stratagem-types.json"))
+    return out
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     page = args[0] if args else PAGE
@@ -90,10 +132,11 @@ def main():
     script = "\n".join(re.findall(r"<script>([\s\S]*?)</script>", text))
     good = {m.start() for m in CALL.finditer(script)}
     for m in KEY_ONLY.finditer(script):
-        if m.start() not in good:
+        if m.start() not in good and not m.group(1).endswith("."):
             bad.append(f'T("{m.group(1)}", ...) - the English must be a plain "..." string')
     for m in CALL.finditer(script):
         items.append((m.group(1), json.loads('"' + m.group(2) + '"'), "T()"))
+    items += content_keys(os.path.dirname(os.path.abspath(page)))
     for key, english, how in items:
         english = re.sub(r"\s+", " ", english).strip()
         if key in found and found[key] != english:
