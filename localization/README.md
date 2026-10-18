@@ -24,6 +24,12 @@ that language. Translations are done on Weblate; you do not need to edit these f
 
 Machine drafts not yet checked by a speaker of the language: **all of them** (every file in `mod/`, `site/` and `guides/` except `en.json`). They use the game's own words for its terms (its word for Energy, Warlord, Deck...) taken from the game's translations.
 
+Game terms follow the game's own translations (its words for Troop, Stratagem, Warlord, Energy, Health, Armour,
+rarities, races, keywords, game modes and menus). Keywords in running text are written as the game's word with the
+English in brackets, e.g. "Refuerzo (Rally)", because the Card Creator lists them in English. Screens that exist only in
+English (the Patcher app, the mod's own windows, Settings > Mod, the Card Creator's controls) are named by their exact
+English label with a short translation in brackets.
+
 ## How it reaches players
 
 The mod and the site download the language files from the revival server
