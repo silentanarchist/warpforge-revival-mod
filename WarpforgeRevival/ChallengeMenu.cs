@@ -28,6 +28,11 @@ namespace WarpforgeRevival
     /// The page: a friend to challenge, a game mode as the preset (its deck rules, and the starting values of the
     /// match rules) and the match rules themselves. Sending goes through the game's own friend challenge, with the
     /// rules added (see ChallengeRules).
+    ///
+    /// 0.14.17: a player can also be picked by friend code (a box under the friend list; the server finds the player
+    /// and lets the two games exchange the challenge although they are not friends), and the game's own duel popup
+    /// (Classic / Skirmish on a profile or the alliance member list), whose challenge cannot carry the mode or any
+    /// rules, now opens this page with that player and mode picked instead.
     /// </summary>
     internal static class ChallengeMenu
     {
@@ -38,6 +43,10 @@ namespace WarpforgeRevival
 
         // menu state, kept while the game runs
         private static string friendId, friendName;
+        private static string codeId, codeName, codeState;    // the player found by friend code (shown under the list)
+        private static TMP_InputField codeBox;
+        private static string codeText = "";                  // what was typed, kept across redraws
+        private static bool codeBusy;
         private static int presetIndex;
         private static ChallengeRules.RuleSet values;
         private static string status = "";
@@ -89,6 +98,7 @@ namespace WarpforgeRevival
         internal static void Tick()
         {
             if (drawnLoc != Loc.Version) { drawnLoc = Loc.Version; dirty = true; }     // the language changed: draw it again in the new one
+            if (openSince >= 0) FinishOpen();
             if (!dirty) return;
             try
             {
@@ -218,7 +228,7 @@ namespace WarpforgeRevival
             int row = 0;
             foreach (var (id, name, state) in friends)
             {
-                if (row >= 11) break;
+                if (row >= 8) break;
                 float top = 0.88f - row * 0.075f;
                 bool picked = id == friendId;
                 string hint = "  (" + (state == "online" ? Loc.T("challenge.online", "online") : state == "playing" ? Loc.T("challenge.playing", "in a match") : Loc.Game("MainMenu/General/Offline", "Offline")) + ")";
@@ -230,6 +240,7 @@ namespace WarpforgeRevival
             }
             if (friends.Count == 0)
                 TestersPage.Text(area, "NoFriends", Loc.T("challenge.noFriends", "Add friends in the Friends tab first."), 24, TextAlignmentOptions.Left, TestersPage.Dim, 0.02f, 0.7f, 0.34f, 0.86f);
+            CodeBox(w, area);
 
             // right: mode and rules
             float x0 = 0.38f, x1 = 0.98f;
@@ -320,6 +331,160 @@ namespace WarpforgeRevival
             }
             catch (Exception e) { status = Loc.T("challenge.sendFailed", "Could not send the challenge: {error}", ("error", e.Message)); dirty = true; RevivalMod.Log.Warning("[challenge] send: " + e); }
         }
+
+        /// <summary>Under the friend list: the player found by friend code (if any), a box for a code and a Find button.</summary>
+        private static void CodeBox(GameWindowWithTabs w, Transform area)
+        {
+            try
+            {
+                const float top = 0.27f;
+                TestersPage.Text(area, "CodeTitle", Loc.T("challenge.byCode", "Or by friend code"), 24, TextAlignmentOptions.Left, TestersPage.Dim, 0.02f, top - 0.06f, 0.34f, top);
+                if (codeId != null)
+                {
+                    bool picked = codeId == friendId;
+                    string hint = "  (" + (codeState == "online" ? Loc.T("challenge.online", "online") : codeState == "playing" ? Loc.T("challenge.playing", "in a match") : Loc.Game("MainMenu/General/Offline", "Offline")) + ")";
+                    var b = TestersPage.Button(area, "Friend_code", "", 0.02f, top - 0.13f, 0.34f, top - 0.065f, picked ? new Color(0.35f, 0.25f, 0.08f, 1f) : TestersPage.Tile);
+                    TestersPage.Text(b.transform, "Name", codeName + hint, 24, TextAlignmentOptions.Left, codeState == "online" ? Color.white : TestersPage.Dim, 0.04f, 0, 0.98f, 1);
+                    TestersPage.OnClick(b, () => { friendId = codeId; friendName = codeName; status = ""; dirty = true; });
+                }
+                // the box: a copy of the Friends tab's add-friend box (the game's own look and keyboard handling)
+                FriendsTab friends = null;
+                foreach (var f in w.GetComponentsInChildren<FriendsTab>(true)) { friends = f; break; }
+                var input = (object)friends == null ? null : friends.inputFieldUserName;
+                if ((object)input == null) return;
+                var boxGo = UnityEngine.Object.Instantiate(input.gameObject, area, false);
+                boxGo.name = "Friend code box";
+                foreach (var le in boxGo.GetComponents<LayoutElement>()) le.ignoreLayout = true;
+                var rt = boxGo.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.02f, top - 0.2f); rt.anchorMax = new Vector2(0.24f, top - 0.14f);
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                codeBox = boxGo.GetComponent<TMP_InputField>();
+                if ((object)codeBox != null)
+                {
+                    codeBox.onSubmit = new TMP_InputField.SubmitEvent();
+                    codeBox.onEndEdit = new TMP_InputField.SubmitEvent();
+                    codeBox.onValueChanged = new TMP_InputField.OnChangeEvent();
+                    codeBox.characterLimit = 24;
+                    codeBox.SetTextWithoutNotify(codeText ?? "");
+                    var ph = codeBox.placeholder?.TryCast<TMP_Text>();
+                    if ((object)ph != null) Ui.SetText(ph, Loc.T("challenge.codePlaceholder", "Friend code"));
+                    codeBox.onValueChanged.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<string>>(new Action<string>(t => codeText = t)));
+                    codeBox.onSubmit.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<string>>(new Action<string>(_ => FindByCode())));
+                }
+                boxGo.SetActive(true);
+                var find = TestersPage.Button(area, "FindCode", codeBusy ? "..." : Loc.T("challenge.find", "Find"), 0.25f, top - 0.2f, 0.34f, top - 0.14f, TestersPage.Tile);
+                TestersPage.OnClick(find, FindByCode);
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[challenge] friend code box: " + e.Message); }
+        }
+
+        private static void FindByCode()
+        {
+            string code = (codeText ?? "").Trim();
+            if (codeBusy) return;
+            if (code.Length == 0) { status = Loc.T("challenge.typeCode", "Type a friend code first."); dirty = true; return; }
+            codeBusy = true;
+            status = ""; dirty = true;
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                string id = null, name = null, state = null, error = null;
+                try
+                {
+                    var reply = await Net.PostJson("/playfab/Revival/ChallengeByCode", Net.Json(w => w.WriteString("code", code)), TimeSpan.FromSeconds(10));
+                    var d = reply.Data;
+                    if (reply.Ok && d.ValueKind == System.Text.Json.JsonValueKind.Object && d.TryGetProperty("id", out var i))
+                    {
+                        id = i.GetString();
+                        name = d.TryGetProperty("name", out var n) ? n.GetString() : id;
+                        state = d.TryGetProperty("state", out var st) ? st.GetString() : "offline";
+                    }
+                    else error = reply.Error ?? Loc.T("challenge.noSuchCode", "No player with that friend code.");
+                }
+                catch (Exception e) { error = e.Message; }
+                PlayFabTransport.OnMainThread(() =>
+                {
+                    codeBusy = false;
+                    if (id != null)
+                    {
+                        codeId = id; codeName = name; codeState = state;
+                        friendId = id; friendName = name;
+                        RevivalMod.Log.Msg($"[challenge] friend code found: {id} ({state})");
+                    }
+                    else status = error;
+                    dirty = true;
+                });
+            });
+        }
+
+        /// <summary>
+        /// The game's own duel popup (Classic / Skirmish on a profile or an alliance member): its challenge can carry
+        /// neither the mode nor any rules (the friend's game plays it as a default challenge), so it opens this page
+        /// instead, with that player and mode picked.
+        /// </summary>
+        private static float openSince = -1f;
+        private static bool pendingSkirmish;
+
+        private static void FromDuelPopup(DuelPopupWindow popup, bool skirmish)
+        {
+            try
+            {
+                var data = popup.playerDuelData;
+                string id = (object)data == null ? null : data.PlayerId, name = (object)data == null ? null : data.PlayerName;
+                if (string.IsNullOrEmpty(id)) { RevivalMod.Log.Warning("[challenge] duel popup without a player"); return; }
+                codeId = friendId = id; codeName = friendName = string.IsNullOrEmpty(name) ? id : name; codeState = GlobalChat.FriendStatus(id);
+                pendingSkirmish = skirmish;
+                status = ""; dirty = true;
+                try { popup.OnCloseButtonPressed(); } catch { try { popup.Close(); } catch { } }
+                RevivalMod.Log.Msg($"[challenge] duel popup: opening the Challenge page for {id} ({(skirmish ? "Skirmish" : "Classic")})");
+                OpenPage();
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[challenge] duel popup: " + e.Message); }
+        }
+
+        private static void OpenPage()
+        {
+            openSince = Time.realtimeSinceStartup;
+            try
+            {
+                if (Ui.Alive(window) && window.IsOpen()) { FinishOpen(); return; }
+                var wm = WindowsManager.Instance;
+                SocialMenuWindow social = null;
+                foreach (var m in Resources.FindObjectsOfTypeAll<SocialMenuWindow>())
+                    if ((object)m != null && m.gameObject.scene.IsValid()) { social = m; break; }
+                if ((object)social != null) { wm.OpenWindow(social, false, null); return; }
+                foreach (var b in UnityEngine.Object.FindObjectsOfType<OpenWindowButton>())
+                {
+                    var scene = b.windowToOpenScene;
+                    if ((object)scene != null && (object)scene.TryCast<SocialMenuWindow>() != null) { b.OpenWindow(); return; }
+                }
+                RevivalMod.Log.Warning("[challenge] the Social window was not found");
+                openSince = -1f;
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[challenge] could not open the Social window: " + e.Message); openSince = -1f; }
+        }
+
+        /// <summary>Once the Social window is open: switch to the Challenge tab with the picked mode.</summary>
+        private static void FinishOpen()
+        {
+            if (openSince < 0) return;
+            if (Ui.Alive(window) && window.IsOpen() && Ui.Alive(tab))
+            {
+                openSince = -1f;
+                var presets = Presets();
+                int want = presets.IndexOf(pendingSkirmish ? "RevivalSkirmish" : "RevivalClassic");
+                if (want >= 0 && want != presetIndex) { presetIndex = want; values = null; }
+                dirty = true;
+                try { window.ChangeTab(tab); } catch (Exception e) { RevivalMod.Log.Warning("[challenge] could not switch to the Challenge tab: " + e.Message); }
+                return;
+            }
+            if (Time.realtimeSinceStartup - openSince > 5f) { openSince = -1f; RevivalMod.Log.Warning("[challenge] the Social window did not open"); }
+        }
+
+        [HarmonyPatch(typeof(DuelPopupWindow), nameof(DuelPopupWindow.OnClassicButtonPressed))]
+        private static class DuelClassic { private static bool Prefix(DuelPopupWindow __instance) { FromDuelPopup(__instance, false); return false; } }
+
+        [HarmonyPatch(typeof(DuelPopupWindow), nameof(DuelPopupWindow.OnSkirmishButtonPressed))]
+        private static class DuelSkirmish { private static bool Prefix(DuelPopupWindow __instance) { FromDuelPopup(__instance, true); return false; } }
 
         private static List<(string id, string name, string state)> Friends()
         {

@@ -16,6 +16,9 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Social > Challenge:** the page's text is much larger, and the page is taller to make room. A text too long for its place shrinks back to fit.
 - **Social > Challenge:** the rules say **Energy** instead of mana, the game's own word for it (Starting Energy, Energy gained per turn, Unspent Energy carried over), also in the rules shown on the challenge popup.
 
+- **Challenge by friend code:** Social > Challenge has a friend-code box under the friend list: type someone's friend code and press Find, and you can challenge them with your rules even if you are not friends (the challenge, its online check and the answer get through for 15 minutes).
+- **Challenge from a profile or the alliance list:** the game's own Classic / Skirmish duel popup now opens Social > Challenge with that player and mode picked, instead of sending a challenge that cannot carry the mode or any rules (it played as a default challenge).
+
 ### Fixes
 - **Who goes first (0.14.17):** the server now decides who goes first in every online match and tells both games, so both games always agree. Friend challenges with custom rules could have both players start first, which broke the match on the first move (not yet confirmed in play). The challenge's own "Goes first" choice still applies. Takes effect when both players have 0.14.17 or newer; until then the match plays as before.
 - **Social > Friends:** the gold line under the Friends / Requests buttons is as long as on the alliance page, instead of running over the menu on the left.
