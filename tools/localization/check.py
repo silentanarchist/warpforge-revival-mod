@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checks translation files against their English: python check.py <mod|site|guides|patcher> [language ...]
+"""Checks translation files against their English: python check.py <mod|site|guides|patcher|server> [language ...]
 
 For each language (all of them when none are named) it reports:
   - keys missing from the translation, and keys the English no longer has
@@ -60,7 +60,7 @@ def check(area, lang, en):
 
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("mod", "site", "guides", "patcher"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("mod", "site", "guides", "patcher", "server"):
         print(__doc__)
         return 2
     area = sys.argv[1]

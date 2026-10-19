@@ -9,6 +9,7 @@ Japanese, Polish, Czech and Turkish (`languages.json`). More languages can be ad
 | `mod/` | The mod's own texts: buttons, messages, windows. `en.json` is the source. |
 | `site/` | The website's texts (the language picker is in the site's header). `en.json` is the source, made from the site page by `tools/localization/extract-site.py`. |
 | `guides/` | The install and Card Creator guides, block by block. `en.json` is made from the server repo's `guides.html` by `tools/localization/extract-guides.py`; each key is the guide and a fingerprint of the block's English, so the guides need no marking and a changed block simply gets a new key (English until translated again). |
+| `server/` | Messages the game server sends to players ("No player with that friend code", sign-in and ban notices...). `en.json` is made from the server repo's `playfab_emu.py` by `tools/localization/extract-server.py`; each key is a fingerprint of the English. Parts filled in by the server are `{p1}`, `{p2}`...: keep each one. The server itself answers in the player's language. |
 | `index.json` | Made by `tools/localization/build-index.py`: which language files exist, with their checksums. |
 
 ## For translators
@@ -53,7 +54,13 @@ changing the site, run
 
     python3 tools/localization/extract-site.py [path/to/creator.html]
 
-(default: `../warpforge-revival-server/content/files/creator.html`) to update `site/en.json`. Before copying to the server, run `tools/localization/build-index.py`.
+(default: `../warpforge-revival-server/content/files/creator.html`) to update `site/en.json`.
+
+The server's messages: every `err(code, "message")` in the server repo's `playfab_emu.py` is a text. After changing
+them run `python3 tools/localization/extract-server.py`. The mod and the website send the player's language in the
+`X-Revival-Lang` header, and the server replies with the translation from `server/<code>.json` (by the message's
+fingerprint; values in `{p1}`, `{p2}`... are put back in). Without the header, or for a message not translated yet,
+the reply stays English. Before copying to the server, run `tools/localization/build-index.py`.
 
 The Card Creator (keys `creator.*`, `creatorHelp.*`, `home.*`) adds two things the extractor knows about:
 
