@@ -166,7 +166,7 @@ namespace WarpforgeRevival
                     var label = __instance.deckName;
                     if ((object)label == null || !string.IsNullOrEmpty(label.text)) return;
                     string name = (object)playerDeck != null ? playerDeck.deckName : null;
-                    label.text = string.IsNullOrEmpty(name) ? "Your deck" : name;
+                    label.text = string.IsNullOrEmpty(name) ? Loc.T("practice.yourDeck", "Your deck") : name;
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[practice] " + e.Message); }
             }

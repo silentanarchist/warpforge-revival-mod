@@ -108,7 +108,7 @@ namespace WarpforgeRevival
             if ((object)label == null) return null;
             var m = PlayerId.Match(label.text ?? "");
             if (!m.Success) return null;
-            Ui.SetText(label, "Friend code: " + AccountPage.FriendCode(m.Value));
+            Ui.SetText(label, Loc.T("profile.friendCode", "Friend code: {code}", ("code", AccountPage.FriendCode(m.Value))));
             return m.Value.ToUpperInvariant();
         }
 
@@ -129,7 +129,7 @@ namespace WarpforgeRevival
                     GUIUtility.systemCopyBuffer = code;
                     RevivalMod.Log.Msg($"[profile] friend code {code} copied to the clipboard");
                     var notice = UIMessageController.Instance;
-                    if ((object)notice != null) notice.ShowMessage("Friend code copied", false);
+                    if ((object)notice != null) notice.ShowMessage(Loc.T("profile.friendCodeCopied", "Friend code copied"), false);
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[profile] could not copy the friend code: " + e.Message); }
                 return false;
@@ -154,7 +154,7 @@ namespace WarpforgeRevival
                     {
                         input.characterLimit = AccountPage.MaxName;
                         var ph = input.placeholder?.TryCast<Il2CppTMPro.TMP_Text>();
-                        if ((object)ph != null) ph.text = $"{AccountPage.MinName}-{AccountPage.MaxName} characters";
+                        if ((object)ph != null) ph.text = Loc.T("profile.nameLength", "{min}-{max} characters", ("min", AccountPage.MinName), ("max", AccountPage.MaxName));
                     }
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[profile] " + e.Message); }

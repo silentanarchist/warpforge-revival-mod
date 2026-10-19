@@ -102,7 +102,7 @@ namespace WarpforgeRevival
                 t = existing.GetComponentInChildren<TMP_Text>(true);
                 if (!existing.gameObject.activeSelf) existing.gameObject.SetActive(true);
                 rt.sizeDelta = new Vector2(w, h);
-                if ((object)t != null) t.text = "CODE";
+                if ((object)t != null) t.text = Loc.T("replay.codeButton", "CODE");
                 b.onClick.RemoveAllListeners();
             }
             else
@@ -133,7 +133,7 @@ namespace WarpforgeRevival
                 lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one; lrt.offsetMin = lrt.offsetMax = Vector2.zero;
                 var tm = label.AddComponent<TextMeshProUGUI>();
                 if ((object)font != null) tm.font = font.font;
-                tm.text = "CODE";
+                tm.text = Loc.T("replay.codeButton", "CODE");
                 tm.fontSize = Mathf.Clamp(h * 0.32f, 13f, 26f);
                 tm.characterSpacing = 4f;
                 tm.alignment = TextAlignmentOptions.Center;
@@ -260,7 +260,7 @@ namespace WarpforgeRevival
                 if (seconds <= 0) return;
                 System.Threading.Tasks.Task.Delay((int)(seconds * 1000)).ContinueWith(_ => PlayFabTransport.OnMainThread(() =>
                 {
-                    try { if ((object)label != null && label.Pointer != IntPtr.Zero && label.text == text) label.text = "CODE"; } catch { }
+                    try { if ((object)label != null && label.Pointer != IntPtr.Zero && label.text == text) label.text = Loc.T("replay.codeButton", "CODE"); } catch { }
                 }));
             }
             catch { }
@@ -282,20 +282,20 @@ namespace WarpforgeRevival
                     if (reply.Ok && reply.Data.ValueKind == JsonValueKind.Object && reply.Data.TryGetProperty("code", out var c)) code = c.GetString();
                     else error = reply.Unreachable ? Loc.T("replay.unreachable", "could not reach the server") : reply.Error;
                 }
-                catch (Exception e) { error = "could not reach the server"; RevivalMod.Log.Warning("[replay code] " + e.Message); }
+                catch (Exception e) { error = Loc.T("replay.unreachable", "could not reach the server"); RevivalMod.Log.Warning("[replay code] " + e.Message); }
                 PlayFabTransport.OnMainThread(() =>
                 {
                     if (!string.IsNullOrEmpty(code))
                     {
                         GUIUtility.systemCopyBuffer = code;
                         RevivalMod.Log.Msg($"[replay code] {code} copied for match {index}");
-                        Flash(label, "COPIED", 2.5f);
+                        Flash(label, Loc.T("replay.codeCopied", "COPIED"), 2.5f);
                         Notice(Loc.T("replay.copied", "Replay code {code} copied", ("code", code)));
                     }
                     else
                     {
                         RevivalMod.Log.Warning($"[replay code] no code for match {index}: {error}");
-                        Flash(label, "NO CODE", 3f);
+                        Flash(label, Loc.T("replay.noCodeButton", "NO CODE"), 3f);
                         Notice(Loc.T("replay.noCode", "No replay code: {error}", ("error", error)));
                     }
                 });

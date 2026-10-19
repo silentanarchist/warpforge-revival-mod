@@ -91,6 +91,10 @@ namespace WarpforgeRevival
         /// <summary>The game's language code as last seen ("en" until then).</summary>
         internal static string Language() => wantLang;
 
+        /// <summary>The language to tell the server (header X-Revival-Lang), so it answers its messages in it; null for
+        /// English, which the server sends anyway.</summary>
+        internal static string ServerLanguage() { string l = wantLang; return string.IsNullOrEmpty(l) || l == "en" ? null : l; }
+
         /// <summary>The text for a key in the player's language, with {name} words filled in.</summary>
         internal static string T(string key, string english, params (string name, object value)[] args)
         {

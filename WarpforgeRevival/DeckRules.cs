@@ -28,12 +28,12 @@ namespace WarpforgeRevival
                     if (card.spellType == SpellType.Secret && card.inventoryOptions == CardInventoryOptions.NotInInventory)
                     {
                         __result = false;
-                        error = "Secrets cannot be added to a deck.";
+                        error = Loc.T("decks.noSecrets", "Secrets cannot be added to a deck.");
                         return;
                     }
                     if (card.inventoryOptions != CardInventoryOptions.CantAddToDeck && card.spellType != SpellType.OffensiveCard) return;
                     __result = false;
-                    error = "Offensive cards cannot be added to a deck.";
+                    error = Loc.T("decks.noOffensive", "Offensive cards cannot be added to a deck.");
                     if (!noted) { noted = true; RevivalMod.Log.Msg($"[decks] refused '{card.cardName}' ({card.spellType}, {card.inventoryOptions}): not a deck card"); }
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[decks] " + e.Message); }

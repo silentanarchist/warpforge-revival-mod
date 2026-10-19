@@ -211,6 +211,8 @@ namespace WarpforgeRevival
                     using var msg = new HttpRequestMessage(HttpMethod.Post, url) { Content = new ByteArrayContent(payload) };
                     msg.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
                     msg.Headers.TryAddWithoutValidation("X-Revival-Request", requestId);
+                    string lang = Loc.ServerLanguage();                     // the server answers its messages in it
+                    if (lang != null) msg.Headers.TryAddWithoutValidation("X-Revival-Lang", lang);
                     foreach (var h in headers)
                         if (!h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
                             msg.Headers.TryAddWithoutValidation(h.Key, h.Value);

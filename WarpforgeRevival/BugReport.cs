@@ -288,8 +288,7 @@ namespace WarpforgeRevival
                 try
                 {
                     MessageBoxW(IntPtr.Zero,
-                        "Warpforge seems frozen.\n\nA bug report has been saved. It will be offered the next time you start the game " +
-                        "(if the game recovers by itself, nothing is sent).",
+                        Loc.T("bugReport.frozenBox", "Warpforge seems frozen.\n\nA bug report has been saved. It will be offered the next time you start the game (if the game recovers by itself, nothing is sent)."),
                         "Warpforge Revival", 0x30 | 0x10000 | 0x40000);   // warning icon, set foreground, topmost
                 }
                 catch { }
@@ -530,14 +529,17 @@ namespace WarpforgeRevival
             catch (Exception e) { RevivalMod.Log.Warning("[bugs] looking for Unity's crash report: " + e.Message); }
 #endif
             if (log.Length > 250 * 1024) log = log.Substring(log.Length - 250 * 1024);
+            // the suggested title stays in English: it is what the admins read on the website
             string title = (kind == "freeze" ? "Freeze" : "Crash") + (where.Length > 0 ? ": " + where : "");
             Form.Show(new Draft
             {
                 Kind = kind, Title = title, Category = "crash", Severity = "blocker", Log = log, Dump = dump,
                 ContextJson = ContextJson(ctx)
             }, kind == "freeze"
-                ? $"The game froze last time{(frozenFor.Length > 0 ? " (stuck for " + frozenFor + " s)" : "")} and was closed. Send a bug report?"
-                : "The game closed unexpectedly last time. Send a bug report?");
+                ? (frozenFor.Length > 0
+                    ? Loc.T("bugReport.frozeStuck", "The game froze last time (stuck for {seconds} s) and was closed. Send a bug report?", ("seconds", frozenFor))
+                    : Loc.T("bugReport.froze", "The game froze last time and was closed. Send a bug report?"))
+                : Loc.T("bugReport.crashed", "The game closed unexpectedly last time. Send a bug report?"));
         }
 
         // ------------------------------------------------------------------ sending
@@ -592,7 +594,7 @@ namespace WarpforgeRevival
                 new[] { new KeyValuePair<string, string>("X-Revival-Mod", RevivalMod.Version) });
             if (reply.Ok && reply.Data.ValueKind == JsonValueKind.Object && reply.Data.TryGetProperty("id", out var id))
                 return (id.GetString(), reply.Data.TryGetProperty("url", out var u) ? u.GetString() : "", null, false);
-            if (reply.Unreachable) return (null, null, "could not reach the server", true);
+            if (reply.Unreachable) return (null, null, Loc.T("replay.unreachable", "could not reach the server"), true);     // shown in the window
             return (null, null, reply.Error, reply.Status >= 500 || reply.Status == 429);
         }
 
@@ -639,14 +641,25 @@ namespace WarpforgeRevival
             private static int openDrop;              // 0 none, 1 the Type list, 2 the severity list
 
             private static readonly string[] CatIds = { "crash", "picture", "card", "rules", "ui", "connection", "replay", "text", "other" };
-            private static readonly string[] CatNames = { "Crash / freeze", "Black or wrong picture", "Card does the wrong thing", "Rules / mode", "Menus & UI", "Connection / sign-in", "Replay", "Text / translation", "Other" };
+            // the names are made each time they are drawn, so they follow the player's language (only the ids are sent)
+            private static string[] CatNames() => new[]
+            {
+                Loc.T("bugReport.cat.crash", "Crash / freeze"), Loc.T("bugReport.cat.picture", "Black or wrong picture"),
+                Loc.T("bugReport.cat.card", "Card does the wrong thing"), Loc.T("bugReport.cat.rules", "Rules / mode"),
+                Loc.T("bugReport.cat.ui", "Menus & UI"), Loc.T("bugReport.cat.connection", "Connection / sign-in"),
+                Loc.T("bugReport.cat.replay", "Replay"), Loc.T("bugReport.cat.text", "Text / translation"), Loc.T("bugReport.cat.other", "Other"),
+            };
             private static readonly string[] SevIds = { "blocker", "match", "annoying", "cosmetic" };
-            private static readonly string[] SevNames = { "Can't play", "Breaks a match", "Annoying", "Cosmetic" };
+            private static string[] SevNames() => new[]
+            {
+                Loc.T("bugReport.sev.blocker", "Can't play"), Loc.T("bugReport.sev.match", "Breaks a match"),
+                Loc.T("bugReport.sev.annoying", "Annoying"), Loc.T("bugReport.sev.cosmetic", "Cosmetic"),
+            };
 
             internal static void Show(Draft draft, string intro = null)
             {
                 d = draft;
-                heading = intro ?? "Report a bug";
+                heading = intro ?? Loc.T("modTab.reportBug", "Report a bug");
                 status = ""; sentUrl = ""; busy = false; problem = false; sent = false; openDrop = 0;
                 Open = true;
                 BlockGame(true);
@@ -721,51 +734,52 @@ namespace WarpforgeRevival
                 if (sent)
                 {
                     GUI.Label(R(cx, cy, cw, 120), status, label); cy += 130;
-                    if (!string.IsNullOrEmpty(sentUrl) && GUI.Button(R(cx, cy, 300, 46), "Open on the website", button))
+                    if (!string.IsNullOrEmpty(sentUrl) && GUI.Button(R(cx, cy, 300, 46), Loc.T("bugReport.openWebsite", "Open on the website"), button))
                         try { Ui.OpenUrl(sentUrl); } catch (Exception e) { status += "\n" + sentUrl; RevivalMod.Log.Warning("[bugs] could not open the browser: " + e.Message); }
-                    if (GUI.Button(R(cx + cw - 160, cy, 160, 46), "Close", button)) Hide();
+                    if (GUI.Button(R(cx + cw - 160, cy, 160, 46), Loc.T("common.close", "Close"), button)) Hide();
                     return;
                 }
 
                 // while a dropdown list is open, everything under it is switched off, so the list gets the click
                 GUI.enabled = openDrop == 0;
-                GUI.Label(R(cx, cy, 160, 34), "Title", label);
+                GUI.Label(R(cx, cy, 160, 34), Loc.T("bugReport.title", "Title"), label);
                 d.Title = GUI.TextField(R(cx + 160, cy, cw - 160, 38), d.Title ?? "", 120, field); cy += 46;
-                GUI.Label(R(cx, cy, 160, 34), "Type", label);
+                GUI.Label(R(cx, cy, 160, 34), Loc.T("bugReport.type", "Type"), label);
+                string[] catNames = CatNames(), sevNames = SevNames();
                 int ci = Math.Max(0, Array.IndexOf(CatIds, d.Category));
                 int si = Math.Max(0, Array.IndexOf(SevIds, d.Severity));
                 float dropY = cy + 40;
                 Rect catBox = new Rect(cx + 160, cy, 300, 38), sevBox = new Rect(cx + 470, cy, cw - 470, 38);
                 GUI.enabled = openDrop == 0 || openDrop == 1;
-                if (GUI.Button(R(catBox.x, catBox.y, catBox.width, catBox.height), CatNames[ci] + (openDrop == 1 ? "  ^" : "  v"), button)) openDrop = openDrop == 1 ? 0 : 1;
+                if (GUI.Button(R(catBox.x, catBox.y, catBox.width, catBox.height), catNames[ci] + (openDrop == 1 ? "  ^" : "  v"), button)) openDrop = openDrop == 1 ? 0 : 1;
                 GUI.enabled = openDrop == 0 || openDrop == 2;
-                if (GUI.Button(R(sevBox.x, sevBox.y, sevBox.width, sevBox.height), SevNames[si] + (openDrop == 2 ? "  ^" : "  v"), button)) openDrop = openDrop == 2 ? 0 : 2;
+                if (GUI.Button(R(sevBox.x, sevBox.y, sevBox.width, sevBox.height), sevNames[si] + (openDrop == 2 ? "  ^" : "  v"), button)) openDrop = openDrop == 2 ? 0 : 2;
                 GUI.enabled = openDrop == 0;
                 cy += 46;
-                GUI.Label(R(cx, cy, 160, 34), "What happened", label);
+                GUI.Label(R(cx, cy, 160, 34), Loc.T("bugReport.whatHappened", "What happened"), label);
                 d.Description = GUI.TextField(R(cx + 160, cy, cw - 160, 38), d.Description ?? "", 1000, field); cy += 50;
 
-                if (d.Screenshot != null) d.SendShot = Tick(cx, cy, "Send the screenshot", d.SendShot);
-                d.SendLog = Tick(cx + cw / 2, cy, "Send the recent log", d.SendLog); cy += 42;
-                if (d.Dump != null) { d.SendDump = Tick(cx, cy, "Send Unity's crash dump (admins only)", d.SendDump); cy += 42; }
-                GUI.Label(R(cx, cy, cw, 60), "Also sent: mod version, device, graphics, screen and what you were doing in the game (scene, match rules). Only you and the admins see the log and screenshot.", small);
+                if (d.Screenshot != null) d.SendShot = Tick(cx, cy, Loc.T("bugReport.sendShot", "Send the screenshot"), d.SendShot);
+                d.SendLog = Tick(cx + cw / 2, cy, Loc.T("bugReport.sendLog", "Send the recent log"), d.SendLog); cy += 42;
+                if (d.Dump != null) { d.SendDump = Tick(cx, cy, Loc.T("bugReport.sendDump", "Send Unity's crash dump (admins only)"), d.SendDump); cy += 42; }
+                GUI.Label(R(cx, cy, cw, 60), Loc.T("bugReport.alsoSent", "Also sent: mod version, device, graphics, screen and what you were doing in the game (scene, match rules). Only you and the admins see the log and screenshot."), small);
                 cy += 66;
 
                 var keep = GUI.color;
                 if (problem) GUI.color = new Color(1f, 0.55f, 0.5f);
-                GUI.Label(R(cx, cy, cw, 48), busy ? "Sending..." : status, small);
+                GUI.Label(R(cx, cy, cw, 48), busy ? Loc.T("common.sending", "Sending...") : status, small);
                 GUI.color = keep;
                 cy = y + ph - 66;
                 GUI.enabled = !busy && openDrop == 0;
-                if (GUI.Button(R(cx, cy, 200, 48), "Send", button)) Send();
-                if (GUI.Button(R(cx + cw - 180, cy, 180, 48), d.Kind == "manual" ? "Cancel" : "Not now", button)) Hide();
+                if (GUI.Button(R(cx, cy, 200, 48), Loc.T("bugReport.send", "Send"), button)) Send();
+                if (GUI.Button(R(cx + cw - 180, cy, 180, 48), d.Kind == "manual" ? Loc.T("common.cancel", "Cancel") : Loc.T("common.notNow", "Not now"), button)) Hide();
                 GUI.enabled = true;
 
                 // the open list, drawn last so it sits on top
                 if (openDrop != 0)
                 {
                     bool cat = openDrop == 1;
-                    string[] names = cat ? CatNames : SevNames, ids = cat ? CatIds : SevIds;
+                    string[] names = cat ? catNames : sevNames, ids = cat ? CatIds : SevIds;
                     Rect head = cat ? catBox : sevBox;
                     float rowH = 36, listH = names.Length * rowH + 8;
                     GUI.Box(R(head.x, dropY, head.width, listH), "", box);
@@ -784,11 +798,11 @@ namespace WarpforgeRevival
 
             private static void Send()
             {
-                if ((d.Title ?? "").Trim().Length < 3) { status = "Give it a title (what went wrong, at least 3 letters)."; problem = true; return; }
+                if ((d.Title ?? "").Trim().Length < 3) { status = Loc.T("bugReport.needTitle", "Give it a title (what went wrong, at least 3 letters)."); problem = true; return; }
                 busy = true; problem = false;
                 string body;
                 try { body = Body(d); }
-                catch (Exception e) { busy = false; status = "Could not put the report together: " + e.Message; problem = true; return; }
+                catch (Exception e) { busy = false; status = Loc.T("bugReport.buildFailed", "Could not put the report together: {error}", ("error", e.Message)); problem = true; return; }
                 Task.Run(async () =>
                 {
                     var (id, url, error, keepIt) = await Post(body);
@@ -799,17 +813,19 @@ namespace WarpforgeRevival
                         if (id != null)
                         {
                             sent = true; sentUrl = url ?? "";
-                            heading = "Bug " + id + " sent";
-                            status = "Thank you. Add steps or more details on the website" + (sentUrl.Length > 0 ? ":\n" + sentUrl : " (Bugs page).");
+                            heading = Loc.T("bugReport.sentHeading", "Bug {id} sent", ("id", id));
+                            status = sentUrl.Length > 0
+                                ? Loc.T("bugReport.thanksLink", "Thank you. Add steps or more details on the website:\n{url}", ("url", sentUrl))
+                                : Loc.T("bugReport.thanks", "Thank you. Add steps or more details on the website (Bugs page).");
                             RevivalMod.Log.Msg($"[bugs] report sent as {id}");
                         }
                         else if (keepIt)
                         {
-                            sent = true; heading = "Not sent yet";
-                            status = "Couldn't send it now (" + error + "). It is saved and will be sent the next time you start the game.";
+                            sent = true; heading = Loc.T("bugReport.notSentYet", "Not sent yet");
+                            status = Loc.T("bugReport.savedForLater", "Couldn't send it now ({error}). It is saved and will be sent the next time you start the game.", ("error", error));
                             RevivalMod.Log.Warning("[bugs] report not sent, kept for later: " + error);
                         }
-                        else { status = "Not sent: " + error; problem = true; RevivalMod.Log.Warning("[bugs] report refused: " + error); }
+                        else { status = Loc.T("bugReport.notSent", "Not sent: {error}", ("error", error)); problem = true; RevivalMod.Log.Warning("[bugs] report refused: " + error); }
                     });
                 });
             }

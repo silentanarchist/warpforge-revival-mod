@@ -102,6 +102,8 @@ namespace WarpforgeRevival
                         Content = new StringContent(json ?? "{}", System.Text.Encoding.UTF8, "application/json")
                     };
                     if (!string.IsNullOrEmpty(ticket)) msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
+                    string lang = Loc.ServerLanguage();                     // the server answers its messages in it
+                    if (lang != null) msg.Headers.TryAddWithoutValidation("X-Revival-Lang", lang);
                     if (headers != null) foreach (var h in headers) if (h.Value != null) msg.Headers.TryAddWithoutValidation(h.Key, h.Value);
                     using var reply = await http.SendAsync(msg);
                     result.Status = (int)reply.StatusCode;
@@ -120,7 +122,7 @@ namespace WarpforgeRevival
                         // not the server's own answer (a proxy's or a network's error page): as the hand-built calls
                         // treated it, the server could not be reached
                         result.Unreachable = true;
-                        result.Error = "Could not reach the server.";
+                        result.Error = Loc.T("common.unreachableDot", "Could not reach the server.");
                         return result;
                     }
                     {
@@ -128,7 +130,7 @@ namespace WarpforgeRevival
                         string why = root.TryGetProperty("errorMessage", out var em) && em.ValueKind == System.Text.Json.JsonValueKind.String ? em.GetString() : null;
                         result.Error = Sentence(why);
                     }
-                    result.Error ??= "The server did not accept that (" + result.Status + ").";
+                    result.Error ??= Loc.T("common.notAccepted", "The server did not accept that ({status}).", ("status", result.Status));     // shown to the player
                     return result;
                 }
                 // tried again only where a repeat does no harm (retry: true); the server does not recognise a repeated
@@ -140,13 +142,13 @@ namespace WarpforgeRevival
                 catch (Exception e)
                 {
                     result.Unreachable = true;
-                    result.Error = "Could not reach the server.";
+                    result.Error = Loc.T("common.unreachableDot", "Could not reach the server.");
                     RevivalMod.Log.Warning($"[net] {path}: {e.GetType().Name}: {e.Message}");
                     return result;
                 }
             }
             result.Unreachable = true;
-            result.Error = "Could not reach the server.";
+            result.Error = Loc.T("common.unreachableDot", "Could not reach the server.");
             return result;
         }
 

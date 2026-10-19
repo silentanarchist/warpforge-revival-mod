@@ -343,7 +343,7 @@ namespace WarpforgeRevival
                 catch (Exception e) { RevivalMod.Log.Warning($"[testers] tile for {id}: {e.Message}"); }
             }
             if (shown == 0)
-                TestersPage.Text(panel.transform, "Empty", "No tester modes are set up on this server right now.", 26, TextAlignmentOptions.Left, TestersPage.Dim, 0.05f, 0.6f, 0.9f, 0.75f);
+                TestersPage.Text(panel.transform, "Empty", Loc.T("testers.noModes", "No tester modes are set up on this server right now."), 26, TextAlignmentOptions.Left, TestersPage.Dim, 0.05f, 0.6f, 0.9f, 0.75f);
             else
             {
                 // lay the row out now (not at the next frame) so it can be fitted before the window is shown

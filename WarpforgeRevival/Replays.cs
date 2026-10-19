@@ -307,7 +307,12 @@ namespace WarpforgeRevival
                                    : null;
                         if (why != null)
                         {
-                            refusal = "This replay cannot be played: " + why + ", so it would not play out as the real match did.";
+                            // the player sees it on the game's popup, in their language (the log keeps the English reason)
+                            refusal = got == null
+                                ? Loc.T("replays.refusedUnreadable", "This replay cannot be played: its saved rules could not be read, so it would not play out as the real match did.")
+                                : got.Value.mod != RevivalMod.RulesVersion
+                                ? Loc.T("replays.refusedRules", "This replay cannot be played: it was recorded with a different version of the mod's rules, so it would not play out as the real match did.")
+                                : Loc.T("replays.refusedCards", "This replay cannot be played: it was recorded with a different set of cards, so it would not play out as the real match did.");
                             refusalAt = UnityEngine.Time.realtimeSinceStartup;
                             RevivalMod.Log.Warning("[replay] replay refused: " + why);
                             return true;           // the game's own handling: "Error loading match replay" (with the reason, see PopupNotes)

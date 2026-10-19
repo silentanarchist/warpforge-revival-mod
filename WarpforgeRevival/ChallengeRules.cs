@@ -337,6 +337,7 @@ namespace WarpforgeRevival
         private static RuleSet lastRules;
         private static string lastRulesMode;
         private static float lastRulesAt = -100f;
+        private static string rulesHeading = "Custom rules:";     // the heading Decorate put on the popup, in the player's language
 
         /// <summary>
         /// Called for every popup the game is about to show: its "... has challenged you in Classic mode!
@@ -356,7 +357,8 @@ namespace WarpforgeRevival
                 lastRules = null;
                 biggerPopup = Time.realtimeSinceStartup;
                 RevivalMod.Log.Msg("[challenge] rules added to the game's challenge popup");
-                return $"{head}\nCustom rules:\n{rules}" + (tail.Length > 0 ? "\n\n" + tail : "");
+                rulesHeading = Loc.T("challenge.customRules", "Custom rules:");      // EnlargePopup finds the popup's text by it
+                return head + "\n" + rulesHeading + "\n" + rules + (tail.Length > 0 ? "\n\n" + tail : "");
             }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] popup: " + e.Message); return text; }
         }
@@ -379,7 +381,7 @@ namespace WarpforgeRevival
                 if ((object)popup == null || !popup.isActiveAndEnabled) return;
                 foreach (var t in popup.GetComponentsInChildren<Il2CppTMPro.TMP_Text>(true))
                 {
-                    if (t.text == null || t.text.IndexOf("custom rules", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (t.text == null || t.text.IndexOf(rulesHeading, StringComparison.OrdinalIgnoreCase) < 0) continue;
                     t.enableAutoSizing = true;
                     t.fontSizeMax = Math.Max(t.fontSizeMax, 38f);
                     t.fontSizeMin = Math.Max(t.fontSizeMin, 22f);

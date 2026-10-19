@@ -20,7 +20,12 @@ namespace WarpforgeRevival
     {
         private const string ButtonName = "RevivalReport";
         private static readonly string[] ReasonIds = { "cheating", "unsportsmanlike", "stalling", "other" };
-        private static readonly string[] ReasonNames = { "Cheating", "Unsportsmanlike", "Stalling / AFK", "Other" };
+        // made each time they are drawn, so they follow the player's language (only the ids are sent)
+        private static string[] ReasonNames() => new[]
+        {
+            Loc.T("playerReport.reason.cheating", "Cheating"), Loc.T("playerReport.reason.unsportsmanlike", "Unsportsmanlike"),
+            Loc.T("playerReport.reason.stalling", "Stalling / AFK"), Loc.T("bugReport.cat.other", "Other"),
+        };
 
         // ---------------------------------------------------------------- the button (from ReplayCodes.Place)
 
@@ -73,7 +78,7 @@ namespace WarpforgeRevival
                 var t = label.AddComponent<TextMeshProUGUI>();
                 var font = item.GetComponentInChildren<TMP_Text>(true);
                 if ((object)font != null) t.font = font.font;
-                t.text = "REPORT";
+                t.text = Loc.T("playerReport.button", "REPORT");
                 t.fontSize = Mathf.Clamp(h * 0.3f, 12f, 24f);
                 t.characterSpacing = 3f;
                 t.alignment = TextAlignmentOptions.Center;
@@ -143,40 +148,41 @@ namespace WarpforgeRevival
                 GUI.Box(R(x, y, pw, ph), "", box);
                 GUI.Box(R(x, y, pw, ph), "", box);
                 float cx = x + 30, cw = pw - 60, cy = y + 18;
-                GUI.Label(R(cx, cy, cw, 40), "Report " + name, label); cy += 46;
+                GUI.Label(R(cx, cy, cw, 40), Loc.T("playerReport.heading", "Report {name}", ("name", name)), label); cy += 46;
                 if (done)
                 {
                     GUI.Label(R(cx, cy, cw, 160), status, label);
-                    if (GUI.Button(R(cx + cw - 160, y + ph - 66, 160, 48), "Close", button)) Open = false;
+                    if (GUI.Button(R(cx + cw - 160, y + ph - 66, 160, 48), Loc.T("common.close", "Close"), button)) Open = false;
                     return;
                 }
-                GUI.Label(R(cx, cy, cw, 30), "Why?", small); cy += 30;
+                GUI.Label(R(cx, cy, cw, 30), Loc.T("playerReport.why", "Why?"), small); cy += 30;
                 float bw = (cw - 30) / 4f;
-                for (int i = 0; i < ReasonNames.Length; i++)
-                    if (GUI.Button(R(cx + i * (bw + 10), cy, bw, 44), ReasonNames[i], reason == i ? picked : button)) reason = i;
+                string[] reasonNames = ReasonNames();
+                for (int i = 0; i < reasonNames.Length; i++)
+                    if (GUI.Button(R(cx + i * (bw + 10), cy, bw, 44), reasonNames[i], reason == i ? picked : button)) reason = i;
                 cy += 56;
-                GUI.Label(R(cx, cy, cw, 30), "What happened (optional)", small); cy += 30;
+                GUI.Label(R(cx, cy, cw, 30), Loc.T("playerReport.whatHappened", "What happened (optional)"), small); cy += 30;
                 note = GUI.TextField(R(cx, cy, cw, 70), note ?? "", 500, field); cy += 82;
                 if (GUI.Button(R(cx, cy, 34, 34), sendLog ? "X" : "", button)) sendLog = !sendLog;
-                if (GUI.Button(R(cx + 40, cy, cw - 40, 34), "Send my recent game log too (helps the admins check)", small)) sendLog = !sendLog;
+                if (GUI.Button(R(cx + 40, cy, cw - 40, 34), Loc.T("playerReport.sendLog", "Send my recent game log too (helps the admins check)"), small)) sendLog = !sendLog;
                 cy += 42;
-                GUI.Label(R(cx, cy, cw, 50), "The admins see both players' recordings of this match and the server's own record of it. False reports can get your own account looked at.", small);
+                GUI.Label(R(cx, cy, cw, 50), Loc.T("playerReport.note", "The admins see both players' recordings of this match and the server's own record of it. False reports can get your own account looked at."), small);
                 cy += 56;
                 var keep = GUI.color;
                 if (problem) GUI.color = new Color(1f, 0.6f, 0.5f);
-                GUI.Label(R(cx, cy, cw, 30), busy ? "Sending..." : status, small);
+                GUI.Label(R(cx, cy, cw, 30), busy ? Loc.T("common.sending", "Sending...") : status, small);
                 GUI.color = keep;
                 GUI.enabled = !busy;
-                if (GUI.Button(R(cx, y + ph - 66, 200, 48), "Send report", button)) Send();
-                if (GUI.Button(R(cx + cw - 160, y + ph - 66, 160, 48), "Cancel", button)) Open = false;
+                if (GUI.Button(R(cx, y + ph - 66, 200, 48), Loc.T("playerReport.send", "Send report"), button)) Send();
+                if (GUI.Button(R(cx + cw - 160, y + ph - 66, 160, 48), Loc.T("common.cancel", "Cancel"), button)) Open = false;
                 GUI.enabled = true;
             }
 
             private static void Send()
             {
-                if (reason < 0) { status = "Pick a reason first."; problem = true; return; }
+                if (reason < 0) { status = Loc.T("playerReport.pickReason", "Pick a reason first."); problem = true; return; }
                 string ticket = PlayFabTransport.SessionTicket;
-                if (string.IsNullOrEmpty(ticket)) { status = "Not signed in to the server yet."; problem = true; return; }
+                if (string.IsNullOrEmpty(ticket)) { status = Loc.T("account.notSignedInYet", "Not signed in to the server yet."); problem = true; return; }
                 busy = true; problem = false;
                 var body = new Dictionary<string, string> { ["player"] = player, ["recordingIndex"] = index, ["reason"] = ReasonIds[reason], ["note"] = note ?? "" };
                 if (sendLog)
@@ -195,17 +201,17 @@ namespace WarpforgeRevival
                         if (reply.Ok && reply.Data.ValueKind == JsonValueKind.Object && reply.Data.TryGetProperty("id", out var i)) id = i.GetString();
                         else error = reply.Error;
                     }
-                    catch (Exception e) { error = "Could not reach the server."; RevivalMod.Log.Warning("[report] " + e.Message); }
+                    catch (Exception e) { error = Loc.T("common.unreachableDot", "Could not reach the server."); RevivalMod.Log.Warning("[report] " + e.Message); }
                     PlayFabTransport.OnMainThread(() =>
                     {
                         busy = false;
                         if (id != null)
                         {
                             done = true;
-                            status = $"Report {id} sent. Thank you - the admins will look at the match.";
+                            status = Loc.T("playerReport.sent", "Report {id} sent. Thank you - the admins will look at the match.", ("id", id));
                             RevivalMod.Log.Msg($"[report] report {id} sent about {player}");
                         }
-                        else { problem = true; status = error ?? "The report was not sent."; RevivalMod.Log.Msg("[report] not sent: " + error); }
+                        else { problem = true; status = error ?? Loc.T("playerReport.notSent", "The report was not sent."); RevivalMod.Log.Msg("[report] not sent: " + error); }
                     });
                 });
             }

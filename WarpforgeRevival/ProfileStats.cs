@@ -138,7 +138,9 @@ namespace WarpforgeRevival
         {
             int Num(string k) => row.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 0;
             int draws = Num("draw");
-            return $"{name}<pos=48%>{Num("won")} W<pos=72%>{Num("lost")} L" + (draws > 0 ? $"  {draws} D" : "");
+            // W / L / D as words the translators can shorten their own way; the layout tags stay out of the texts
+            return name + "<pos=48%>" + Loc.T("profile.won", "{count} W", ("count", Num("won"))) + "<pos=72%>" + Loc.T("profile.lost", "{count} L", ("count", Num("lost")))
+                   + (draws > 0 ? "  " + Loc.T("profile.draws", "{count} D", ("count", draws)) : "");
         }
 
         /// <summary>Right after sign-in: your own record, so your profile opens with it (0.13.55).</summary>
@@ -167,13 +169,13 @@ namespace WarpforgeRevival
                     if (reply.Ok && data.ValueKind == JsonValueKind.Object && data.TryGetProperty("total", out var total))
                     {
                         var sb = new StringBuilder();
-                        sb.Append("<size=125%><color=#F0B840>Record</color></size>\n");
-                        sb.Append(Line("Overall", total)).Append('\n');
+                        sb.Append("<size=125%><color=#F0B840>").Append(Loc.T("profile.record", "Record")).Append("</color></size>\n");
+                        sb.Append(Line(Loc.T("profile.overall", "Overall"), total)).Append('\n');
                         if (data.TryGetProperty("modes", out var modes) && modes.ValueKind == JsonValueKind.Array)
                             foreach (var m in modes.EnumerateArray())
                                 sb.Append("<color=#C8C8C8>").Append(Line(m.TryGetProperty("name", out var n) ? n.GetString() : "?", m)).Append("</color>\n");
                         int skulls = total.TryGetProperty("skulls", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetInt32() : 0;
-                        sb.Append("\n<color=#F0B840>Total skulls</color><pos=48%>").Append(skulls);
+                        sb.Append("\n<color=#F0B840>").Append(Loc.T("profile.totalSkulls", "Total skulls")).Append("</color><pos=48%>").Append(skulls);
                         text = sb.ToString();
                         if (answered != null && data.TryGetProperty("playerId", out var pid) && pid.ValueKind == JsonValueKind.String) answeredId = pid.GetString();
                     }

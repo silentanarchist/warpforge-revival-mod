@@ -18,8 +18,9 @@ namespace WarpforgeRevival
             {
                 try
                 {
-                    Name(__instance.classicButton, "Classic");
-                    Name(__instance.skirmishButton, "Skirmish");
+                    // the game's own names for the modes, in the player's language
+                    Name(__instance.classicButton, Loc.Game("MainMenu/GameMode/Classic", "Classic"));
+                    Name(__instance.skirmishButton, Loc.Game("MainMenu/GameMode/Skirmish", "Skirmish"));
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[duel] " + e.Message); }
             }

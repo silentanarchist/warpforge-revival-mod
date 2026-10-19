@@ -18,10 +18,7 @@ namespace WarpforgeRevival
         private const string SnoozeKey = "WFR.RecoveryReminderAfter";
         private const double SnoozeDays = 3;
         private const float SettleSeconds = 4f, OpenTimeout = 6f;
-        private const string Text =
-            "Your account has no recovery code yet.\n\n" +
-            "If you ever forget your password, a recovery code is the only way back into your account (decks, progress and friends). " +
-            "It takes a moment: Settings > Account, enter your password and press Create recovery code. The code is saved to a file for you.";
+        private static string Text => Loc.T("recoveryReminder.text", "Your account has no recovery code yet.\n\nIf you ever forget your password, a recovery code is the only way back into your account (decks, progress and friends). It takes a moment: Settings > Account, enter your password and press Create recovery code. The code is saved to a file for you.");
 
         private static bool asked;
         private static float readySince = -1f, openSince = -1f;
@@ -90,7 +87,7 @@ namespace WarpforgeRevival
                 catch { }
                 RevivalMod.Log.Msg($"[recovery reminder] Not now: asking again in {SnoozeDays:0} days");
             };
-            wm.ShowPopUp(Text, false, true, "Set it up", "Not now",
+            wm.ShowPopUp(Text, false, true, Loc.T("recoveryReminder.setUp", "Set it up"), Loc.T("common.notNow", "Not now"),
                          DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(setUp),
                          DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(later));
             RevivalMod.Log.Msg("[recovery reminder] the linked account has no recovery code: reminder shown");
@@ -166,7 +163,7 @@ namespace WarpforgeRevival
 
         private static void Fallback()
         {
-            try { WindowsManager.Instance?.ShowPopUp("Open Settings > Account to make your recovery code.", false, true, "OK", (Il2CppSystem.Action)null); } catch { }
+            try { WindowsManager.Instance?.ShowPopUp(Loc.T("recoveryReminder.openSettings", "Open Settings > Account to make your recovery code."), false, true, Loc.Game("MainMenu/General/OK", "OK"), (Il2CppSystem.Action)null); } catch { }
         }
 
         private static string Path(Transform t)

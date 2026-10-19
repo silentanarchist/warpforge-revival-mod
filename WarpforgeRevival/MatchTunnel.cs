@@ -35,9 +35,11 @@ namespace WarpforgeRevival
         /// </summary>
         internal static string Problem => problem != null && DateTime.UtcNow - problemAt < TimeSpan.FromMinutes(2) ? problem : null;
 
-        private static void Trouble(string why)
+        /// <param name="why">for the log, in English</param>
+        /// <param name="shown">the same in the player's language, for the popup</param>
+        private static void Trouble(string why, string shown)
         {
-            problem = why;
+            problem = shown;
             problemAt = DateTime.UtcNow;
             RevivalMod.Log.Warning("[match] " + why);
         }
@@ -96,9 +98,12 @@ namespace WarpforgeRevival
             {
                 // No answer from the server yet: this connection goes as it is (a server that
                 // requires encrypted matches will refuse it), and the next one asks again.
-                Trouble(asked.IsCompleted
-                    ? "the server could not be asked about encrypted matches, so this match connection is not encrypted - check the connection and try again"
-                    : "the server has not answered yet about encrypted matches, so this match connection is not encrypted - try again in a moment");
+                if (asked.IsCompleted)
+                    Trouble("the server could not be asked about encrypted matches, so this match connection is not encrypted - check the connection and try again",
+                            Loc.T("match.notAsked", "the server could not be asked about encrypted matches, so this match connection is not encrypted - check the connection and try again"));
+                else
+                    Trouble("the server has not answered yet about encrypted matches, so this match connection is not encrypted - try again in a moment",
+                            Loc.T("match.noAnswerYet", "the server has not answered yet about encrypted matches, so this match connection is not encrypted - try again in a moment"));
                 return;
             }
             try
@@ -110,7 +115,8 @@ namespace WarpforgeRevival
             }
             catch (Exception e)
             {
-                Trouble("the encrypted match connection could not be started on this device (" + e.Message + "); restart the game");
+                Trouble("the encrypted match connection could not be started on this device (" + e.Message + "); restart the game",
+                        Loc.T("match.tunnelNotStarted", "the encrypted match connection could not be started on this device ({error}); restart the game", ("error", e.Message)));
             }
         }
 
@@ -167,7 +173,9 @@ namespace WarpforgeRevival
             }
             catch (Exception e)
             {
-                Trouble("the encrypted match connection to the server failed (" + (e.InnerException?.Message ?? e.Message) + ")");
+                string error = e.InnerException?.Message ?? e.Message;
+                Trouble("the encrypted match connection to the server failed (" + error + ")",
+                        Loc.T("match.tunnelFailed", "the encrypted match connection to the server failed ({error})", ("error", error)));
             }
             finally
             {

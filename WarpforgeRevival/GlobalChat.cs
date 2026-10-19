@@ -59,6 +59,8 @@ namespace WarpforgeRevival
             var msg = new HttpRequestMessage(HttpMethod.Post, server + path) { Content = body };
             string ticket = PlayFabTransport.SessionTicket;
             if (!string.IsNullOrEmpty(ticket)) msg.Headers.TryAddWithoutValidation("X-Authorization", ticket);
+            string lang = Loc.ServerLanguage();                             // chat refusals in the player's language
+            if (lang != null) msg.Headers.TryAddWithoutValidation("X-Revival-Lang", lang);
             return Http.SendAsync(msg);
         }
 

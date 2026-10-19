@@ -25,13 +25,14 @@ namespace WarpforgeRevival
             {
                 case "APIClientRequestRateLimitExceeded":
                 case "APIRequestRateLimitExceeded":
-                    return "Too many requests to the server. Wait a minute and try again.";
+                    return Loc.T("popup.rateLimited", "Too many requests to the server. Wait a minute and try again.");
                 case "ServiceUnavailable":
                 case "InternalServerError":
-                    return "The server could not do that right now. Try again in a moment.";
+                    return Loc.T("popup.serverBusy", "The server could not do that right now. Try again in a moment.");
             }
+            // otherwise the key's own words, which stay in English (they come from the key, not from the mod)
             var words = System.Text.RegularExpressions.Regex.Replace(last, "(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|_", " ").Trim();
-            if (words.Length == 0) return "Something went wrong.";
+            if (words.Length == 0) return Loc.T("popup.somethingWrong", "Something went wrong.");
             words = words.Substring(0, 1).ToUpperInvariant() + words.Substring(1).ToLowerInvariant();
             return words.EndsWith(".") ? words : words + ".";
         }
@@ -49,12 +50,13 @@ namespace WarpforgeRevival
                     {
                         try { shown = Il2CppI2.Loc.LocalizationManager.GetTranslation(text, true, 0, true, false, null, null, true); } catch { }
                     }
+                    // (the game's English wording is matched here, so this is not translated)
                     // The game's "Error connecting to server" after a match connection that could
                     // not be encrypted: say why instead of pointing at the player's internet.
                     string why = MatchTunnel.Problem;
                     if (why != null && (shown ?? text ?? "").IndexOf("Error connecting to server", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        text = "Could not connect to the match: " + why + ".";
+                        text = Loc.T("popup.matchConnect", "Could not connect to the match: {reason}.", ("reason", why));
                         localizeTexts = false;
                         shown = text;
                     }

@@ -24,7 +24,8 @@ namespace WarpforgeRevival
         private static GameObject root;
         internal static TMP_FontAsset font;
         private static Transform content;
-        private static readonly string[] Tabs = { "Play" };
+        private static readonly string[] Tabs = { "Play" };          // ids (object names, the log); TabLabel is what is shown
+        private static string TabLabel(int i) => i == 0 ? Loc.T("testers.tabPlay", "Play") : Tabs[i];
         private static readonly Button[] tabButtons = new Button[1];
         private static int current;                       // the tab shown, kept while the game runs
 
@@ -64,8 +65,8 @@ namespace WarpforgeRevival
             Box(panel, "TopLine", Line, 0, 0.995f, 1, 1);
 
             Text(panel, "Title", Loc.T("menu.testers", "Testers"), 46, TextAlignmentOptions.Left, Color.white, 0.04f, 0.86f, 0.6f, 0.97f);
-            Text(panel, "Note", "Modes and tools for testers. Not shown to other players.", 22, TextAlignmentOptions.Left, Dim, 0.04f, 0.8f, 0.8f, 0.87f);
-            var close = Button(panel, "Close", "Close", 0.82f, 0.88f, 0.97f, 0.96f, Tile);
+            Text(panel, "Note", Loc.T("testers.note", "Modes and tools for testers. Not shown to other players."), 22, TextAlignmentOptions.Left, Dim, 0.04f, 0.8f, 0.8f, 0.87f);
+            var close = Button(panel, "Close", Loc.T("common.close", "Close"), 0.82f, 0.88f, 0.97f, 0.96f, Tile);
             OnClick(close, Close);
 
             // tab bar
@@ -76,7 +77,7 @@ namespace WarpforgeRevival
                 int index = i;
                 var tab = Button(panel, "Tab" + Tabs[i], "", 0.04f + i * 0.17f, 0.7f, 0.2f + i * 0.17f, 0.78f, Tile);
                 tabButtons[i] = tab;
-                Text(tab.transform, "Label", Tabs[i], 28, TextAlignmentOptions.Center, Color.white, 0, 0, 1, 1);
+                Text(tab.transform, "Label", TabLabel(i), 28, TextAlignmentOptions.Center, Color.white, 0, 0, 1, 1);
                 OnClick(tab, () => ShowTab(index));
             }
             ShowTab(current);
@@ -121,9 +122,9 @@ namespace WarpforgeRevival
                 if ((object)ev == null) { RevivalMod.Log.Warning($"[testers] mode {id} is not on this server"); continue; }
                 var picked = ev;
                 AddTile(shown++, "Mode_" + id, Label(ev, EventLabelReferenceType.Title, id),
-                     "Open this mode's page: pick a deck, play, or build decks for it.", () => Play(picked, id));
+                     Loc.T("testers.modeHint", "Open this mode's page: pick a deck, play, or build decks for it."), () => Play(picked, id));
             }
-            if (shown == 0) Empty("No tester modes are set up on this server right now.");
+            if (shown == 0) Empty(Loc.T("testers.noModes", "No tester modes are set up on this server right now."));
         }
 
         internal static void Close()

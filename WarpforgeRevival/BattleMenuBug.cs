@@ -42,7 +42,7 @@ namespace WarpforgeRevival
             copy.onClick = new UnityEngine.UI.Button.ButtonClickedEvent();          // nothing of Resign's comes along
             foreach (var label in go.GetComponentsInChildren<TMP_Text>(true))
             {
-                Ui.SetText(label, "Report bug");
+                Loc.Bind(label, () => Loc.T("bugReport.battleButton", "Report bug"));     // the window is reused: follows a language change
             }
             foreach (var loc in go.GetComponentsInChildren<Il2CppI2.Loc.Localize>(true)) loc.enabled = false;
 

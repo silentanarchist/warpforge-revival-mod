@@ -69,6 +69,8 @@ namespace WarpforgeRevival
             brokenStyle ??= new GUIStyle(GUI.skin.label) { fontSize = Math.Max(24, (int)(h / 24)), wordWrap = true, alignment = TextAnchor.MiddleCenter };
             brokenStyle.normal.textColor = Color.white;
             GUI.Box(new Rect(w * 0.1f, h * 0.3f, w * 0.8f, h * 0.4f), "");
+            // stays in English on purpose: the translations need the parts of .NET that failed to load here
+            // (Loc starts an HttpClient and reads JSON), so Loc.T could fail just when this has to show
             GUI.Label(new Rect(w * 0.12f, h * 0.32f, w * 0.76f, h * 0.36f),
                 "Warpforge Revival could not start properly this time (the mod loader failed to load part of .NET).\n\n" +
                 "Close the game fully (swipe it away) and open it again.", brokenStyle);
