@@ -43,7 +43,9 @@ namespace WarpforgeRevival
         {
             try
             {
-                var reply = await Net.PostJson("/playfab/Revival/MatchTicket", "{}", TimeSpan.FromSeconds(10), retry: true);
+                // the version goes with it: from 0.14.17 the match service picks who goes first when both players' mods follow it
+                var reply = await Net.PostJson("/playfab/Revival/MatchTicket", "{}", TimeSpan.FromSeconds(10),
+                    new[] { new System.Collections.Generic.KeyValuePair<string, string>("X-Revival-Mod", RevivalMod.Version) }, retry: true);
                 var data = reply.Data;
                 if (reply.Ok && data.ValueKind == System.Text.Json.JsonValueKind.Object && data.TryGetProperty("ticket", out var t))
                 {

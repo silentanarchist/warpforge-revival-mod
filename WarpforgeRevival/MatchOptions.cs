@@ -19,6 +19,14 @@ namespace WarpforgeRevival
     /// the friend's from theirs - after the game's own decision
     /// (SupportMethods.GetPlayerGoesFirstWithInitiative), and the forced choice is also written on the
     /// match (forceFirstPlayer), which the game saves with the recording, so the replay starts the same.
+    ///
+    /// The server's coin (0.14.17): every playable warlord has the same initiative, so online the game
+    /// decides who goes first by a coin, and a friend challenge with custom rules showed the two games can
+    /// toss it differently and both start first (the match breaks on the first move). So when the second
+    /// player joins the match room, the server tosses the coin and writes the room property "RevivalFirst"
+    /// (the id of the player going first), which both games read here. The server writes it only when
+    /// both players run a mod that follows it, so a pair with an older mod plays as before. A challenge's
+    /// own "Goes first" rule still wins.
     /// </summary>
     internal static class MatchOptions
     {
@@ -61,7 +69,8 @@ namespace WarpforgeRevival
             {
                 try
                 {
-                    if ((object)matchData == null || !ChallengeRules.Active) return;
+                    if ((object)matchData == null) return;
+                    if (!ChallengeRules.Active) { FollowServer(matchData, ref __result); return; }
                     if (ChallengeRules.ActiveIsReplay)
                     {
                         // the recording carries the match's forceFirstPlayer (1 this player, 2 the opponent)
@@ -73,7 +82,7 @@ namespace WarpforgeRevival
                         return;
                     }
                     int fp = ChallengeRules.FirstPlayer;
-                    if ((fp != 1 && fp != 2) || matchData.playMode != PlayModes.Duel) return;
+                    if ((fp != 1 && fp != 2) || matchData.playMode != PlayModes.Duel) { FollowServer(matchData, ref __result); return; }
                     bool me = ChallengeRules.ActiveIsChallenger ? fp == 1 : fp == 2;
                     matchData.forceFirstPlayer = me ? 1 : 2;
                     forcedFirst = true;
@@ -82,6 +91,55 @@ namespace WarpforgeRevival
                     __result = me;
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[match] who goes first: " + e.Message); }
+            }
+
+            /// <summary>No rule of a challenge says who goes first: the server's coin, when it tossed one.</summary>
+            private static void FollowServer(MatchData matchData, ref bool result)
+            {
+                bool? pick = ServerPick(matchData);
+                if (pick == null) return;
+                bool me = pick.Value;
+                matchData.forceFirstPlayer = me ? 1 : 2;          // the game's own tie-break then agrees, on both sides
+                if (result != me) RevivalMod.Log.Msg($"[match] server's coin: {(me ? "you" : "your opponent")} go{(me ? "" : "es")} first (the game had picked {(result ? "you" : "your opponent")})");
+                else RevivalMod.Log.Msg($"[match] server's coin: {(me ? "you" : "your opponent")} go{(me ? "" : "es")} first");
+                result = me;
+            }
+
+            /// <summary>The server's coin for this match, when it tossed one: true = this player goes first.</summary>
+            private static bool? ServerPick(MatchData matchData)
+            {
+                try
+                {
+                    if ((object)matchData == null || !PhotonNetwork.inRoom) return null;
+                    var mode = matchData.playMode;
+                    if (mode == PlayModes.Replay || mode == PlayModes.TutorialReplay || mode == PlayModes.OfflinePractice ||
+                        mode == PlayModes.Tutorial || mode == PlayModes.Campaign || mode == PlayModes.OwnDeckTraining) return null;
+                    var room = PhotonNetwork.room;
+                    var props = (object)room == null ? null : room.CustomProperties;
+                    if ((object)props == null) return null;
+                    var key = (Il2CppSystem.Object)(Il2CppSystem.String)"RevivalFirst";
+                    if (!props.ContainsKey(key)) return null;
+                    string first = props[key]?.ToString();
+                    string mine = PlayerDataManager.singletonManager?.playFabId;
+                    if (string.IsNullOrEmpty(first) || string.IsNullOrEmpty(mine)) return null;
+                    bool me = string.Equals(first, mine, StringComparison.OrdinalIgnoreCase);
+                    if (!me && !OpponentIs(first)) { RevivalMod.Log.Warning("[match] the server's coin names a player not in this match; the game decides"); return null; }
+                    return me;
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[match] server's coin: " + e.Message); return null; }
+            }
+
+            private static bool OpponentIs(string id)
+            {
+                try
+                {
+                    var others = PhotonNetwork.otherPlayers;     // the game names each player by their id
+                    if (others == null || others.Length == 0) return true;        // nobody to compare with yet: trust the server
+                    foreach (var p in others)
+                        if ((object)p != null && string.Equals(p.NickName, id, StringComparison.OrdinalIgnoreCase)) return true;
+                    return false;
+                }
+                catch { return true; }
             }
         }
     }
