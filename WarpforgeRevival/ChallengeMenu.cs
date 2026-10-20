@@ -490,19 +490,23 @@ namespace WarpforgeRevival
                     }
                     catch (Exception e) { RevivalMod.Log.Warning("[challenge] row label: " + e.Message); }
                 }
-                if ((object)on != null) { on.gameObject.SetActive(state != "offline"); on.color = state == "playing" ? away : onColor; }
-                if ((object)off != null) off.gameObject.SetActive(state == "offline");
-                // the row itself is the button; its background takes the picked tint
+                bool offline = state != "online" && state != "playing";       // FriendStatus gives null for offline
+                if ((object)on != null) { on.gameObject.SetActive(!offline); on.color = state == "playing" ? away : onColor; }
+                if ((object)off != null) off.gameObject.SetActive(offline);
+                // the row itself is the button; picked, its background and border pieces are tinted gold
                 var bg = go.GetComponent<Image>();
                 var button = go.GetComponent<Button>() ?? go.AddComponent<Button>();
                 button.onClick = new Button.ButtonClickedEvent();
                 button.interactable = true;
-                if ((object)bg != null) { button.targetGraphic = bg; if (picked) bg.color = new Color(0.9f, 0.65f, 0.25f, bg.color.a); }
-                else if (picked)
+                if ((object)bg != null) button.targetGraphic = bg;
+                if (picked)
                 {
-                    var tint = TestersPage.Box(go.transform, "Picked", new Color(0.35f, 0.25f, 0.08f, 0.6f), 0, 0, 1, 1);
-                    tint.SetAsFirstSibling();
-                    tint.GetComponent<Image>().raycastTarget = false;
+                    var gold = new Color(0.95f, 0.7f, 0.3f, 1f);
+                    foreach (var img in go.GetComponentsInChildren<Image>(true))
+                    {
+                        if ((object)img == null || ((object)on != null && img.Pointer == on.Pointer) || ((object)off != null && img.Pointer == off.Pointer)) continue;
+                        img.color = new Color(gold.r, gold.g, gold.b, img.color.a);
+                    }
                 }
                 // clicks: the entry's own pieces may not catch them (0.14.25: a click did nothing), so a clear
                 // full-size layer on top does, and nothing in the copy may block it
@@ -577,6 +581,12 @@ namespace WarpforgeRevival
             if (code.Length == 0) { status = Loc.T("challenge.typeCode", "Type a friend code first."); dirty = true; return; }
             codeBusy = true;
             status = ""; dirty = true;
+            LookUp(code);
+        }
+
+        /// <summary>Asks the server for the player behind a friend code, name or id; the answer picks them.</summary>
+        private static void LookUp(string code, bool quiet = false)
+        {
             System.Threading.Tasks.Task.Run(async () =>
             {
                 string id = null, name = null, state = null, error = null;
@@ -602,6 +612,7 @@ namespace WarpforgeRevival
                         friendId = id; friendName = name;
                         RevivalMod.Log.Msg($"[challenge] friend code found: {id} ({state})");
                     }
+                    else if (quiet) RevivalMod.Log.Msg("[challenge] look-up of " + code + ": " + error);
                     else status = error;
                     dirty = true;
                 });
@@ -623,7 +634,8 @@ namespace WarpforgeRevival
                 var data = popup.playerDuelData;
                 string id = (object)data == null ? null : data.PlayerId, name = (object)data == null ? null : data.PlayerName;
                 if (string.IsNullOrEmpty(id)) { RevivalMod.Log.Warning("[challenge] duel popup without a player"); return; }
-                codeId = friendId = id; codeName = friendName = string.IsNullOrEmpty(name) ? id : name; codeState = GlobalChat.FriendStatus(id);
+                codeId = friendId = id; codeName = friendName = string.IsNullOrEmpty(name) ? id : name; codeState = GlobalChat.FriendStatus(id) ?? "offline";
+                LookUp(id, quiet: true);      // the server says whether they are on (FriendStatus only knows friends)
                 pendingSkirmish = skirmish;
                 status = ""; dirty = true;
                 try { popup.OnCloseButtonPressed(); } catch { try { popup.Close(); } catch { } }
