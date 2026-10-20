@@ -248,7 +248,10 @@ namespace WarpforgeRevival
             var friends = Friends();
             // the list scrolls on its own (0.14.17): rows of a fixed height inside a scroll area with a bar
             const float friendRow = 0.075f, friendGap = 0.01f;
-            var list = ScrollArea(area, "FriendList", 0.02f, 0.3f, 0.34f, 0.88f, Math.Max(1, friends.Count) * friendRow, out float listH);
+            // under the list: the code box (with its label), or, once a player was found by code or picked from a profile,
+            // that player's row in the box's place; the list takes the room that leaves
+            float listBottom = codeId != null ? 0.15f : 0.2f;
+            var list = ScrollArea(area, "FriendList", 0.02f, listBottom, 0.34f, 0.88f, Math.Max(1, friends.Count) * friendRow, out float listH);
             int row = 0;
             foreach (var (id, name, state) in friends)
             {
@@ -429,16 +432,20 @@ namespace WarpforgeRevival
         {
             try
             {
-                const float top = 0.27f;        // found player 0.205-0.27, label 0.14-0.19, box 0.07-0.13
-                TestersPage.Text(area, "CodeTitle", Loc.T("challenge.byCode", "Or by friend code"), 24, TextAlignmentOptions.Left, TestersPage.Dim, 0.02f, top - 0.13f, 0.34f, top - 0.08f);
+                const float top = 0.19f;        // label 0.14-0.19, box 0.07-0.13; or the found player's row at 0.06-0.13
                 if (codeId != null)
                 {
                     bool picked = codeId == friendId;
                     string hint = "  (" + (codeState == "online" ? Loc.T("challenge.online", "online") : codeState == "playing" ? Loc.T("challenge.playing", "in a match") : Loc.Game("MainMenu/General/Offline", "Offline")) + ")";
-                    var b = TestersPage.Button(area, "Friend_code", "", 0.02f, top - 0.065f, 0.34f, top, picked ? new Color(0.35f, 0.25f, 0.08f, 1f) : TestersPage.Tile);
+                    var b = TestersPage.Button(area, "Friend_code", "", 0.02f, 0.06f, 0.29f, 0.13f, picked ? new Color(0.35f, 0.25f, 0.08f, 1f) : TestersPage.Tile);
                     TestersPage.Text(b.transform, "Name", codeName + hint, 24, TextAlignmentOptions.Left, codeState == "online" ? Color.white : TestersPage.Dim, 0.04f, 0, 0.98f, 1);
                     TestersPage.OnClick(b, () => { friendId = codeId; friendName = codeName; status = ""; dirty = true; });
+                    // the x puts the code box back
+                    var clear = TestersPage.Button(area, "ClearCode", "x", 0.3f, 0.06f, 0.34f, 0.13f, TestersPage.Tile);
+                    TestersPage.OnClick(clear, () => { if (friendId == codeId) { friendId = null; friendName = null; } codeId = codeName = codeState = null; codeText = ""; status = ""; dirty = true; });
+                    return;
                 }
+                TestersPage.Text(area, "CodeTitle", Loc.T("challenge.byCode", "Or by friend code"), 24, TextAlignmentOptions.Left, TestersPage.Dim, 0.02f, top - 0.05f, 0.34f, top);
                 // the box: a copy of the Friends tab's add-friend box (the game's own look and keyboard handling)
                 FriendsTab friends = null;
                 foreach (var f in w.GetComponentsInChildren<FriendsTab>(true)) { friends = f; break; }
@@ -448,7 +455,7 @@ namespace WarpforgeRevival
                 boxGo.name = "Friend code box";
                 foreach (var le in boxGo.GetComponents<LayoutElement>()) le.ignoreLayout = true;
                 var rt = boxGo.GetComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0.02f, top - 0.2f); rt.anchorMax = new Vector2(0.24f, top - 0.14f);
+                rt.anchorMin = new Vector2(0.02f, 0.07f); rt.anchorMax = new Vector2(0.24f, 0.13f);
                 rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
                 codeBox = boxGo.GetComponent<TMP_InputField>();
                 if ((object)codeBox != null)
@@ -464,7 +471,7 @@ namespace WarpforgeRevival
                     codeBox.onSubmit.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<string>>(new Action<string>(_ => FindByCode())));
                 }
                 boxGo.SetActive(true);
-                var find = TestersPage.Button(area, "FindCode", codeBusy ? "..." : Loc.T("challenge.find", "Find"), 0.25f, top - 0.2f, 0.34f, top - 0.14f, TestersPage.Tile);
+                var find = TestersPage.Button(area, "FindCode", codeBusy ? "..." : Loc.T("challenge.find", "Find"), 0.25f, 0.07f, 0.34f, 0.13f, TestersPage.Tile);
                 TestersPage.OnClick(find, FindByCode);
             }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] friend code box: " + e.Message); }
