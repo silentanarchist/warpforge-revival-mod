@@ -79,6 +79,8 @@ namespace WarpforgeRevival
         private static int drawnLoc;
         private static readonly List<RectTransform> scrollContents = new List<RectTransform>();
         private static int replaceBars;
+        // the page is drawn afresh after every click, so each list's scroll position is kept and put back (0.14.19)
+        private static readonly Dictionary<string, float> scrollAt = new Dictionary<string, float>();
         /// <summary>
         /// The page's text larger than first drawn (x1.7). A text that would not fit its place shrinks back, down to its
         /// first size at the least.
@@ -102,7 +104,17 @@ namespace WarpforgeRevival
             if (drawnLoc != Loc.Version) { drawnLoc = Loc.Version; dirty = true; }     // the language changed: draw it again in the new one
             if (openSince >= 0) FinishOpen();
             if (replaceBars > 0 && --replaceBars == 0)
-                foreach (var c in scrollContents) if (Ui.Alive(c)) Scrolling.Improve(c);
+                foreach (var c in scrollContents)
+                {
+                    if (!Ui.Alive(c)) continue;
+                    Scrolling.Improve(c);
+                    try
+                    {
+                        var sr = c.GetComponentInParent<ScrollRect>();       // the position again, now that the sizes are known
+                        if ((object)sr != null && scrollAt.TryGetValue(sr.name, out float at)) sr.verticalNormalizedPosition = at;
+                    }
+                    catch { }
+                }
             if (!dirty) return;
             try
             {
@@ -208,6 +220,10 @@ namespace WarpforgeRevival
             dirty = false;
             scrollContents.Clear();
             var old = host.Find(PanelName);
+            if ((object)old != null)
+            {
+                try { foreach (var sr in old.GetComponentsInChildren<ScrollRect>(true)) scrollAt[sr.name] = sr.verticalNormalizedPosition; } catch { }
+            }
             if ((object)old != null) { old.gameObject.SetActive(false); old.name = PanelName + " (old)"; UnityEngine.Object.Destroy(old.gameObject); }
             if ((object)TestersPage.font == null)
                 try { var any = w.GetComponentInChildren<TMP_Text>(true); if ((object)any != null) TestersPage.font = any.font; } catch { }
@@ -264,31 +280,33 @@ namespace WarpforgeRevival
             const float ruleRow = 0.066f;
             var rules = ScrollArea(area, "RuleList", x0, 0.17f, 0.96f, 0.85f, ChallengeRules.Fields.Length * ruleRow, out float rulesH);
             int r = 0;
+            rows.Clear();
             foreach (var f in ChallengeRules.Fields)
             {
                 float top = 1f - r * ruleRow / rulesH, bottom = top - ruleRow / rulesH, pad = 0.004f / rulesH;
-                int v = values.Get(f.Key) ?? f.Min;
-                bool changed = preset.Get(f.Key) != v;
-                TestersPage.Text(rules, "L_" + f.Key, f.Text(), 26, TextAlignmentOptions.Left, changed ? new Color(1f, 0.85f, 0.45f, 1f) : Color.white, 0.01f, bottom, 0.6f, top);
-                TestersPage.Text(rules, "V_" + f.Key, ChallengeRules.Show(f.Key, v), 27, TextAlignmentOptions.Center, Color.white, 0.7f, bottom, 0.87f, top);
+                var rr = new RuleRow { Field = f };
+                rr.Label = TestersPage.Text(rules, "L_" + f.Key, f.Text(), 26, TextAlignmentOptions.Left, Color.white, 0.01f, bottom, 0.6f, top);
+                rr.Value = TestersPage.Text(rules, "V_" + f.Key, "", 27, TextAlignmentOptions.Center, Color.white, 0.7f, bottom, 0.87f, top);
                 var field = f;
-                // a button that would not change anything (at the lowest or highest value) is left out
-                if (Next(field, -1) != v)
-                {
-                    var minus = TestersPage.Button(rules, "M_" + f.Key, "-", 0.61f, bottom + pad, 0.69f, top - pad, TestersPage.Tile);
-                    TestersPage.OnClick(minus, () => Step(field, -1));
-                }
-                if (Next(field, +1) != v)
-                {
-                    var plus = TestersPage.Button(rules, "P_" + f.Key, "+", 0.88f, bottom + pad, 0.96f, top - pad, TestersPage.Tile);
-                    TestersPage.OnClick(plus, () => Step(field, +1));
-                }
+                // the buttons are always there; one that would change nothing (at the lowest or highest value) is hidden
+                rr.Minus = TestersPage.Button(rules, "M_" + f.Key, "-", 0.61f, bottom + pad, 0.69f, top - pad, TestersPage.Tile);
+                TestersPage.OnClick(rr.Minus, () => Step(field, -1));
+                rr.Plus = TestersPage.Button(rules, "P_" + f.Key, "+", 0.88f, bottom + pad, 0.96f, top - pad, TestersPage.Tile);
+                TestersPage.OnClick(rr.Plus, () => Step(field, +1));
+                rows.Add(rr);
                 r++;
             }
+            RefreshRows(preset);
 
             const float by = 0.1f;
             var reset = TestersPage.Button(area, "Reset", Loc.T("challenge.reset", "Mode's own rules"), x0, by - 0.08f, 0.62f, by, TestersPage.Tile);
-            TestersPage.OnClick(reset, () => { values = null; status = ""; dirty = true; });
+            TestersPage.OnClick(reset, () =>
+            {
+                status = "";
+                try { values = ChallengeRules.Preset(ev, mode); RefreshRows(ChallengeRules.Preset(ev, mode)); }
+                catch { values = null; dirty = true; }
+                var st = area.Find("Status"); if ((object)st != null) st.gameObject.SetActive(false);
+            });
             var send = TestersPage.Button(area, "Send", friendId == null ? Loc.T("challenge.pickFriend", "Pick a friend") : Loc.T("challenge.send", "Challenge {name}", ("name", friendName)), 0.64f, by - 0.08f, x1, by,
                                           friendId == null ? TestersPage.Tile : new Color(0.45f, 0.12f, 0.08f, 1f));
             TestersPage.OnClick(send, () => Send(mode, ev));
@@ -323,6 +341,7 @@ namespace WarpforgeRevival
             scroll.vertical = true;
             scroll.movementType = ScrollRect.MovementType.Clamped;
             scroll.scrollSensitivity = 60f;
+            if (scrollAt.TryGetValue(name, out float at)) scroll.verticalNormalizedPosition = at;
             if (contentH > viewH + 0.0001f)
             {
                 // the bar sits just outside the area's right edge (Scrolling attaches it to the panel around the list);
@@ -345,6 +364,29 @@ namespace WarpforgeRevival
             return next;
         }
 
+        private sealed class RuleRow { public ChallengeRules.Field Field; public TMP_Text Label, Value; public Button Minus, Plus; }
+        private static readonly List<RuleRow> rows = new List<RuleRow>();
+
+        /// <summary>The rule rows brought up to date in place: value, the changed-from-preset colour, which buttons show.
+        /// No redraw, so the lists keep their scroll (0.14.20).</summary>
+        private static void RefreshRows(ChallengeRules.RuleSet preset)
+        {
+            foreach (var row in rows)
+            {
+                try
+                {
+                    if (!Ui.Alive(row.Value)) continue;
+                    int v = values.Get(row.Field.Key) ?? row.Field.Min;
+                    bool changed = preset.Get(row.Field.Key) != v;
+                    row.Value.text = ChallengeRules.Show(row.Field.Key, v);
+                    row.Label.color = changed ? new Color(1f, 0.85f, 0.45f, 1f) : Color.white;
+                    row.Minus.gameObject.SetActive(Next(row.Field, -1) != v);
+                    row.Plus.gameObject.SetActive(Next(row.Field, +1) != v);
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[challenge] row: " + e.Message); }
+            }
+        }
+
         private static void Step(ChallengeRules.Field f, int dir)
         {
             if (values == null) return;
@@ -353,7 +395,12 @@ namespace WarpforgeRevival
             if (next == v) return;
             values.Values[f.Key] = next;
             ChallengeRules.CapHand(values.Values);       // a lower hand limit pulls the starting hand down with it
-            dirty = true;
+            try
+            {
+                var ev = ChallengeRules.FindEvent(values.EventId);
+                RefreshRows(ChallengeRules.Preset(ev, values.EventId));
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[challenge] " + e.Message); dirty = true; }
         }
 
         private static void Send(string mode, IPlayEvent ev)
