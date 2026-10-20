@@ -77,6 +77,8 @@ namespace WarpforgeRevival
         internal static bool IsChallengeTab(UnityEngine.Object t) => Ui.Alive(tab) && (object)t != null && t.Pointer == tab.Pointer;
 
         private static int drawnLoc;
+        private static readonly List<RectTransform> scrollContents = new List<RectTransform>();
+        private static int replaceBars;
         /// <summary>
         /// The page's text larger than first drawn (x1.7). A text that would not fit its place shrinks back, down to its
         /// first size at the least.
@@ -99,6 +101,8 @@ namespace WarpforgeRevival
         {
             if (drawnLoc != Loc.Version) { drawnLoc = Loc.Version; dirty = true; }     // the language changed: draw it again in the new one
             if (openSince >= 0) FinishOpen();
+            if (replaceBars > 0 && --replaceBars == 0)
+                foreach (var c in scrollContents) if (Ui.Alive(c)) Scrolling.Improve(c);
             if (!dirty) return;
             try
             {
@@ -202,6 +206,7 @@ namespace WarpforgeRevival
         private static void Build(GameWindowWithTabs w, Transform host)
         {
             dirty = false;
+            scrollContents.Clear();
             var old = host.Find(PanelName);
             if ((object)old != null) { old.gameObject.SetActive(false); old.name = PanelName + " (old)"; UnityEngine.Object.Destroy(old.gameObject); }
             if ((object)TestersPage.font == null)
@@ -225,21 +230,23 @@ namespace WarpforgeRevival
             // left: friends
             TestersPage.Text(area, "FriendsTitle", Loc.T("challenge.title", "Challenge a friend"), 34, TextAlignmentOptions.Left, Color.white, 0.02f, 0.9f, 0.34f, 0.99f);
             var friends = Friends();
+            // the list scrolls on its own (0.14.17): rows of a fixed height inside a scroll area with a bar
+            const float friendRow = 0.075f, friendGap = 0.01f;
+            var list = ScrollArea(area, "FriendList", 0.02f, 0.3f, 0.34f, 0.88f, Math.Max(1, friends.Count) * friendRow, out float listH);
             int row = 0;
             foreach (var (id, name, state) in friends)
             {
-                if (row >= 8) break;
-                float top = 0.88f - row * 0.075f;
+                float top = 1f - row * friendRow / listH, bottom = top - (friendRow - friendGap) / listH;
                 bool picked = id == friendId;
                 string hint = "  (" + (state == "online" ? Loc.T("challenge.online", "online") : state == "playing" ? Loc.T("challenge.playing", "in a match") : Loc.Game("MainMenu/General/Offline", "Offline")) + ")";
-                var b = TestersPage.Button(area, "Friend_" + id, "", 0.02f, top - 0.065f, 0.34f, top, picked ? new Color(0.35f, 0.25f, 0.08f, 1f) : TestersPage.Tile);
+                var b = TestersPage.Button(list, "Friend_" + id, "", 0f, bottom, 1f, top, picked ? new Color(0.35f, 0.25f, 0.08f, 1f) : TestersPage.Tile);
                 TestersPage.Text(b.transform, "Name", name + hint, 24, TextAlignmentOptions.Left, state == "online" ? Color.white : TestersPage.Dim, 0.04f, 0, 0.98f, 1);
                 string fid = id, fname = name;
                 TestersPage.OnClick(b, () => { friendId = fid; friendName = fname; status = ""; dirty = true; });
                 row++;
             }
             if (friends.Count == 0)
-                TestersPage.Text(area, "NoFriends", Loc.T("challenge.noFriends", "Add friends in the Friends tab first."), 24, TextAlignmentOptions.Left, TestersPage.Dim, 0.02f, 0.7f, 0.34f, 0.86f);
+                TestersPage.Text(list, "NoFriends", Loc.T("challenge.noFriends", "Add friends in the Friends tab first."), 24, TextAlignmentOptions.Left, TestersPage.Dim, 0f, 0f, 1f, 1f);
             CodeBox(w, area);
 
             // right: mode and rules
@@ -253,40 +260,78 @@ namespace WarpforgeRevival
             TestersPage.Text(area, "DeckRules", ChallengeRules.DeckRules(ev, mode) + " " + Loc.T("challenge.yourDeck", "You play your deck for this mode."), 20, TextAlignmentOptions.Left, TestersPage.Dim, x0, 0.86f, x1, 0.92f);
 
             var preset = ChallengeRules.Preset(ev, mode);
+            // the rules scroll on their own (0.14.17), so more can be added and the text is larger; the buttons stay at the bottom
+            const float ruleRow = 0.066f;
+            var rules = ScrollArea(area, "RuleList", x0, 0.17f, 0.96f, 0.85f, ChallengeRules.Fields.Length * ruleRow, out float rulesH);
             int r = 0;
-            const float rowH = 0.049f;     // 14 rules (0.13.33 added carried-over mana) and the buttons fit below the mode
             foreach (var f in ChallengeRules.Fields)
             {
-                float top = 0.84f - r * rowH;
+                float top = 1f - r * ruleRow / rulesH, bottom = top - ruleRow / rulesH, pad = 0.004f / rulesH;
                 int v = values.Get(f.Key) ?? f.Min;
                 bool changed = preset.Get(f.Key) != v;
-                TestersPage.Text(area, "L_" + f.Key, f.Text(), 21, TextAlignmentOptions.Left, changed ? new Color(1f, 0.85f, 0.45f, 1f) : Color.white, x0, top - rowH, 0.74f, top);
-                TestersPage.Text(area, "V_" + f.Key, ChallengeRules.Show(f.Key, v), 22, TextAlignmentOptions.Center, Color.white, 0.8f, top - rowH, 0.9f, top);
+                TestersPage.Text(rules, "L_" + f.Key, f.Text(), 26, TextAlignmentOptions.Left, changed ? new Color(1f, 0.85f, 0.45f, 1f) : Color.white, 0.01f, bottom, 0.6f, top);
+                TestersPage.Text(rules, "V_" + f.Key, ChallengeRules.Show(f.Key, v), 27, TextAlignmentOptions.Center, Color.white, 0.7f, bottom, 0.87f, top);
                 var field = f;
                 // a button that would not change anything (at the lowest or highest value) is left out
                 if (Next(field, -1) != v)
                 {
-                    var minus = TestersPage.Button(area, "M_" + f.Key, "-", 0.75f, top - rowH + 0.005f, 0.8f, top - 0.004f, TestersPage.Tile);
+                    var minus = TestersPage.Button(rules, "M_" + f.Key, "-", 0.61f, bottom + pad, 0.69f, top - pad, TestersPage.Tile);
                     TestersPage.OnClick(minus, () => Step(field, -1));
                 }
                 if (Next(field, +1) != v)
                 {
-                    var plus = TestersPage.Button(area, "P_" + f.Key, "+", 0.9f, top - rowH + 0.005f, 0.95f, top - 0.004f, TestersPage.Tile);
+                    var plus = TestersPage.Button(rules, "P_" + f.Key, "+", 0.88f, bottom + pad, 0.96f, top - pad, TestersPage.Tile);
                     TestersPage.OnClick(plus, () => Step(field, +1));
                 }
                 r++;
             }
 
-            float by = 0.84f - r * rowH - 0.015f;
-            var reset = TestersPage.Button(area, "Reset", Loc.T("challenge.reset", "Mode's own rules"), x0, by - 0.075f, 0.62f, by, TestersPage.Tile);
+            const float by = 0.1f;
+            var reset = TestersPage.Button(area, "Reset", Loc.T("challenge.reset", "Mode's own rules"), x0, by - 0.08f, 0.62f, by, TestersPage.Tile);
             TestersPage.OnClick(reset, () => { values = null; status = ""; dirty = true; });
-            var send = TestersPage.Button(area, "Send", friendId == null ? Loc.T("challenge.pickFriend", "Pick a friend") : Loc.T("challenge.send", "Challenge {name}", ("name", friendName)), 0.64f, by - 0.075f, x1, by,
+            var send = TestersPage.Button(area, "Send", friendId == null ? Loc.T("challenge.pickFriend", "Pick a friend") : Loc.T("challenge.send", "Challenge {name}", ("name", friendName)), 0.64f, by - 0.08f, x1, by,
                                           friendId == null ? TestersPage.Tile : new Color(0.45f, 0.12f, 0.08f, 1f));
             TestersPage.OnClick(send, () => Send(mode, ev));
             if (!string.IsNullOrEmpty(status))
-                TestersPage.Text(area, "Status", status, 22, TextAlignmentOptions.Left, TestersPage.Dim, x0, 0.0f, x1, by - 0.08f);
+                TestersPage.Text(area, "Status", status, 22, TextAlignmentOptions.Left, TestersPage.Dim, x0, by + 0.01f, x1, 0.16f);
             Enlarge(go.transform);
             if (!builtLogged) { builtLogged = true; RevivalMod.Log.Msg($"[challenge] menu built: {friends.Count} friend(s), presets {string.Join(", ", presets)}"); }
+        }
+
+        /// <summary>
+        /// A scroll area (wheel, drag, and a bar down its right edge) at the given place in the panel. Its content is
+        /// contentFrac of the panel's height tall (at least the area itself); rows are placed in it with anchors as
+        /// fractions of the content height, which is returned in contentH (in the same panel-height units).
+        /// </summary>
+        private static Transform ScrollArea(Transform panel, string name, float x0, float y0, float x1, float y1, float contentFrac, out float contentH)
+        {
+            float viewH = y1 - y0;
+            contentH = Math.Max(viewH, contentFrac);
+            var view = TestersPage.Box(panel, name, new Color(0f, 0f, 0f, 0.18f), x0, y0, x1, y1);
+            view.gameObject.AddComponent<RectMask2D>();
+            var scroll = view.gameObject.AddComponent<ScrollRect>();
+            var content = new GameObject("Content");
+            var crt = content.AddComponent<RectTransform>();
+            crt.SetParent(view, false);
+            crt.anchorMin = new Vector2(0f, 1f); crt.anchorMax = new Vector2(1f, 1f); crt.pivot = new Vector2(0.5f, 1f);
+            float panelH = panel.GetComponent<RectTransform>().rect.height;
+            crt.sizeDelta = new Vector2(0f, panelH * contentH);
+            crt.anchoredPosition = Vector2.zero;
+            scroll.content = crt;
+            scroll.viewport = view.GetComponent<RectTransform>();
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 60f;
+            if (contentH > viewH + 0.0001f)
+            {
+                // the bar sits just outside the area's right edge (Scrolling attaches it to the panel around the list);
+                // placed again next frame, once the new objects have their sizes
+                Scrolling.Improve(crt);
+                scrollContents.Add(crt);
+                replaceBars = 2;
+            }
+            return crt;
         }
 
         /// <summary>What one press of - (dir -1) or + (dir +1) would set; the same value when the press would do nothing.</summary>
@@ -337,13 +382,13 @@ namespace WarpforgeRevival
         {
             try
             {
-                const float top = 0.27f;
-                TestersPage.Text(area, "CodeTitle", Loc.T("challenge.byCode", "Or by friend code"), 24, TextAlignmentOptions.Left, TestersPage.Dim, 0.02f, top - 0.06f, 0.34f, top);
+                const float top = 0.27f;        // found player 0.205-0.27, label 0.14-0.19, box 0.07-0.13
+                TestersPage.Text(area, "CodeTitle", Loc.T("challenge.byCode", "Or by friend code"), 24, TextAlignmentOptions.Left, TestersPage.Dim, 0.02f, top - 0.13f, 0.34f, top - 0.08f);
                 if (codeId != null)
                 {
                     bool picked = codeId == friendId;
                     string hint = "  (" + (codeState == "online" ? Loc.T("challenge.online", "online") : codeState == "playing" ? Loc.T("challenge.playing", "in a match") : Loc.Game("MainMenu/General/Offline", "Offline")) + ")";
-                    var b = TestersPage.Button(area, "Friend_code", "", 0.02f, top - 0.13f, 0.34f, top - 0.065f, picked ? new Color(0.35f, 0.25f, 0.08f, 1f) : TestersPage.Tile);
+                    var b = TestersPage.Button(area, "Friend_code", "", 0.02f, top - 0.065f, 0.34f, top, picked ? new Color(0.35f, 0.25f, 0.08f, 1f) : TestersPage.Tile);
                     TestersPage.Text(b.transform, "Name", codeName + hint, 24, TextAlignmentOptions.Left, codeState == "online" ? Color.white : TestersPage.Dim, 0.04f, 0, 0.98f, 1);
                     TestersPage.OnClick(b, () => { friendId = codeId; friendName = codeName; status = ""; dirty = true; });
                 }
