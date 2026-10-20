@@ -90,12 +90,20 @@ namespace WarpforgeRevival
             const float scale = 1.7f;
             foreach (var t in panel.GetComponentsInChildren<TMP_Text>(true))
             {
+                if (InFriendRow(t.transform)) continue;        // the game's own rows keep the game's text size
                 float size = t.fontSize;
                 t.enableAutoSizing = true;
                 t.fontSizeMin = size;
                 t.fontSizeMax = size * scale;
                 t.fontSize = size * scale;
             }
+        }
+
+        private static bool InFriendRow(Transform t)
+        {
+            for (int i = 0; i < 6 && (object)t != null; i++, t = t.parent)
+                if (t.name.StartsWith("Friend_", StringComparison.Ordinal)) return true;
+            return false;
         }
 
         /// <summary>Called every frame: redraws the page after a click on it (picking a friend, a mode, a rule) or a change of language.</summary>
@@ -455,7 +463,17 @@ namespace WarpforgeRevival
                 foreach (var b in new[] { entry.challengeButton, entry.deleteUserButton, entry.showProfileButton })
                     if ((object)b != null) b.gameObject.SetActive(false);
                 UnityEngine.Object.Destroy(entry);
-                if ((object)label != null) Ui.SetText(label, name);
+                if ((object)label != null)
+                {
+                    Ui.SetText(label, name);
+                    // one line: a long name shrinks a little rather than wrapping, then is cut with ...
+                    label.enableWordWrapping = false;
+                    label.overflowMode = TextOverflowModes.Ellipsis;
+                    float size = label.fontSize;
+                    label.enableAutoSizing = true;
+                    label.fontSizeMax = size;
+                    label.fontSizeMin = size * 0.7f;
+                }
                 if ((object)on != null) { on.gameObject.SetActive(state != "offline"); on.color = state == "playing" ? away : onColor; }
                 if ((object)off != null) off.gameObject.SetActive(state == "offline");
                 // the row itself is the button; its background takes the picked tint
