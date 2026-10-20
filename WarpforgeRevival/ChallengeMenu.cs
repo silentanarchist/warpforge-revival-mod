@@ -473,6 +473,22 @@ namespace WarpforgeRevival
                     label.enableAutoSizing = true;
                     label.fontSizeMax = size;
                     label.fontSizeMin = size * 0.7f;
+                    // the label's room was laid out next to the three buttons: let it run to the row's right edge instead
+                    try
+                    {
+                        var lrt = label.GetComponent<RectTransform>();
+                        var rowRt = go.GetComponent<RectTransform>();
+                        var corners = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
+                        lrt.GetWorldCorners(corners);
+                        float left = rowRt.InverseTransformPoint(corners[0]).x - rowRt.rect.xMin;     // keep the gap for the status light
+                        foreach (var le in label.GetComponents<LayoutElement>()) le.ignoreLayout = true;
+                        lrt.SetParent(go.transform, false);
+                        lrt.anchorMin = new Vector2(0f, 0f); lrt.anchorMax = new Vector2(1f, 1f); lrt.pivot = new Vector2(0f, 0.5f);
+                        lrt.offsetMin = new Vector2(Mathf.Max(0f, left), 0f); lrt.offsetMax = new Vector2(-16f, 0f);
+                        lrt.localScale = Vector3.one;
+                        label.alignment = TextAlignmentOptions.Left;
+                    }
+                    catch (Exception e) { RevivalMod.Log.Warning("[challenge] row label: " + e.Message); }
                 }
                 if ((object)on != null) { on.gameObject.SetActive(state != "offline"); on.color = state == "playing" ? away : onColor; }
                 if ((object)off != null) off.gameObject.SetActive(state == "offline");
