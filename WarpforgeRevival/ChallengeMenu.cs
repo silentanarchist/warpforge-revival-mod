@@ -549,12 +549,20 @@ namespace WarpforgeRevival
                 foreach (var m in Resources.FindObjectsOfTypeAll<SocialMenuWindow>())
                     if ((object)m != null && m.gameObject.scene.IsValid()) { social = m; break; }
                 if ((object)social != null) { wm.OpenWindow(social, false, null); return; }
+                // not opened yet this session (the menu loads it from a prefab when its button is pressed): press the
+                // menu's own Social button - the one whose window is the Social window, or else the one named for it
+                OpenWindowButton named = null;
+                string all = "";
                 foreach (var b in UnityEngine.Object.FindObjectsOfType<OpenWindowButton>())
                 {
                     var scene = b.windowToOpenScene;
                     if ((object)scene != null && (object)scene.TryCast<SocialMenuWindow>() != null) { b.OpenWindow(); return; }
+                    string path = RecoveryReminder.Path(b.transform);
+                    all += " | " + path;
+                    if (named == null && path.IndexOf("social", StringComparison.OrdinalIgnoreCase) >= 0) named = b;
                 }
-                RevivalMod.Log.Warning("[challenge] the Social window was not found");
+                if (named != null) { RevivalMod.Log.Msg("[challenge] pressing the Social button " + RecoveryReminder.Path(named.transform)); named.OpenWindow(); return; }
+                RevivalMod.Log.Warning("[challenge] the Social window was not found; window buttons:" + all);
                 openSince = -1f;
             }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] could not open the Social window: " + e.Message); openSince = -1f; }

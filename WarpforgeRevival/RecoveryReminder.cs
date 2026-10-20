@@ -166,7 +166,7 @@ namespace WarpforgeRevival
             try { WindowsManager.Instance?.ShowPopUp(Loc.T("recoveryReminder.openSettings", "Open Settings > Account to make your recovery code."), false, true, Loc.Game("MainMenu/General/OK", "OK"), (Il2CppSystem.Action)null); } catch { }
         }
 
-        private static string Path(Transform t)
+        internal static string Path(Transform t)
         {
             string p = "";
             for (int i = 0; (object)t != null && i < 4; i++, t = t.parent) p = t.name + (p.Length > 0 ? "/" + p : "");
