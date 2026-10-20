@@ -484,7 +484,7 @@ namespace WarpforgeRevival
                         foreach (var le in label.GetComponents<LayoutElement>()) le.ignoreLayout = true;
                         lrt.SetParent(go.transform, false);
                         lrt.anchorMin = new Vector2(0f, 0f); lrt.anchorMax = new Vector2(1f, 1f); lrt.pivot = new Vector2(0f, 0.5f);
-                        lrt.offsetMin = new Vector2(Mathf.Max(0f, left), 0f); lrt.offsetMax = new Vector2(-16f, 0f);
+                        lrt.offsetMin = new Vector2(Mathf.Max(0f, left) + 10f, 0f); lrt.offsetMax = new Vector2(-16f, 0f);   // a little air after the light
                         lrt.localScale = Vector3.one;
                         label.alignment = TextAlignmentOptions.Left;
                     }
@@ -504,6 +504,12 @@ namespace WarpforgeRevival
                     tint.SetAsFirstSibling();
                     tint.GetComponent<Image>().raycastTarget = false;
                 }
+                // clicks: the entry's own pieces may not catch them (0.14.25: a click did nothing), so a clear
+                // full-size layer on top does, and nothing in the copy may block it
+                foreach (var cg in go.GetComponentsInChildren<CanvasGroup>(true)) { cg.blocksRaycasts = true; cg.interactable = true; }
+                var hit = TestersPage.Box(go.transform, "Hit", new Color(0f, 0f, 0f, 0f), 0, 0, 1, 1);
+                hit.SetAsLastSibling();
+                if ((object)bg == null) button.targetGraphic = hit.GetComponent<Image>();
                 TestersPage.OnClick(button, onClick);
                 go.SetActive(true);
             }
