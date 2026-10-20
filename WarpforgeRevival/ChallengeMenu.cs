@@ -467,9 +467,9 @@ namespace WarpforgeRevival
         /// instead, with that player and mode picked.
         /// </summary>
         private static float openSince = -1f;
-        private static bool pendingSkirmish;
+        private static bool? pendingSkirmish;
 
-        private static void FromDuelPopup(DuelPopupWindow popup, bool skirmish)
+        private static void FromDuelPopup(DuelPopupWindow popup, bool? skirmish)
         {
             try
             {
@@ -480,11 +480,16 @@ namespace WarpforgeRevival
                 pendingSkirmish = skirmish;
                 status = ""; dirty = true;
                 try { popup.OnCloseButtonPressed(); } catch { try { popup.Close(); } catch { } }
-                RevivalMod.Log.Msg($"[challenge] duel popup: opening the Challenge page for {id} ({(skirmish ? "Skirmish" : "Classic")})");
+                RevivalMod.Log.Msg($"[challenge] duel popup skipped: opening the Challenge page for {id}" + (skirmish == null ? "" : skirmish.Value ? " (Skirmish)" : " (Classic)"));
                 OpenPage();
             }
             catch (Exception e) { RevivalMod.Log.Warning("[challenge] duel popup: " + e.Message); }
         }
+
+        /// <summary>The popup is never shown: as the game opens it (the Challenge button on a profile or an alliance
+        /// member), it is closed again and the Challenge page opens with that player picked and the mode as it was.</summary>
+        [HarmonyPatch(typeof(DuelPopupWindow), nameof(DuelPopupWindow.Open))]
+        private static class DuelOpened { private static void Postfix(DuelPopupWindow __instance) => FromDuelPopup(__instance, null); }
 
         private static void OpenPage()
         {
@@ -516,7 +521,7 @@ namespace WarpforgeRevival
             {
                 openSince = -1f;
                 var presets = Presets();
-                int want = presets.IndexOf(pendingSkirmish ? "RevivalSkirmish" : "RevivalClassic");
+                int want = pendingSkirmish == null ? -1 : presets.IndexOf(pendingSkirmish.Value ? "RevivalSkirmish" : "RevivalClassic");
                 if (want >= 0 && want != presetIndex) { presetIndex = want; values = null; }
                 dirty = true;
                 try { window.ChangeTab(tab); } catch (Exception e) { RevivalMod.Log.Warning("[challenge] could not switch to the Challenge tab: " + e.Message); }
