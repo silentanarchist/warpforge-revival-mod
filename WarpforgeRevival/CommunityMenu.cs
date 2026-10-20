@@ -34,6 +34,7 @@ namespace WarpforgeRevival
         private static float fetchedAt = -1000f;
         private static bool fetching, fetchFailed;
         private static string watchStatus = "";
+        private static string codeText = "";                  // what is typed in the code box, kept across redraws
         private static bool dirty;
         private static int drawnLoc;
         private static readonly Dictionary<string, float> scrollAt = new Dictionary<string, float>();
@@ -93,14 +94,13 @@ namespace WarpforgeRevival
             // ---- left: replays
             const float lx0 = 0.02f, lx1 = 0.4f;
             TestersPage.Text(area, "ReplaysTitle", Loc.T("community.replays", "Replays"), 34, TextAlignmentOptions.Left, Color.white, lx0, 0.9f, lx1, 0.99f);
-            var watch = TestersPage.Button(area, "WatchCode", Loc.T("modTab.watchReplay", "Watch a replay code"), lx0, 0.8f, lx1, 0.88f, new Color(0.45f, 0.12f, 0.08f, 1f));
-            TestersPage.OnClick(watch, () =>
-            {
-                ReplayCodes.WatchStatus = text => { watchStatus = text ?? ""; dirty = true; };
-                ReplayCodes.WatchFromClipboard();
-            });
-            TestersPage.Text(area, "WatchHint", string.IsNullOrEmpty(watchStatus) ? Loc.T("community.watchHint", "Copy a code, then press the button.") : watchStatus,
-                             20, TextAlignmentOptions.Left, TestersPage.Dim, lx0, 0.74f, lx1, 0.79f);
+            // a box to paste or type a code into, and a Watch button (0.14.29; before, the code came from the clipboard)
+            TestersPage.Text(area, "WatchTitle", Loc.T("modTab.watchReplay", "Watch a replay code"), 24, TextAlignmentOptions.Left, TestersPage.Dim, lx0, 0.83f, lx1, 0.88f);
+            CodeBox(w, area, lx0, 0.76f, lx1 - 0.1f, 0.82f);
+            var watch = TestersPage.Button(area, "WatchCode", Loc.T("community.watch", "Watch"), lx1 - 0.09f, 0.76f, lx1, 0.82f, new Color(0.45f, 0.12f, 0.08f, 1f));
+            TestersPage.OnClick(watch, WatchTyped);
+            TestersPage.Text(area, "WatchHint", string.IsNullOrEmpty(watchStatus) ? Loc.T("community.watchHint", "Paste a code from Discord or a friend, then press Watch.") : watchStatus,
+                             20, TextAlignmentOptions.Left, TestersPage.Dim, lx0, 0.7f, lx1, 0.75f);
 
             TestersPage.Text(area, "SharedTitle", Loc.T("community.shared", "Shared in Discord"), 26, TextAlignmentOptions.Left, TestersPage.Dim, lx0, 0.66f, lx1, 0.72f);
             const float sharedRow = 0.14f;
@@ -162,6 +162,47 @@ namespace WarpforgeRevival
                 TestersPage.OnClick(b, () => { try { Ui.OpenUrl(discordUrl); } catch (Exception e) { RevivalMod.Log.Warning("[community] discord: " + e.Message); } });
             }
             Enlarge(go.transform);
+        }
+
+        /// <summary>The code box: a copy of the Friends tab's add-friend box (the game's own look and keyboard handling).</summary>
+        private static void CodeBox(GameWindowWithTabs w, Transform area, float x0, float y0, float x1, float y1)
+        {
+            try
+            {
+                FriendsTab friends = null;
+                foreach (var f in w.GetComponentsInChildren<FriendsTab>(true)) { friends = f; break; }
+                var input = (object)friends == null ? null : friends.inputFieldUserName;
+                if ((object)input == null) return;
+                var boxGo = UnityEngine.Object.Instantiate(input.gameObject, area, false);
+                boxGo.name = "Replay code box";
+                foreach (var le in boxGo.GetComponents<LayoutElement>()) le.ignoreLayout = true;
+                var rt = boxGo.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(x0, y0); rt.anchorMax = new Vector2(x1, y1);
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                var box = boxGo.GetComponent<TMP_InputField>();
+                if ((object)box != null)
+                {
+                    box.onSubmit = new TMP_InputField.SubmitEvent();
+                    box.onEndEdit = new TMP_InputField.SubmitEvent();
+                    box.onValueChanged = new TMP_InputField.OnChangeEvent();
+                    box.characterLimit = 12;
+                    box.SetTextWithoutNotify(codeText ?? "");
+                    var ph = box.placeholder?.TryCast<TMP_Text>();
+                    if ((object)ph != null) Ui.SetText(ph, Loc.T("community.codePlaceholder", "Replay code"));
+                    box.onValueChanged.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<string>>(new Action<string>(t => codeText = t)));
+                    box.onSubmit.AddListener(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction<string>>(new Action<string>(_ => WatchTyped())));
+                }
+                boxGo.SetActive(true);
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[community] code box: " + e.Message); }
+        }
+
+        private static void WatchTyped()
+        {
+            string code = ReplayCodes.Normalize(codeText ?? "");
+            ReplayCodes.WatchStatus = text => { watchStatus = text ?? ""; dirty = true; };
+            if (code.Length == 0) { watchStatus = Loc.T("community.typeCode", "Paste or type a replay code first."); dirty = true; return; }
+            ReplayCodes.Watch(code);
         }
 
         private static string[] Parts(params string[] xs) => Array.FindAll(xs, x => !string.IsNullOrEmpty(x));
