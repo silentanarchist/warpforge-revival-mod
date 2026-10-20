@@ -37,8 +37,13 @@ namespace WarpforgeRevival
     internal static class ChallengeMenu
     {
         private const string PanelName = "RevivalChallengeMenu", TabName = "RevivalChallengeTab";
-        private static SocialMenuWindow window;
-        private static AlliancesTab tab;
+        private static SocialMenuWindow window => SocialTabs.Window;
+        private static AlliancesTab tab => entry?.Tab;
+        private static readonly SocialTabs.Entry entry = SocialTabs.Register(new SocialTabs.Entry
+        {
+            Name = "Challenge", TabName = TabName, ButtonName = "Challenge Tab Button",
+            Build = (w, host) => Build(w, host),
+        });
         private static bool builtLogged;
 
         // menu state, kept while the game runs
@@ -133,93 +138,6 @@ namespace WarpforgeRevival
         }
 
         // ---------------------------------------------------------------- the tab
-
-        [HarmonyPatch(typeof(GameWindowWithTabs), nameof(GameWindowWithTabs.SetupTabs))]
-        private static class AddTab
-        {
-            /// <summary>Before the game wires up the ribbon: the tab and its button.</summary>
-            private static void Prefix(GameWindowWithTabs __instance)
-            {
-                try
-                {
-                    var social = __instance.TryCast<SocialMenuWindow>();
-                    if ((object)social == null) return;
-                    var alliances = __instance.GetComponentInChildren<AlliancesTab>(true);
-                    var buttons = __instance.Components?.TabButtons;
-                    if ((object)alliances == null || (object)buttons == null || buttons.options == null)
-                    { RevivalMod.Log.Warning("[challenge] Social window has no Alliances tab or ribbon to copy; no Challenge tab"); return; }
-                    TabButtons.TabButton source = null;
-                    for (int i = 0; i < buttons.options.Count; i++)
-                    {
-                        var b = buttons.options[i];
-                        if (b != null && (object)b.tab != null && b.tab.Pointer == alliances.Pointer && (object)b.toggle != null) { source = b; break; }
-                    }
-                    if (source == null) { RevivalMod.Log.Warning("[challenge] the Alliances tab has no button to copy; no Challenge tab"); return; }
-
-                    // Both copies are made under an inactive holder, so nothing in them (the alliance pages, the
-                    // button's alliances switch) starts up before it is taken out.
-                    var holder = new GameObject("RevivalChallengeHolder");
-                    holder.SetActive(false);
-
-                    // the tab: a copy of the Alliances tab with its alliance pages taken out
-                    var tabGo = UnityEngine.Object.Instantiate(alliances.gameObject, holder.transform, false);
-                    tabGo.name = TabName;
-                    var copyTab = tabGo.GetComponent<AlliancesTab>();
-                    for (int i = tabGo.transform.childCount - 1; i >= 0; i--)
-                        UnityEngine.Object.DestroyImmediate(tabGo.transform.GetChild(i).gameObject);
-                    tabGo.SetActive(false);
-                    tabGo.transform.SetParent(alliances.transform.parent, false);
-                    tabGo.transform.SetSiblingIndex(alliances.transform.GetSiblingIndex() + 1);
-
-                    // the button: a copy of the Alliances button, without its alliances switch
-                    var buttonGo = UnityEngine.Object.Instantiate(source.toggle.gameObject, holder.transform, false);
-                    buttonGo.name = "Challenge Tab Button";
-                    foreach (var fc in buttonGo.GetComponents<FeatureChecker>()) UnityEngine.Object.DestroyImmediate(fc);
-                    MenuLayout.StripBadges(buttonGo);            // not the alliance invitations' count
-                    buttonGo.SetActive(true);
-                    buttonGo.transform.SetParent(source.toggle.transform.parent, false);
-                    UnityEngine.Object.Destroy(holder);
-                    var toggle = buttonGo.GetComponent<EverguildToggle>();
-                    if ((object)toggle == null) { UnityEngine.Object.Destroy(buttonGo); UnityEngine.Object.Destroy(tabGo); RevivalMod.Log.Warning("[challenge] copied button is not a tab button"); return; }
-                    toggle.isOn = false;
-                    buttons.AssignTabButton(copyTab, toggle);       // wired up by the game in TabButtons.Initialize, next
-
-                    window = social;
-                    tab = copyTab;
-                    MenuLayout.Name(copyTab, "Challenge");
-                }
-                catch (Exception e) { RevivalMod.Log.Warning("[challenge] could not add the Challenge tab: " + e); }
-            }
-
-            /// <summary>After the game has filed its tabs: the copy set up, listed, closed, and its page drawn.</summary>
-            private static void Postfix(GameWindowWithTabs __instance)
-            {
-                try
-                {
-                    if (!Ui.Alive(tab) || !Ui.Alive(window) || __instance.Pointer != window.Pointer) return;
-                    tab.Setup(__instance);
-                    var tabs = __instance.tabs;
-                    if (tabs != null && !tabs.Contains(tab)) tabs.Add(tab);     // after the game filed them by class
-                    if (tab.gameObject.activeSelf) tab.gameObject.SetActive(false);
-                    var onChange = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<WindowTabBase>>(new Action<WindowTabBase>(TabChanged));
-                    __instance.OnTabChanged = __instance.OnTabChanged == null
-                        ? onChange
-                        : Il2CppSystem.Delegate.Combine(__instance.OnTabChanged, onChange).Cast<Il2CppSystem.Action<WindowTabBase>>();
-                    Build(window, tab.transform);
-                    RevivalMod.Log.Msg("[challenge] Challenge tab added to the Social window");
-                }
-                catch (Exception e) { RevivalMod.Log.Warning("[challenge] Challenge tab set-up: " + e.Message); }
-            }
-        }
-
-        /// <summary>The window's own "tab changed" event (it lights the ribbon): the page is drawn again when the
-        /// Challenge tab is picked, in the same frame (the friend list may have changed). No hook: 0.13.52 hooked
-        /// WindowTabBase.TryOpenTab, which crashed the Android loader (its code starts 8 bytes before a page end).</summary>
-        private static void TabChanged(WindowTabBase to)
-        {
-            try { if (IsChallengeTab(to) && Ui.Alive(window)) Build(window, tab.transform); }
-            catch (Exception e) { RevivalMod.Log.Warning("[challenge] menu: " + e.Message); }
-        }
 
         // ---------------------------------------------------------------- the menu
 
@@ -756,13 +674,13 @@ namespace WarpforgeRevival
         // is the one thing that made the Android loader place code at an address of its own choosing.)
 
         [HarmonyPatch(typeof(AlliancesTab), nameof(AlliancesTab.Start))]
-        private static class NoAllianceStart { private static bool Prefix(AlliancesTab __instance) => !IsChallengeTab(__instance); }
+        private static class NoAllianceStart { private static bool Prefix(AlliancesTab __instance) => !SocialTabs.IsCopy(__instance); }
 
         [HarmonyPatch(typeof(AlliancesTab), nameof(AlliancesTab.Refresh))]
         private static class NoAllianceRefresh
         {
             // the real tab: AllianceConfig.ShouldRefresh breaks the game's refresh loop (0.13.60)
-            private static bool Prefix(AlliancesTab __instance) => !IsChallengeTab(__instance) && AllianceConfig.ShouldRefresh();
+            private static bool Prefix(AlliancesTab __instance) => !SocialTabs.IsCopy(__instance) && AllianceConfig.ShouldRefresh();
         }
     }
 }

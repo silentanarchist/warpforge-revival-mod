@@ -46,7 +46,7 @@ namespace WarpforgeRevival
                 // shows other alliances from the Join list
                 AllianceMemberTab memberTab = null;
                 foreach (var t in window.GetComponentsInChildren<AlliancesTab>(true))
-                    if ((object)t != null && !ChallengeMenu.IsChallengeTab(t)) { memberTab = t.allianceMemberVariant; break; }
+                    if ((object)t != null && !SocialTabs.IsCopy(t)) { memberTab = t.allianceMemberVariant; break; }
                 var target = (object)memberTab != null ? memberTab.generalView : null;
                 var list = (object)target != null ? target.memberList : null;
                 var line = (object)list != null ? list.memberLabel : null;

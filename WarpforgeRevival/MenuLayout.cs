@@ -70,13 +70,14 @@ namespace WarpforgeRevival
             switch (label)
             {
                 case "CHALLENGE": return Loc.T("menu.challenge", "Challenge");
+                case "COMMUNITY": return Loc.T("menu.community", "Community");
                 case "PLAY": return Loc.Game("MainMenu/NavigationPanel/HomeButton", "PLAY");
                 case "DECKS": return Loc.T("menu.decks", "Decks");
                 case "CARDS": return Loc.Game("MenuShop/ShopItemType/Cards", "Cards");
                 default: return label;
             }
         }
-        private static readonly string[] Icons = { "play" };
+        private static readonly string[] Icons = { "play", "collection", "social" };     // the menu bar's pictures
 
         // ---------------------------------------------------------------- the layout
 
@@ -87,6 +88,7 @@ namespace WarpforgeRevival
             ["Social"] = new List<Button>
             {
                 new Button { Tab = "Challenge", Label = "CHALLENGE", Icon = "play", After = "FriendsTab", Visible = true },
+                new Button { Tab = "Community", Label = "COMMUNITY", Icon = "collection", After = "Challenge", Visible = true },
                 new Button { Tab = "AlliancesTab", Visible = false },
             },
             // the Testers window (a copy of the Collection window): Play, Decks, Cards; Styles hidden
@@ -143,9 +145,17 @@ namespace WarpforgeRevival
                     }
                     parsed[w.Name] = list;
                 }
-                // windows the server leaves out keep the built-in layout
+                // windows the server leaves out keep the built-in layout; a mod tab the server's list does not
+                // mention (a tab newer than the layout) keeps its built-in button, so it is not left unlabelled
                 var all = BuiltIn();
-                foreach (var kv in parsed) all[kv.Key] = kv.Value;
+                foreach (var kv in parsed)
+                {
+                    var merged = new List<Button>(kv.Value);
+                    if (all.TryGetValue(kv.Key, out var builtIn))
+                        foreach (var b in builtIn)
+                            if ((b.Tab == "Challenge" || b.Tab == "Community") && !merged.Exists(x => x.Tab == b.Tab)) merged.Add(b);
+                    all[kv.Key] = merged;
+                }
                 layout = all;
                 source = "server";
                 RevivalMod.Log.Msg($"[menu layout] the server's menu layout is used ({string.Join(", ", parsed.Keys)}); windows built from now on use it");
@@ -335,22 +345,31 @@ namespace WarpforgeRevival
             return list;
         }
 
-        private static Sprite playIcon;
+        private static readonly Dictionary<string, Sprite> icons = new Dictionary<string, Sprite>();
 
         private static Sprite Icon(string name)
         {
-            if (name != "play") return null;
-            if (Ui.Alive(playIcon)) return playIcon;
+            NavigationPanelToggleType which;
+            switch (name)
+            {
+                case "play": which = NavigationPanelToggleType.Main; break;
+                case "collection": which = NavigationPanelToggleType.Collection; break;
+                case "social": which = NavigationPanelToggleType.Social; break;
+                default: return null;
+            }
+            if (icons.TryGetValue(name, out var have) && Ui.Alive(have)) return have;
+            Sprite sprite = null;
             try
             {
                 var nav = GameState.FindNav();
-                var play = (object)nav == null ? null : nav.GetToggle(NavigationPanelToggleType.Main);
-                var img = (object)play == null ? null : play.transform.Find("Image");
+                var toggle = (object)nav == null ? null : nav.GetToggle(which);
+                var img = (object)toggle == null ? null : toggle.transform.Find("Image");
                 var image = (object)img == null ? null : img.GetComponent<Image>();
-                playIcon = (object)image == null ? null : image.sprite;
+                sprite = (object)image == null ? null : image.sprite;
             }
-            catch { playIcon = null; }
-            return Ui.Alive(playIcon) ? playIcon : null;
+            catch { sprite = null; }
+            if (Ui.Alive(sprite)) icons[name] = sprite;
+            return Ui.Alive(sprite) ? sprite : null;
         }
 
         // ---------------------------------------------------------------- pages laid out per platform

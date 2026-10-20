@@ -20,9 +20,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.14.27-a";
+        public const string Version = "0.14.28-a";
 #else
-        public const string Version = "0.14.27-w";
+        public const string Version = "0.14.28-w";
 #endif
 
         /// <summary>
@@ -232,6 +232,7 @@ namespace WarpforgeRevival
 #endif
             TestersCollection.Tick();
             ChallengeMenu.Tick();
+            CommunityMenu.Tick();
             MenuLayout.Tick();
             ChallengeRules.Tick();
             SupportPage.Tick();

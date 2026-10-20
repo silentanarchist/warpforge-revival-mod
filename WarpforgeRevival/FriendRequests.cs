@@ -76,7 +76,7 @@ namespace WarpforgeRevival
             var window = friends.GetComponentInParent<GameWindowWithTabs>();
             if ((object)window != null)
                 foreach (var t in window.GetComponentsInChildren<AlliancesTab>(true))
-                    if ((object)t != null && !ChallengeMenu.IsChallengeTab(t)) { alliances = t; memberTab = t.allianceMemberVariant; break; }
+                    if ((object)t != null && !SocialTabs.IsCopy(t)) { alliances = t; memberTab = t.allianceMemberVariant; break; }
             var general = (object)memberTab != null ? memberTab.generalButton : null;
             var trophies = (object)memberTab != null ? memberTab.trophiesButton : null;
             if ((object)general == null || (object)trophies == null)

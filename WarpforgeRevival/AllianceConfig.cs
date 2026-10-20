@@ -33,7 +33,7 @@ namespace WarpforgeRevival
             {
                 JoinAllianceMenu join = null;
                 foreach (var j in window.GetComponentsInChildren<JoinAllianceMenu>(true))
-                    if ((object)j != null && !ChallengeMenu.IsChallengeTab(j.GetComponentInParent<AlliancesTab>(true))) { join = j; break; }
+                    if ((object)j != null && !SocialTabs.IsCopy(j.GetComponentInParent<AlliancesTab>(true))) { join = j; break; }
                 if ((object)join == null) return;
                 int removed = 0;
                 var holder = join.invitationHolder;
@@ -88,7 +88,7 @@ namespace WarpforgeRevival
         {
             try
             {
-                if ((object)to == null || ChallengeMenu.IsChallengeTab(to)) return;
+                if ((object)to == null || SocialTabs.IsCopy(to)) return;
                 var tab = to.TryCast<AlliancesTab>();
                 if ((object)tab == null) return;
                 if (asking && UnityEngine.Time.realtimeSinceStartup - askedAt < 10f) return;   // the game's window refresh after the mod's own request (no answer in 10 s: ask again)

@@ -145,7 +145,7 @@ namespace WarpforgeRevival
             AddReportButton(faq, faqT);
             AddExportButton(faq, faqT);
             AddCompressBox();
-            AddWatchButton(faq, faqT);
+            // "Watch a replay code" lives on Social > Community since 0.14.28 (AddWatchButton kept, unused)
 
             // The phone layout of this page keeps the button and its introduction switched off and
             // shows its own wording instead (which was just hidden with the rest of the publisher's
