@@ -256,12 +256,8 @@ namespace WarpforgeRevival
             foreach (var (id, name, state) in friends)
             {
                 float top = 1f - row * friendRow / listH, bottom = top - (friendRow - friendGap) / listH;
-                bool picked = id == friendId;
-                string hint = "  (" + (state == "online" ? Loc.T("challenge.online", "online") : state == "playing" ? Loc.T("challenge.playing", "in a match") : Loc.Game("MainMenu/General/Offline", "Offline")) + ")";
-                var b = TestersPage.Button(list, "Friend_" + id, "", 0f, bottom, 1f, top, picked ? new Color(0.35f, 0.25f, 0.08f, 1f) : TestersPage.Tile);
-                TestersPage.Text(b.transform, "Name", name + hint, 24, TextAlignmentOptions.Left, state == "online" ? Color.white : TestersPage.Dim, 0.04f, 0, 0.98f, 1);
                 string fid = id, fname = name;
-                TestersPage.OnClick(b, () => { friendId = fid; friendName = fname; status = ""; dirty = true; });
+                FriendRow(w, list, "Friend_" + id, name, state, id == friendId, 0f, bottom, 1f, top, () => { friendId = fid; friendName = fname; status = ""; dirty = true; });
                 row++;
             }
             if (friends.Count == 0)
@@ -427,6 +423,67 @@ namespace WarpforgeRevival
             catch (Exception e) { status = Loc.T("challenge.sendFailed", "Could not send the challenge: {error}", ("error", e.Message)); dirty = true; RevivalMod.Log.Warning("[challenge] send: " + e); }
         }
 
+        private static FriendUIElementWarpforge rowPrefab;
+
+        /// <summary>
+        /// A player row drawn like the Friends tab's own (a copy of its entry without the three buttons): the status
+        /// light, the name, and the whole row as a button. Picked rows are tinted. Falls back to a plain tile when the
+        /// Friends tab's entry cannot be found.
+        /// </summary>
+        private static void FriendRow(GameWindowWithTabs w, Transform parent, string objName, string name, string state, bool picked,
+                                      float x0, float y0, float x1, float y1, Action onClick)
+        {
+            try
+            {
+                if (!Ui.Alive(rowPrefab))
+                {
+                    rowPrefab = null;
+                    foreach (var f in w.GetComponentsInChildren<FriendsTab>(true)) { rowPrefab = f.friendElementPrefab; break; }
+                }
+                if ((object)rowPrefab == null) throw new Exception("no friend entry to copy");
+                var go = UnityEngine.Object.Instantiate(rowPrefab.gameObject, parent, false);
+                go.name = objName;
+                foreach (var le in go.GetComponents<LayoutElement>()) le.ignoreLayout = true;
+                var rt = go.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(x0, y0); rt.anchorMax = new Vector2(x1, y1);
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                rt.localScale = Vector3.one;
+                var entry = go.GetComponent<FriendUIElementWarpforge>();
+                var label = entry.userLabel;
+                var on = entry.connectedImage; var off = entry.notConnected;
+                Color onColor = entry.connectedColor, away = entry.awayColor;
+                foreach (var b in new[] { entry.challengeButton, entry.deleteUserButton, entry.showProfileButton })
+                    if ((object)b != null) b.gameObject.SetActive(false);
+                UnityEngine.Object.Destroy(entry);
+                if ((object)label != null) Ui.SetText(label, name);
+                if ((object)on != null) { on.gameObject.SetActive(state != "offline"); on.color = state == "playing" ? away : onColor; }
+                if ((object)off != null) off.gameObject.SetActive(state == "offline");
+                // the row itself is the button; its background takes the picked tint
+                var bg = go.GetComponent<Image>();
+                var button = go.GetComponent<Button>() ?? go.AddComponent<Button>();
+                button.onClick = new Button.ButtonClickedEvent();
+                button.interactable = true;
+                if ((object)bg != null) { button.targetGraphic = bg; if (picked) bg.color = new Color(0.9f, 0.65f, 0.25f, bg.color.a); }
+                else if (picked)
+                {
+                    var tint = TestersPage.Box(go.transform, "Picked", new Color(0.35f, 0.25f, 0.08f, 0.6f), 0, 0, 1, 1);
+                    tint.SetAsFirstSibling();
+                    tint.GetComponent<Image>().raycastTarget = false;
+                }
+                TestersPage.OnClick(button, onClick);
+                go.SetActive(true);
+            }
+            catch (Exception e)
+            {
+                if (!rowFallbackLogged) { rowFallbackLogged = true; RevivalMod.Log.Warning("[challenge] friend rows drawn plainly: " + e.Message); }
+                string hint = "  (" + (state == "online" ? Loc.T("challenge.online", "online") : state == "playing" ? Loc.T("challenge.playing", "in a match") : Loc.Game("MainMenu/General/Offline", "Offline")) + ")";
+                var b = TestersPage.Button(parent, objName, "", x0, y0, x1, y1, picked ? new Color(0.35f, 0.25f, 0.08f, 1f) : TestersPage.Tile);
+                TestersPage.Text(b.transform, "Name", name + hint, 24, TextAlignmentOptions.Left, state == "online" ? Color.white : TestersPage.Dim, 0.04f, 0, 0.98f, 1);
+                TestersPage.OnClick(b, onClick);
+            }
+        }
+        private static bool rowFallbackLogged;
+
         /// <summary>Under the friend list: the player found by friend code (if any), a box for a code and a Find button.</summary>
         private static void CodeBox(GameWindowWithTabs w, Transform area)
         {
@@ -435,11 +492,7 @@ namespace WarpforgeRevival
                 const float top = 0.19f;        // label 0.14-0.19, box 0.07-0.13; or the found player's row at 0.06-0.13
                 if (codeId != null)
                 {
-                    bool picked = codeId == friendId;
-                    string hint = "  (" + (codeState == "online" ? Loc.T("challenge.online", "online") : codeState == "playing" ? Loc.T("challenge.playing", "in a match") : Loc.Game("MainMenu/General/Offline", "Offline")) + ")";
-                    var b = TestersPage.Button(area, "Friend_code", "", 0.02f, 0.06f, 0.29f, 0.13f, picked ? new Color(0.35f, 0.25f, 0.08f, 1f) : TestersPage.Tile);
-                    TestersPage.Text(b.transform, "Name", codeName + hint, 24, TextAlignmentOptions.Left, codeState == "online" ? Color.white : TestersPage.Dim, 0.04f, 0, 0.98f, 1);
-                    TestersPage.OnClick(b, () => { friendId = codeId; friendName = codeName; status = ""; dirty = true; });
+                    FriendRow(w, area, "Friend_code", codeName, codeState, codeId == friendId, 0.02f, 0.06f, 0.29f, 0.13f, () => { friendId = codeId; friendName = codeName; status = ""; dirty = true; });
                     // the x puts the code box back
                     var clear = TestersPage.Button(area, "ClearCode", "x", 0.3f, 0.06f, 0.34f, 0.13f, TestersPage.Tile);
                     TestersPage.OnClick(clear, () => { if (friendId == codeId) { friendId = null; friendName = null; } codeId = codeName = codeState = null; codeText = ""; status = ""; dirty = true; });
