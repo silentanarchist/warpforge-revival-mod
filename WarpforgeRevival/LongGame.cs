@@ -192,6 +192,10 @@ namespace WarpforgeRevival
         // tester-mode tile (0.14.34: the server-deal test, a Classic-rules mode with Classic decks).
         private static float longTileClickedAt = -100f;
         private static IPlayEvent clickedEvent;
+        // The draft run being looked at (0.14.41): the game asks GameModes.GetActiveEvent(ClosedDeck) for "the draft
+        // event" in places that should mean this one - CardDeck.EmptySlotsCount (the deck's size and the "x/N" count,
+        // the deck validity before a draft match) - and gets the first draft event (Classic Draft) otherwise.
+        private static IPlayEvent lastDraft;
 
         [HarmonyPatch(typeof(LiveopMenuContainer), nameof(LiveopMenuContainer.OnClick))]
         private static class TileClicked
@@ -206,6 +210,7 @@ namespace WarpforgeRevival
                     if (isLong) longEvent = e;
                     bool remember = isLong || TestersPage.IsTesterEvent(e);
                     clickedEvent = remember ? e : null;
+                    try { if ((object)e != null && (object)e.TryCast<IDraftEvent>() != null) lastDraft = e; } catch { }
                     longTileClickedAt = remember ? UnityEngine.Time.realtimeSinceStartup : -100f;
                     string id = "?";
                     try { var d = (object)e == null ? null : e.GetBaseData(); if ((object)d != null) id = d.eventId; } catch { }
@@ -348,6 +353,12 @@ namespace WarpforgeRevival
             {
                 try
                 {
+                    if (playMode == PlayModes.ClosedDeck && (object)lastDraft != null)
+                    {
+                        // the draft run last opened from its tile, not whichever draft event comes first
+                        __result = lastDraft;
+                        return;
+                    }
                     if (string.IsNullOrEmpty(EventId)) return;
                     if (playMode == LongMode || (playMode == PlayModes.Classic && (page == Page.Long || editingLong)))
                     {

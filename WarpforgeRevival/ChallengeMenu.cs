@@ -206,7 +206,7 @@ namespace WarpforgeRevival
             const float ruleRow = 0.066f;
             var shownFields = new List<ChallengeRules.Field>();
             foreach (var f in ChallengeRules.Fields)
-                if (!ChallengeRules.TestersOnly(f.Key) || AccountPage.IsTester) shownFields.Add(f);
+                if (!ChallengeRules.TestersOnly(f.Key) || (ShowTesterRules && AccountPage.IsTester)) shownFields.Add(f);
             var rules = ScrollArea(area, "RuleList", x0, 0.17f, 0.96f, 0.85f, shownFields.Count * ruleRow, out float rulesH);
             int r = 0;
             rows.Clear();
@@ -549,6 +549,9 @@ namespace WarpforgeRevival
         private static float openSince = -1f;
         private static bool? pendingSkirmish;
         private static bool pendingDeal;
+        // the tester-only rules (the server-deal test) are off the page for now (owner, 2026-10-21): the test runs as
+        // its own mode in the Testers window; the rule stays in the rule set so every game reads the same fields
+        private const bool ShowTesterRules = false;
 
         /// <summary>From the Testers window: the Challenge page with the Classic preset and the server-deal rule on.</summary>
         internal static void OpenForServerDeal()
