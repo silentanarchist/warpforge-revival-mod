@@ -137,14 +137,16 @@ namespace WarpforgeRevival
 
         /// <summary>A search in a mode whose server rule "aiFallback" is off never starts a match against the AI: the game
         /// keeps waiting for a person (the Server Deal test mode has it off; any mode can).</summary>
-        [HarmonyPatch(typeof(SearchOpponentManager), nameof(SearchOpponentManager.WaitAndStartMatchWithBot))]
+        /// (The game's path: SearchOpponentManager.WaitForHumanOpponent waits its time, then MatchMakerManager.ChangeToBotBattle
+        /// turns the search into a bot match; skipping that leaves the player in the room they opened, where a person can still join.)
+        [HarmonyPatch(typeof(Il2CppEverguild.MatchMakerManager), nameof(Il2CppEverguild.MatchMakerManager.ChangeToBotBattle))]
         private static class NoBotInDealModes
         {
-            private static bool Prefix(SearchOpponentManager __instance)
+            private static bool Prefix(MatchData matchData)
             {
                 try
                 {
-                    var md = __instance.matchData;
+                    var md = matchData;
                     var ev = (object)md == null ? null : md.CurrentEvent;
                     var data = (object)ev == null ? null : ev.GetBaseData();
                     string id = (object)data == null ? null : data.eventId;
