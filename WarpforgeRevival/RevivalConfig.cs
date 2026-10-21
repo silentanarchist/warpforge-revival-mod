@@ -31,10 +31,8 @@ namespace WarpforgeRevival
         public const string DefaultServer = "wf-revival.silentanarchist.com";
 
         /// <summary>
-        /// The community server's earlier name (until 0.13.27). A settings file that still names it is
-        /// switched to <see cref="DefaultServer"/> once, and while the new name does not answer the old
-        /// one is used instead. Both are the same server. To be removed in a later update, once players
-        /// have moved over.
+        /// The community server's earlier name (until 0.13.27; its DNS record was removed 2026-10-21). A settings
+        /// file that still names it is switched to <see cref="DefaultServer"/> once. The mod no longer tries it.
         /// </summary>
         public const string OldServer = "warpforge.silentanarchist.com";
 
@@ -79,22 +77,6 @@ namespace WarpforgeRevival
             string secure = "https://" + plain.Substring("http://".Length);
             string remembered = secureServer != null ? (secureServer.Value ?? "") : "";
             string why = Probe(secure);
-            if (why != null && string.Equals(host, DefaultServer, System.StringComparison.OrdinalIgnoreCase))
-            {
-                // the new name may not be reachable everywhere yet: the old name is the same server
-                string old = "https://" + OldServer + secure.Substring(("https://" + host).Length);
-                string whyOld = Probe(old);
-                if (whyOld == null)
-                {
-                    RevivalMod.Log.Warning("[secure] " + host + " did not answer over https (" + why + "); using the server's earlier name " + OldServer + " this time");
-                    return old;
-                }
-                if (remembered.Equals(OldServer, System.StringComparison.OrdinalIgnoreCase))
-                {
-                    RevivalMod.Log.Warning("[secure] neither " + host + " nor " + OldServer + " answered over https (" + why + "); the mod will not use an unencrypted connection to them");
-                    return secure;
-                }
-            }
             if (why == null)
             {
                 if (remembered != host)
