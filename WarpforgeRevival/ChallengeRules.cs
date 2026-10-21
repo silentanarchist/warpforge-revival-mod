@@ -55,13 +55,18 @@ namespace WarpforgeRevival
             new Field("offenseCards", () => Loc.T("challenge.rule.offenseCards", "Offence cards"), 0, 1),
             // 0 the game decides (warlord initiative, then a coin toss), 1 the challenger, 2 the friend challenged
             new Field("firstPlayer", () => Loc.T("challenge.rule.firstPlayer", "Goes first"), 0, 2),
+            // 0.14.34: the server-deal test (ServerDeal.cs). Shown to testers only; the server accepts 1 from testers only.
+            new Field("serverDeal", () => Loc.T("challenge.rule.serverDeal", "Server deal (test)"), 0, 1),
         };
+
+        /// <summary>Rules only testers see on the Challenge page (every rule set still carries them, at their lowest value).</summary>
+        internal static bool TestersOnly(string key) => key == "serverDeal";
 
         /// <summary>A rule's value as the menu shows it ("x1.4", "+5", "4").</summary>
         internal static string Show(string key, int v) =>
             key == "warlordHealthMultiplier" ? "x" + (v / 10.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
             : key == "warlordLifeChange" && v > 0 ? "+" + v
-            : key == "offenseCards" ? (v == 1 ? Loc.Game("MainMenu/Settings/ButtonLabel/Music_On", "On") : Loc.Game("MainMenu/Settings/ButtonLabel/Music_Off", "Off"))
+            : key == "offenseCards" || key == "serverDeal" ? (v == 1 ? Loc.Game("MainMenu/Settings/ButtonLabel/Music_On", "On") : Loc.Game("MainMenu/Settings/ButtonLabel/Music_Off", "Off"))
             : key == "firstPlayer" ? (v == 1 ? Loc.T("challenge.firstYou", "You") : v == 2 ? Loc.T("challenge.firstOpponent", "Opponent") : Loc.Game("MenuDeck/Button/Random", "Random"))      // as the challenger sees it
             : v.ToString();
 
@@ -139,7 +144,8 @@ namespace WarpforgeRevival
                        Loc.T("challenge.sum.offence", "Offence cards: {offence}", ("offence", Show("offenseCards", G("offenseCards")))) + " · " +
                        (G("firstPlayer") == 1 ? Loc.T("challenge.sum.firstChallenger", "goes first: your challenger")
                         : G("firstPlayer") == 2 ? Loc.T("challenge.sum.firstYou", "goes first: you")
-                        : Loc.T("challenge.sum.firstRandom", "goes first: random"));
+                        : Loc.T("challenge.sum.firstRandom", "goes first: random")) +
+                       (G("serverDeal") == 1 ? "\n" + Loc.T("challenge.sum.serverDeal", "Server deal (test): the server shuffles and deals") : "");
             }
         }
 
@@ -173,6 +179,7 @@ namespace WarpforgeRevival
             r.Values["turnSeconds"] = secs >= 30 && secs <= 300 ? secs : 60;
             r.Values["offenseCards"] = ServerSettings.OffenceFor(eventId) ? 1 : 0;
             r.Values["firstPlayer"] = 0;
+            r.Values["serverDeal"] = 0;
             foreach (var f in Fields)
             {
                 int v = r.Values.TryGetValue(f.Key, out int got) ? got : f.Min;
@@ -422,6 +429,8 @@ namespace WarpforgeRevival
         internal static int? Offence => active?.Get("offenseCards");
         /// <summary>Who goes first under a challenge's rules: 0 the game decides, 1 the challenger, 2 the friend challenged.</summary>
         internal static int FirstPlayer => active?.Get("firstPlayer") ?? 0;
+        /// <summary>The match being played is a server-deal test (0.14.34; ServerDeal.cs checks the room too).</summary>
+        internal static bool ServerDealRule => active != null && !ActiveIsReplay && active.Get("serverDeal") == 1;
         /// <summary>A replay's saved rules say a challenge forced who went first in it.</summary>
         internal static bool ReplayForcedFirst => active != null && activeIsReplay && active.Get("forcedFirst") == 1;
 

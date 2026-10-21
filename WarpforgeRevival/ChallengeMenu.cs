@@ -160,6 +160,7 @@ namespace WarpforgeRevival
             string mode = presets[presetIndex];
             var ev = ChallengeRules.FindEvent(mode);
             if (values == null || values.EventId != mode) values = ChallengeRules.Preset(ev, mode);
+            if (pendingDeal && AccountPage.IsTester) { values.Values["serverDeal"] = 1; pendingDeal = false; }     // from the Testers window
 
             var go = new GameObject(PanelName);
             var rt = go.AddComponent<RectTransform>();
@@ -203,10 +204,13 @@ namespace WarpforgeRevival
             var preset = ChallengeRules.Preset(ev, mode);
             // the rules scroll on their own (0.14.17), so more can be added and the text is larger; the buttons stay at the bottom
             const float ruleRow = 0.066f;
-            var rules = ScrollArea(area, "RuleList", x0, 0.17f, 0.96f, 0.85f, ChallengeRules.Fields.Length * ruleRow, out float rulesH);
+            var shownFields = new List<ChallengeRules.Field>();
+            foreach (var f in ChallengeRules.Fields)
+                if (!ChallengeRules.TestersOnly(f.Key) || AccountPage.IsTester) shownFields.Add(f);
+            var rules = ScrollArea(area, "RuleList", x0, 0.17f, 0.96f, 0.85f, shownFields.Count * ruleRow, out float rulesH);
             int r = 0;
             rows.Clear();
-            foreach (var f in ChallengeRules.Fields)
+            foreach (var f in shownFields)
             {
                 float top = 1f - r * ruleRow / rulesH, bottom = top - ruleRow / rulesH, pad = 0.004f / rulesH;
                 var rr = new RuleRow { Field = f };
@@ -544,6 +548,18 @@ namespace WarpforgeRevival
         /// </summary>
         private static float openSince = -1f;
         private static bool? pendingSkirmish;
+        private static bool pendingDeal;
+
+        /// <summary>From the Testers window: the Challenge page with the Classic preset and the server-deal rule on.</summary>
+        internal static void OpenForServerDeal()
+        {
+            pendingSkirmish = false;
+            pendingDeal = true;
+            values = null;
+            status = ""; dirty = true;
+            RevivalMod.Log.Msg("[challenge] opening the Challenge page for a server-deal test");
+            OpenPage();
+        }
 
         private static void FromDuelPopup(DuelPopupWindow popup, bool? skirmish)
         {
