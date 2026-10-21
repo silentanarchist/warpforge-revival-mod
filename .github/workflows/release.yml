@@ -1,6 +1,6 @@
 # Publishes a Release for the build zips committed under releases/.
 # Since 0.14.0 (2026-10-17) one Release holds both builds of a version: releases/WarpforgeRevival-<x.y.z>-w.zip (PC)
-# and releases/WarpforgeRevival.Android-<x.y.z>-a.zip (Android) become the Release "Warpforge Revival <x.y.z>", tag
+# and releases/WarpforgeRevival.Android-<x.y.z>-a.zip (Android) become the Release "WF Revival <x.y.z>", tag
 # v<x.y.z>, with install steps for each build it holds and the "## <x.y.z>" section of CHANGELOG.md. A zip committed
 # after its version's Release exists is added to it. Releases from before 0.14.0 (one per build, tags v<x.y.z>-w /
 # v<x.y.z>-a) are left alone: a zip that already has such a Release is skipped. Only the current builds are kept in releases/.
@@ -58,7 +58,7 @@ jobs:
             if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
               body="See the release page for what changed."
             fi
-            jq -n --arg title "Warpforge Revival $version" \
+            jq -n --arg title "WF Revival $version" \
                   --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" \
                   --arg body "$body" '
               { allowed_mentions: { parse: [] },
@@ -130,7 +130,7 @@ jobs:
             else
               echo "no CHANGELOG.md section for $base"
             fi
-            gh release create "$tag" "${pc[@]}" "${android[@]}" --target "$GITHUB_SHA" --title "Warpforge Revival ${base}" --notes-file notes.md --latest
+            gh release create "$tag" "${pc[@]}" "${android[@]}" --target "$GITHUB_SHA" --title "WF Revival ${base}" --notes-file notes.md --latest
             echo "published $tag"
             announce "$base"
           done

@@ -1,4 +1,4 @@
-# Warpforge Revival for Android
+# WF Revival for Android
 
 *This guide was the README of the separate Android repository
 ([wf-revival-mod-android](https://github.com/silentanarchist/wf-revival-mod-android)) until both mods moved
@@ -7,10 +7,10 @@ into this one repository on 2026-10-17. The mod and the Warpforge Patcher app ar
 older copies of the app can still find their update.*
 
 Everything needed to run *Warhammer 40,000: Warpforge* on an Android phone against a
-[Warpforge Revival server](https://github.com/silentanarchist/wf-revival-server), now that
+[WF Revival server](https://github.com/silentanarchist/wf-revival-server), now that
 the game's own servers are closed:
 
-- **the Android build of the Warpforge Revival mod** (`WarpforgeRevival.Android.dll`),
+- **the Android build of the WF Revival mod** (`WarpforgeRevival.Android.dll`),
 - **the patcher** that puts a mod loader into your own copy of the Android game, and
 - **the changes made to that mod loader** so it runs this game on current phones.
 

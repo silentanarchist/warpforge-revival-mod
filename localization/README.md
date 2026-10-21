@@ -1,6 +1,6 @@
 # Translations
 
-Text that Warpforge Revival adds to the game (and later the website and custom cards), in every language the game
+Text that WF Revival adds to the game (and later the website and custom cards), in every language the game
 itself ships: English, Spanish, Russian, French, German, Portuguese (Brazil), Italian, Korean, Simplified Chinese,
 Japanese, Polish, Czech and Turkish (`languages.json`). More languages can be added on request.
 

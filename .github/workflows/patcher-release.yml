@@ -59,7 +59,7 @@ jobs:
             if grep -E "^## ${version//./\\.}( |$).*\(test build\)" releases/patcher/CHANGELOG.md >/dev/null; then pre="--prerelease"; fi
             sha="$(sha256sum "$apk" | cut -c1-64)"
             {
-              echo "**Warpforge Patcher** puts the mod loader and the Warpforge Revival mod into your own copy of the Android game (version 1.35.0), on the device itself. No PC patching, no cable."
+              echo "**Warpforge Patcher** puts the mod loader and the WF Revival mod into your own copy of the Android game (version 1.35.0), on the device itself. No PC patching, no cable."
               echo
               echo "If the game is already installed, the app removes it first (Android asks you to confirm), then installs the patched copy."
               echo

@@ -1,4 +1,7 @@
-# Warpforge Revival mod
+# WF Revival mod
+
+*Formerly "Warpforge Revival". The mod files are still named `WarpforgeRevival.dll` / `WarpforgeRevival.Android.dll`
+until the release that renames them.*
 
 A [MelonLoader](https://melonwiki.xyz/) mod that lets *Warhammer 40,000: Warpforge* run against a
 community-hosted server now that the game's own servers are closed.
@@ -59,7 +62,7 @@ Each file starts with a comment saying what it is for and why.
 ## Download
 
 Every version is on the [Releases](https://github.com/silentanarchist/wf-revival-mod/releases) page: since
-0.14.0 one release, "Warpforge Revival <version>", holds both the Windows and the Android build.
+0.14.0 one release, "WF Revival <version>" (before 2026-10-21 "Warpforge Revival <version>"), holds both the Windows and the Android build.
 
 The latest builds are [releases/WarpforgeRevival-0.14.0-w.zip](releases/WarpforgeRevival-0.14.0-w.zip) (Windows) and
 [releases/WarpforgeRevival.Android-0.14.0-a.zip](releases/WarpforgeRevival.Android-0.14.0-a.zip) (Android; see
