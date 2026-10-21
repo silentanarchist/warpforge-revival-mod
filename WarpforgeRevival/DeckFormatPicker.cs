@@ -57,6 +57,7 @@ namespace WarpforgeRevival
             if (tiles == null || (object)anchor == null) return;
 
             SelectDeckGameModeMenuContainer classic = null, skirmish = null, longGame = null;
+            var testerTiles = new List<SelectDeckGameModeMenuContainer>();     // tester modes (0.14.39): not formats of their own here
             var seen = new List<string>();
             for (int i = 0; i < tiles.Count; i++)
             {
@@ -65,6 +66,7 @@ namespace WarpforgeRevival
                 string id = IdOf(tile, out var e);
                 seen.Add(id);
                 if (LongGame.IsLongEvent(e)) longGame = tile;
+                else if (TestersPage.IsTesterEvent(e)) testerTiles.Add(tile);
                 else if (id.IndexOf("Skirmish", StringComparison.OrdinalIgnoreCase) >= 0) skirmish = tile;
                 else if (id.IndexOf("Classic", StringComparison.OrdinalIgnoreCase) >= 0) classic = tile;
             }
@@ -81,6 +83,8 @@ namespace WarpforgeRevival
             // the normal picker leaves it out, so Classic and Skirmish are two full-size tiles side by side.
             if (TestersCollection.IsUnder(tab.transform)) return;
             if ((object)longGame != null) longGame.gameObject.SetActive(false);
+            // the other tester modes (the Server Deal test) play Classic decks: no format of their own
+            foreach (var t in testerTiles) t.gameObject.SetActive(false);
             try
             {
                 if ((object)classic != null) classic.transform.SetSiblingIndex(0);
@@ -88,7 +92,7 @@ namespace WarpforgeRevival
             }
             catch { }
             LayoutRebuilder.MarkLayoutForRebuild(anchor.TryCast<RectTransform>());
-            if (report) RevivalMod.Log.Msg($"[decks] format picker: Classic and Skirmish full size{((object)longGame != null ? "; Custom Test left out (Testers window has it)" : "")}");
+            if (report) RevivalMod.Log.Msg($"[decks] format picker: Classic and Skirmish full size{((object)longGame != null ? "; Custom Test left out (Testers window has it)" : "")}{(testerTiles.Count > 0 ? $"; {testerTiles.Count} tester mode(s) left out (Classic decks)" : "")}");
         }
     }
 }
