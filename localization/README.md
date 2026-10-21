@@ -8,6 +8,7 @@ Japanese, Polish, Czech and Turkish (`languages.json`). More languages can be ad
 |---|---|
 | `mod/` | The mod's own texts: buttons, messages, windows. `en.json` is the source. |
 | `site/` | The website's texts (the language picker is in the site's header). `en.json` is the source, made from the site page by `tools/localization/extract-site.py`. |
+| `patcher/` | The Warpforge Patcher app's texts (the Android app that patches the game on the device). `en.json` is the source, made from the app's code (silentanarchist/MelonLoaderInstaller, `WarpforgePatcher/`) by `tools/localization/extract-patcher.py`. The app builds these files in and also fetches newer copies from the server. |
 | `guides/` | The install and Card Creator guides, block by block. `en.json` is made from the server repo's `guides.html` by `tools/localization/extract-guides.py`; each key is the guide and a fingerprint of the block's English, so the guides need no marking and a changed block simply gets a new key (English until translated again). |
 | `server/` | Messages the game server sends to players ("No player with that friend code", sign-in and ban notices...). `en.json` is made from the server repo's `playfab_emu.py` by `tools/localization/extract-server.py`; each key is a fingerprint of the English. Parts filled in by the server are `{p1}`, `{p2}`...: keep each one. The server itself answers in the player's language. |
 | `index.json` | Made by `tools/localization/build-index.py`: which language files exist, with their checksums. |
@@ -29,8 +30,9 @@ Game terms follow the game's own translations (its words for Troop, Stratagem, W
 rarities, races, keywords, game modes and menus). Keywords in running text are written as the game's word with the
 English in brackets, e.g. "Refuerzo (Rally)", because the Card Creator lists them in English. Screens the mod has
 translated (Friends, Social > Challenge, the Testers window, Settings > Account and Settings > Mod, the sign-in window)
-are named by their exact translated label from `mod/<code>.json`. Screens that exist only in English (the Card Creator's
-controls until they are translated, the Patcher app until its translated version is out) are named by their exact
+are named by their exact translated label from `mod/<code>.json`, and the Patcher app's buttons (translated from patcher
+0.4.0) by their label from `patcher/<code>.json`. Screens that exist only in English (the Card Creator's controls until
+they are translated) are named by their exact
 English label with a short translation in brackets.
 
 ## How it reaches players
@@ -47,6 +49,14 @@ The English stays in the code; after adding or changing texts run
     python3 tools/localization/extract.py
 
 to update `mod/en.json`.
+
+The Patcher app (MelonLoaderInstaller fork, `WarpforgePatcher/`) writes its texts as `Loc.T("area.key", "English")`,
+`new LocText("area.key", "English")` or `new UserError("area.key", "English")` (`Loc.cs`); its log stays in English.
+After changing the app's texts run
+
+    python3 tools/localization/extract-patcher.py [path/to/WarpforgePatcher]
+
+to update `patcher/en.json`; the app's `build.sh` copies `patcher/*.json` into the app.
 
 The website marks its texts as `data-t="key"` on elements (the element's text is the English; `data-t-title` /
 `data-t-placeholder` for those attributes) and as `T("key", "English", { name: value })` in its scripts. After
