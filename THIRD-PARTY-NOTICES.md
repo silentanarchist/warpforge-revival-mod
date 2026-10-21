@@ -3,7 +3,7 @@
 This repository contains this project's own work and, in `loader-changes/`, changes to other
 people's software. The built programs (`LemonPatch.exe` and the loader package `melon_data.zip`) are
 not stored here since 2026-10-17: `patcher/1 - patch.bat` downloads them into `patcher/tool/` from
-[the commit of the old Android repository where they were published](https://github.com/silentanarchist/warpforge-revival-mod-android/tree/52b333dd265cbee4471db22bfe140d95e99754c5/patcher/tool),
+[the commit of the old Android repository where they were published](https://github.com/silentanarchist/wf-revival-mod-android/tree/52b333dd265cbee4471db22bfe140d95e99754c5/patcher/tool),
 and everything below applies to them as it did there. This file says what is whose, under which licence,
 and what was changed. The licence texts are in [`licenses/`](licenses).
 

@@ -1,4 +1,4 @@
-# Moved here from warpforge-revival-mod-android with the rest of the Android parts (2026-10-17); the app's releases up to
+# Moved here from wf-revival-mod-android with the rest of the Android parts (2026-10-17); the app's releases up to
 # 0.2.7 stay there, and apps up to that version look for updates there.
 # Publishes a Release for the Warpforge Patcher app (the Android app that patches the game on the device itself).
 # Wording (owner's rule): release notes say "device", not "phone", unless something only applies to phones.

@@ -12,7 +12,7 @@ same order). This writes localization/guides/en.json.
     python3 tools/localization/extract-guides.py [path/to/guides.html]
     python3 tools/localization/extract-guides.py --check [path/to/guides.html]
 
-The page defaults to ../warpforge-revival-server/content/files/guides.html next to this repo. The English must come
+The page defaults to ../wf-revival-server/content/files/guides.html next to this repo. The English must come
 out exactly as the site's own richEnglish() makes it (creator.html), or the fingerprints will not match.
 """
 import hashlib, html, json, os, re, sys
@@ -20,7 +20,7 @@ from html.parser import HTMLParser
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, "localization", "guides", "en.json")
-PAGE = os.path.join(os.path.dirname(ROOT), "warpforge-revival-server", "content", "files", "guides.html")
+PAGE = next((p for p in (os.path.join(os.path.dirname(ROOT), d, "content", "files", "guides.html") for d in ("wf-revival-server", "warpforge-revival-server")) if os.path.exists(p)), None) or os.path.join(os.path.dirname(ROOT), "wf-revival-server", "content", "files", "guides.html")
 VOID = {"br", "img", "input", "meta", "link", "hr", "wbr", "source", "col", "area", "base", "embed", "param", "track"}
 RICH = {"strong", "em", "code", "br", "b", "i"}
 BLOCKS = {"h1", "h2", "h3", "h4", "p", "li", "td", "th", "figcaption", "summary", "dt", "dd"}

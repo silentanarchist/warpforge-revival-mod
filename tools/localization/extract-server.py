@@ -20,7 +20,7 @@ import ast, hashlib, json, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, "localization", "server", "en.json")
-SOURCE = os.path.join(os.path.dirname(ROOT), "warpforge-revival-server", "playfab_emu.py")
+SOURCE = next((p for p in (os.path.join(os.path.dirname(ROOT), d, "playfab_emu.py") for d in ("wf-revival-server", "warpforge-revival-server")) if os.path.exists(p)), None) or os.path.join(os.path.dirname(ROOT), "wf-revival-server", "playfab_emu.py")
 
 
 def key_of(template):

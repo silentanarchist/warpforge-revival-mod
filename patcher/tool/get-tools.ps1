@@ -1,11 +1,11 @@
 # Used by "1 - patch.bat".
 # The patching program (LemonPatch.exe) and the loader package (melon_data.zip) are about 84 MB, so since the two mod
 # repositories were merged (2026-10-17) they are no longer kept in this repository. This downloads any piece that is
-# missing from the commit of the old Android repository (silentanarchist/warpforge-revival-mod-android) where they
+# missing from the commit of the old Android repository (silentanarchist/wf-revival-mod-android) where they
 # were last published, and checks each against the SHA-256 recorded here, so a changed or broken download is never used.
 # Pieces already in this folder (for example from an older copy of the patcher) are checked the same way and kept.
 $ErrorActionPreference = 'Stop'
-$base = 'https://raw.githubusercontent.com/silentanarchist/warpforge-revival-mod-android/52b333dd265cbee4471db22bfe140d95e99754c5/patcher/tool/'
+$base = 'https://raw.githubusercontent.com/silentanarchist/wf-revival-mod-android/52b333dd265cbee4471db22bfe140d95e99754c5/patcher/tool/'
 $pieces = [ordered]@{
     'LemonPatch.exe.part0'  = 'bc50bf789786693ccad9ef2d39830bac15be41c125e102234acb58d041372921'
     'LemonPatch.exe.part1'  = '4cf9296394c67de68aa777c05c6c81d502c545b524036235cdf0fb585064d2f2'

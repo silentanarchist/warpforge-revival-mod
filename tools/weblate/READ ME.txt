@@ -2,7 +2,7 @@ WARPFORGE REVIVAL - WEBLATE (the translation site), self-hosted
 ===============================================================
 
 Weblate is where players translate the mod, the website, the guides and the Patcher app. It reads the
-translation files from the mod repo on GitHub (warpforge-revival-mod, folder localization/) and writes the
+translation files from the mod repo on GitHub (wf-revival-mod, folder localization/) and writes the
 approved translations back to a branch called "weblate". From there they are merged and copied to the game
 server when you say so.
 
@@ -63,7 +63,7 @@ CONNECT GITHUB
 5. In Weblate: your admin menu > Manage > SSH keys. Under "Add host key" enter github.com (port empty) and
    submit, so Weblate trusts GitHub. Then "Generate Ed25519 SSH key" (if none is shown) and copy the
    public key.
-6. On GitHub: warpforge-revival-mod > Settings > Deploy keys > Add deploy key: paste it, tick "Allow write
+6. On GitHub: wf-revival-mod > Settings > Deploy keys > Add deploy key: paste it, tick "Allow write
    access". (Only this repo; Weblate never gets your account.)
 
 
@@ -73,9 +73,9 @@ THE PROJECT AND ITS COMPONENTS
 
 8. Add one component for each area (Add new translation component > From version control). Same for all:
      Version control system:  Git
-     Source code repository:  git@github.com:silentanarchist/warpforge-revival-mod.git
+     Source code repository:  git@github.com:silentanarchist/wf-revival-mod.git
      Repository branch:       main
-     Repository push URL:     git@github.com:silentanarchist/warpforge-revival-mod.git
+     Repository push URL:     git@github.com:silentanarchist/wf-revival-mod.git
      Push branch:             weblate
      File format:             JSON file
      Monolingual base language file / Template for new translations: the en.json below

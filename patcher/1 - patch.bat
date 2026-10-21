@@ -45,7 +45,7 @@ if exist "tool\melon_data.zip.part0" (
 echo.
 echo  The patching tool and the loader could not be downloaded. Check the internet
 echo  connection and run this again, or download these five files yourself from
-echo    https://github.com/silentanarchist/warpforge-revival-mod-android/tree/52b333dd265cbee4471db22bfe140d95e99754c5/patcher/tool
+echo    https://github.com/silentanarchist/wf-revival-mod-android/tree/52b333dd265cbee4471db22bfe140d95e99754c5/patcher/tool
 echo  and put them in the "tool" folder:
 echo    LemonPatch.exe.part0, LemonPatch.exe.part1,
 echo    melon_data.zip.part0, melon_data.zip.part1, melon_data.zip.part2
@@ -61,7 +61,7 @@ if not exist "tool\melon_data.zip" goto :nodownload
 echo.
 echo  The patching tool and the loader could not be downloaded. Check the internet
 echo  connection and run this again, or download these five files yourself from
-echo    https://github.com/silentanarchist/warpforge-revival-mod-android/tree/52b333dd265cbee4471db22bfe140d95e99754c5/patcher/tool
+echo    https://github.com/silentanarchist/wf-revival-mod-android/tree/52b333dd265cbee4471db22bfe140d95e99754c5/patcher/tool
 echo  and put them in the "tool" folder:
 echo    LemonPatch.exe.part0, LemonPatch.exe.part1,
 echo    melon_data.zip.part0, melon_data.zip.part1, melon_data.zip.part2
@@ -115,7 +115,7 @@ goto :end
 echo.
 echo  The patching tool and the loader could not be downloaded. Check the internet
 echo  connection and run this again, or download these five files yourself from
-echo    https://github.com/silentanarchist/warpforge-revival-mod-android/tree/52b333dd265cbee4471db22bfe140d95e99754c5/patcher/tool
+echo    https://github.com/silentanarchist/wf-revival-mod-android/tree/52b333dd265cbee4471db22bfe140d95e99754c5/patcher/tool
 echo  and put them in the "tool" folder:
 echo    LemonPatch.exe.part0, LemonPatch.exe.part1,
 echo    melon_data.zip.part0, melon_data.zip.part1, melon_data.zip.part2

@@ -8,12 +8,12 @@ Windows and `WarpforgeRevival.Android.dll` for Android (the same source; the par
 `ANDROID_PORT` are the Android differences). It also holds the PC patcher that puts the mod loader
 into the Android game, and the changes made to that loader. **Installing? See the
 [guides on the website](https://wf-revival.silentanarchist.com/guides).** (Until 2026-10-17 the Android parts were in their own repository,
-[warpforge-revival-mod-android](https://github.com/silentanarchist/warpforge-revival-mod-android). It
+[wf-revival-mod-android](https://github.com/silentanarchist/wf-revival-mod-android). It
 stays up so older copies of the Warpforge Patcher app can find their update; the app is released here now.)
 Versions are numbered `x.y.z.f-w` for Windows and `x.y.z.f-a` for Android: `x.y.z` is the shared code
 and always the same on both; `f` counts fixes made for one of them only, is left off while it is 0
 (`0.12.1-w`), and starts again with every new `x.y.z`. The server it talks to is in
-[warpforge-revival-server](https://github.com/silentanarchist/warpforge-revival-server).
+[wf-revival-server](https://github.com/silentanarchist/wf-revival-server).
 
 This is an unofficial fan project. It is not affiliated with or endorsed by Everguild or
 Games Workshop. It contains no game files: you need your own copy of the game.
@@ -58,7 +58,7 @@ Each file starts with a comment saying what it is for and why.
 
 ## Download
 
-Every version is on the [Releases](https://github.com/silentanarchist/warpforge-revival-mod/releases) page: since
+Every version is on the [Releases](https://github.com/silentanarchist/wf-revival-mod/releases) page: since
 0.14.0 one release, "Warpforge Revival <version>", holds both the Windows and the Android build.
 
 The latest builds are [releases/WarpforgeRevival-0.14.0-w.zip](releases/WarpforgeRevival-0.14.0-w.zip) (Windows) and

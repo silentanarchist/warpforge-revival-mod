@@ -64,7 +64,7 @@ changing the site, run
 
     python3 tools/localization/extract-site.py [path/to/creator.html]
 
-(default: `../warpforge-revival-server/content/files/creator.html`) to update `site/en.json`.
+(default: `../wf-revival-server/content/files/creator.html`) to update `site/en.json`.
 
 The server's messages: every `err(code, "message")` in the server repo's `playfab_emu.py` is a text. After changing
 them run `python3 tools/localization/extract-server.py`. The mod and the website send the player's language in the

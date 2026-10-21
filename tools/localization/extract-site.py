@@ -20,14 +20,14 @@ left out. Only the creator's own wording is collected; a card's name and rules t
     python3 tools/localization/extract-site.py [path/to/creator.html]          write localization/site/en.json
     python3 tools/localization/extract-site.py --check [path/to/creator.html]  only check it is up to date
 
-The page defaults to ../warpforge-revival-server/content/files/creator.html next to this repo.
+The page defaults to ../wf-revival-server/content/files/creator.html next to this repo.
 """
 import html, json, os, re, sys
 from html.parser import HTMLParser
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, "localization", "site", "en.json")
-PAGE = os.path.join(os.path.dirname(ROOT), "warpforge-revival-server", "content", "files", "creator.html")
+PAGE = next((p for p in (os.path.join(os.path.dirname(ROOT), d, "content", "files", "creator.html") for d in ("wf-revival-server", "warpforge-revival-server")) if os.path.exists(p)), None) or os.path.join(os.path.dirname(ROOT), "wf-revival-server", "content", "files", "creator.html")
 CALL = re.compile(r'\bT\(\s*"([a-zA-Z0-9_.]+)"\s*,\s*"((?:[^"\\]|\\.)*)"')
 KEY_ONLY = re.compile(r'\bT\(\s*"([a-zA-Z0-9_.]+)"')
 RICH = {"strong", "em", "code", "br", "b", "i"}            # the tags a data-t-rich text (and its translations) may hold
