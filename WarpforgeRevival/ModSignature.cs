@@ -32,7 +32,18 @@ namespace WarpforgeRevival
             "+STVSQrWCM6CEz1ouUaizh/+HK/PnlAMd4d+3593u6Q=",
         };
 
-        private static readonly Regex VersionInBuild = new Regex(@"Warpforge Revival[\s\S](\d+(?:\.\d+){1,3})(-[a-z][a-z0-9]*)?", RegexOptions.CultureInvariant);
+        // the mod's name in its MelonInfo attribute: "WF Revival" from the rename on (0.15.0), "Warpforge Revival" before
+        private static readonly Regex VersionInBuild = new Regex(@"(?:WF|Warpforge) Revival[\s\S](\d+(?:\.\d+){1,3})(-[a-z][a-z0-9]*)?", RegexOptions.CultureInvariant);
+
+        /// <summary>The file names a build of this platform may have been signed under: the new name first
+        /// (WFRevival.dll / WFRevival.Android.dll, 0.15.0 on), then the old one. The signed message carries the file name
+        /// the owner signed, so a verifier must accept either while builds of both names are about.</summary>
+        internal static readonly string[] FileNames =
+#if ANDROID_PORT
+            { "WFRevival.Android.dll", "WarpforgeRevival.Android.dll" };
+#else
+            { "WFRevival.dll", "WarpforgeRevival.dll" };
+#endif
 
         /// <summary>The version a build names for itself ("0.14.0-w"), read the way the server reads it; null if none.</summary>
         internal static string VersionOf(byte[] build, int length)
@@ -44,6 +55,19 @@ namespace WarpforgeRevival
         /// <summary>Checks a downloaded build. Returns null when it is signed by one of the owner's keys (and says which
         /// version it is), or why it was refused.</summary>
         internal static string Check(byte[] data, string fileName, out string version)
+        {
+            // a build may have been signed under either of this platform's file names (the rename, 0.15.0)
+            version = null;
+            string result = null;
+            foreach (var name in FileNames)
+            {
+                result = CheckAs(data, name, out version);
+                if (result == null || result != "the signature does not match") return result;
+            }
+            return result;
+        }
+
+        private static string CheckAs(byte[] data, string fileName, out string version)
         {
             version = null;
             if (data == null || data.Length <= Trailer) return "the download is too small";

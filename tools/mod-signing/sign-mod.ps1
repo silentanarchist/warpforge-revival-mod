@@ -1,4 +1,4 @@
-# Signs Warpforge Revival mod builds with the project owner's key (mod 0.14.0 and later install only signed updates).
+# Signs WF Revival (formerly Warpforge Revival) mod builds with the project owner's key (mod 0.14.0 and later install only signed updates).
 # Folder layout (C:\modding\warpforge revival\mod-signing):
 #   keys\       mod-signing-key.txt (never share it), public-keys.txt, make signing keys.bat
 #   to-sign\    Claude puts the builds that are ready to publish here
@@ -200,7 +200,7 @@ function Message([string]$name, [string]$version, [byte[]]$hash) {
 }
 
 function VersionOf([byte[]]$data, [int]$length) {
-    $m = [regex]::Match($latin1.GetString($data, 0, $length), 'Warpforge Revival[\s\S](\d+(?:\.\d+){1,3})(-[a-z][a-z0-9]*)?')
+    $m = [regex]::Match($latin1.GetString($data, 0, $length), '(?:WF|Warpforge) Revival[\s\S](\d+(?:\.\d+){1,3})(-[a-z][a-z0-9]*)?')
     if ($m.Success) { return $m.Groups[1].Value + $m.Groups[2].Value }
     return $null
 }
@@ -228,7 +228,8 @@ foreach ($line in Get-Content $publicFile) {
     if ($parts.Count -eq 2) { $publicKeys += ,([Convert]::FromBase64String($parts[1])) }
 }
 
-$names = @('WarpforgeRevival.dll', 'WarpforgeRevival.Android.dll')
+# the builds' file names: WFRevival(.Android).dll from the rename on (mod 0.15.0), WarpforgeRevival(.Android).dll before
+$names = @('WFRevival.dll', 'WFRevival.Android.dll', 'WarpforgeRevival.dll', 'WarpforgeRevival.Android.dll')
 $failed = $false
 
 if ($Check) {
