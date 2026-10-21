@@ -46,6 +46,9 @@ namespace WarpforgeRevival
         private static volatile System.Collections.Generic.List<string> testerModes = new System.Collections.Generic.List<string>();
         /// <summary>Event ids of the modes the server shows only to testers (besides the Long Game), as sent in "testerModes".</summary>
         public static System.Collections.Generic.IReadOnlyList<string> TesterModes => testerModes;
+        private static volatile System.Collections.Generic.List<string> dealModes = new System.Collections.Generic.List<string>();
+        /// <summary>Event ids of the server-deal test modes, as sent in "dealModes".</summary>
+        public static System.Collections.Generic.IReadOnlyList<string> DealModes => dealModes;
         public static double LongGameHealth => longGameHealth;
 
         private static volatile int practiceClassicLife;
@@ -236,6 +239,12 @@ namespace WarpforgeRevival
                             if (m.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(m.GetString())) tm.Add(m.GetString());
                     if (string.Join(",", tm) != string.Join(",", testerModes)) RevivalMod.Log.Msg("[settings] server settings: tester modes: " + (tm.Count == 0 ? "none" : string.Join(", ", tm)));
                     testerModes = tm;
+                    // "dealModes": the modes that are server-deal tests (ServerDeal.cs: no AI opponent in them)
+                    var dm = new System.Collections.Generic.List<string>();
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("dealModes", out var dms) && dms.ValueKind == JsonValueKind.Array)
+                        foreach (var m in dms.EnumerateArray())
+                            if (m.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(m.GetString())) dm.Add(m.GetString());
+                    dealModes = dm;
                     // the pick is switched on or off for each match as it starts (MatchOptions), not here:
                     // a refresh during a match must not change it
                     if (seconds != turnSeconds) RevivalMod.Log.Msg($"[settings] server settings: turn timer {(seconds > 0 ? seconds + "s" : "not set")}");

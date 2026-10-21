@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text;
 using HarmonyLib;
 using Il2Cpp;
@@ -131,6 +132,27 @@ namespace WarpforgeRevival
                         RevivalMod.Log.Warning("[deal] the table received " + Hash(md.randomNumbers) + " is NOT the server's; kept so both games agree");
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[deal] joiner's table: " + e.Message); }
+            }
+        }
+
+        /// <summary>A search in a server-deal mode never falls back to the AI: it is a two-player test, so the game keeps
+        /// waiting for a person (the game would otherwise start a practice-style match against a bot after its wait).</summary>
+        [HarmonyPatch(typeof(SearchOpponentManager), nameof(SearchOpponentManager.WaitAndStartMatchWithBot))]
+        private static class NoBotInDealModes
+        {
+            private static bool Prefix(SearchOpponentManager __instance)
+            {
+                try
+                {
+                    var md = __instance.matchData;
+                    var ev = (object)md == null ? null : md.CurrentEvent;
+                    var data = (object)ev == null ? null : ev.GetBaseData();
+                    string id = (object)data == null ? null : data.eventId;
+                    if (string.IsNullOrEmpty(id) || !ServerSettings.DealModes.Contains(id)) return true;
+                    RevivalMod.Log.Msg($"[deal] no AI opponent in {id}: still waiting for another tester");
+                    return false;
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[deal] bot fallback: " + e.Message); return true; }
             }
         }
 
