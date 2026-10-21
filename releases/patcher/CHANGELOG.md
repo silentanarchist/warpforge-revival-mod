@@ -1,7 +1,18 @@
-# Warpforge Patcher changelog
+# WF Revival Patcher changelog
+
+Called Warpforge Patcher up to 0.4.0.
 
 The Android app that patches the game on the device itself. Write "device", not "phone", unless something only applies to phones. Newest first. A heading ending in
 "(test build)" is published as a pre-release.
+
+## 0.4.1 - 2026-10-21
+
+**On 0.4.0 or older? Install this version by hand once** (download the APK below and open it; your saved signing key and settings are kept). The project's GitHub page moved to `silentanarchist/wf-revival-mod`, and older versions of the app can't update themselves from the new address. From 0.4.1 on, updates arrive in the app again.
+
+### Changes
+- **The app is now called WF Revival Patcher.** The project dropped "Warpforge" from its own names. It's the same app: it installs over the old one and keeps everything.
+- Looks for its updates at the project's new GitHub address.
+- Ready for the renamed mod file (`WFRevival.Android.dll`, coming with a later mod update): it checks the signature of mod builds under either name and puts each one in place under its own name, so the game never loads two copies.
 
 ## 0.4.0 - 2026-10-21
 

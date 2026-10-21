@@ -1,9 +1,10 @@
 # Moved here from wf-revival-mod-android with the rest of the Android parts (2026-10-17); the app's releases up to
 # 0.2.7 stay there, and apps up to that version look for updates there.
-# Publishes a Release for the Warpforge Patcher app (the Android app that patches the game on the device itself).
+# Publishes a Release for the WF Revival Patcher app (called Warpforge Patcher up to 0.4.0; the Android app that patches
+# the game on the device itself).
 # Wording (owner's rule): release notes say "device", not "phone", unless something only applies to phones.
-# Committing releases/patcher/WarpforgePatcher-<version>.apk to main is all it takes: this creates the tag
-# patcher-v<version> and a Release named "Warpforge Patcher <version>" with that APK attached, its notes being
+# Committing releases/patcher/WFRevivalPatcher-<version>.apk (WarpforgePatcher-<version>.apk up to 0.4.0) to main is all it takes: this creates the tag
+# patcher-v<version> and a Release named "WF Revival Patcher <version>" with that APK attached, its notes being
 # the install steps and the version's section of releases/patcher/CHANGELOG.md. Builds that already have a
 # Release are left alone. Only the current build is kept in releases/patcher/.
 #
@@ -12,7 +13,7 @@
 # The app's source is the WarpforgePatcher folder (plus the Core it uses) of
 # https://github.com/silentanarchist/MelonLoaderInstaller. releases/patcher/SOURCE-COMMIT names the exact commit the
 # current APK was built from: the notes link to that commit (not the branch, which moves on), and its source zip is
-# attached to the Release as WarpforgePatcher-<version>-source.zip (GPL-3.0: the source travels with the build).
+# attached to the Release as WFRevivalPatcher-<version>-source.zip (GPL-3.0: the source travels with the build).
 # A Release that already exists but lacks that zip gets it added and its notes rewritten.
 # The APK is built and signed with the app's private key on the owner's side.
 # Each new Release is posted to Discord like the mod's (secret DISCORD_WEBHOOK_URL), unless it is a pre-release.
@@ -48,24 +49,25 @@ jobs:
           src="$(tr -d '[:space:]' < releases/patcher/SOURCE-COMMIT)"
           if ! printf '%s' "$src" | grep -Eq '^[0-9a-f]{40}$'; then echo "::error::releases/patcher/SOURCE-COMMIT must hold one full commit id"; exit 1; fi
           src_url="https://github.com/silentanarchist/MelonLoaderInstaller/tree/$src/WarpforgePatcher"
-          for apk in releases/patcher/WarpforgePatcher-*.apk; do
+          for apk in releases/patcher/WFRevivalPatcher-*.apk releases/patcher/WarpforgePatcher-*.apk; do
             version="$(basename "$apk" .apk)"
+            version="${version#WFRevivalPatcher-}"
             version="${version#WarpforgePatcher-}"
             tag="patcher-v${version}"
-            srczip="WarpforgePatcher-${version}-source.zip"
+            srczip="WFRevivalPatcher-${version}-source.zip"
             curl -sSfL -o "$srczip" "https://github.com/silentanarchist/MelonLoaderInstaller/archive/$src.zip"
             unzip -l "$srczip" | grep -q "/WarpforgePatcher/MainActivity.cs" || { echo "::error::$src has no WarpforgePatcher source"; exit 1; }
             pre=""
             if grep -E "^## ${version//./\\.}( |$).*\(test build\)" releases/patcher/CHANGELOG.md >/dev/null; then pre="--prerelease"; fi
             sha="$(sha256sum "$apk" | cut -c1-64)"
             {
-              echo "**Warpforge Patcher** puts the mod loader and the WF Revival mod into your own copy of the Android game (version 1.35.0), on the device itself. No PC patching, no cable."
+              echo "**WF Revival Patcher** puts the mod loader and the WF Revival mod into your own copy of the Android game (version 1.35.0), on the device itself. No PC patching, no cable."
               echo
               echo "If the game is already installed, the app removes it first (Android asks you to confirm), then installs the patched copy."
               echo
               echo "**Install**"
               echo "1. Download \`$(basename "$apk")\` below on the device and open it. Allow installing apps from your browser when Android asks."
-              echo "2. Open **Warpforge Patcher**, allow the two permissions it asks for, and press **Patch and install**."
+              echo "2. Open **WF Revival Patcher**, allow the two permissions it asks for, and press **Patch and install**."
               echo "3. Start the game. The full guide, with screenshots: https://wf-revival.silentanarchist.com/guides/phone (the website needs an account: sign in or make one at https://wf-revival.silentanarchist.com/login)."
               echo
               echo "Needs Android 8 or newer and about 2 GB free while patching. The app downloads the loader from the project's GitHub and the mod from the revival server, and checks both."
@@ -88,12 +90,12 @@ jobs:
               fi
               continue
             fi
-            gh release create "$tag" "$apk" "$srczip" --target "$GITHUB_SHA" --title "Warpforge Patcher ${version}" --notes-file notes.md --latest=false $pre
+            gh release create "$tag" "$apk" "$srczip" --target "$GITHUB_SHA" --title "WF Revival Patcher ${version}" --notes-file notes.md --latest=false $pre
             echo "published $tag ${pre:+(pre-release)}"
             if [ -n "$DISCORD_WEBHOOK_URL" ] && [ -z "$pre" ]; then
               body="$(printf '%s' "$section" | sed -E 's/^#### +(.*)$/**\1**/')"
               [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ] && body="See the release page."
-              jq -n --arg title "Warpforge Patcher $version" --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" --arg body "$body" \
+              jq -n --arg title "WF Revival Patcher $version" --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" --arg body "$body" \
                 '{ allowed_mentions: { parse: [] }, embeds: [ { title: $title, url: $url, description: $body[0:3900] } ] }' > discord.json
               url="$(printf '%s' "$DISCORD_WEBHOOK_URL" | tr -d '[:space:]')"; url="${url%/}"; url="${url%/github}"
               code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Content-Type: application/json" -d @discord.json "$url" || true)"
