@@ -95,16 +95,16 @@ namespace WarpforgeRevival
             const float lx0 = 0.02f, lx1 = 0.4f;
             TestersPage.Text(area, "ReplaysTitle", Loc.T("community.replays", "Replays"), 34, TextAlignmentOptions.Left, Color.white, lx0, 0.9f, lx1, 0.99f);
             // a box to paste or type a code into, and a Watch button (0.14.29; before, the code came from the clipboard)
-            TestersPage.Text(area, "WatchTitle", Loc.T("modTab.watchReplay", "Watch a replay code"), 24, TextAlignmentOptions.Left, TestersPage.Dim, lx0, 0.83f, lx1, 0.88f);
-            CodeBox(w, area, lx0, 0.76f, lx1 - 0.1f, 0.82f);
-            var watch = TestersPage.Button(area, "WatchCode", Loc.T("community.watch", "Watch"), lx1 - 0.09f, 0.76f, lx1, 0.82f, new Color(0.45f, 0.12f, 0.08f, 1f));
+            TestersPage.Text(area, "WatchTitle", Loc.T("modTab.watchReplay", "Watch a replay code"), 24, TextAlignmentOptions.Left, TestersPage.Dim, lx0, 0.8f, lx1, 0.86f);
+            CodeBox(w, area, lx0, 0.72f, lx1 - 0.1f, 0.78f);
+            var watch = TestersPage.Button(area, "WatchCode", Loc.T("community.watch", "Watch"), lx1 - 0.09f, 0.72f, lx1, 0.78f, new Color(0.45f, 0.12f, 0.08f, 1f));
             TestersPage.OnClick(watch, WatchTyped);
-            TestersPage.Text(area, "WatchHint", string.IsNullOrEmpty(watchStatus) ? Loc.T("community.watchHint", "Paste a code from Discord or a friend, then press Watch.") : watchStatus,
-                             20, TextAlignmentOptions.Left, TestersPage.Dim, lx0, 0.7f, lx1, 0.75f);
+            if (!string.IsNullOrEmpty(watchStatus))
+                TestersPage.Text(area, "WatchHint", watchStatus, 20, TextAlignmentOptions.Left, TestersPage.Dim, lx0, 0.66f, lx1, 0.71f);
 
-            TestersPage.Text(area, "SharedTitle", Loc.T("community.shared", "Shared in Discord"), 26, TextAlignmentOptions.Left, TestersPage.Dim, lx0, 0.66f, lx1, 0.72f);
+            TestersPage.Text(area, "SharedTitle", Loc.T("community.shared", "Shared in Discord"), 26, TextAlignmentOptions.Left, TestersPage.Dim, lx0, 0.58f, lx1, 0.64f);
             const float sharedRow = 0.14f;
-            var list = ScrollArea(area, "SharedList", lx0, 0.02f, lx1, 0.65f, Math.Max(1, shared.Count) * sharedRow, out float listH);
+            var list = ScrollArea(area, "SharedList", lx0, 0.02f, lx1, 0.57f, Math.Max(1, shared.Count) * sharedRow, out float listH);
             if (shared.Count == 0)
                 TestersPage.Text(list, "None", fetching ? Loc.T("community.loading", "Loading...") : fetchFailed ? Loc.T("common.unreachableDot", "Could not reach the server.")
                                  : Loc.T("community.noShared", "Nothing shared yet. Share a replay code in Discord with /replay and it shows here."),

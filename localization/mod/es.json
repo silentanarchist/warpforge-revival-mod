@@ -132,7 +132,6 @@
   "community.typeCode": "Pega o escribe primero un código de repetición.",
   "community.versus": "{a} contra {b}",
   "community.watch": "Ver",
-  "community.watchHint": "Pega un código de Discord o de un amigo y pulsa Ver.",
   "community.wonBy": "(ganó {name})",
   "decks.customTestCopies": "Custom Test permite como máximo {limit} de cada carta {rarity}.",
   "decks.noOffensive": "Las cartas de Ofensa no se pueden añadir a un mazo.",

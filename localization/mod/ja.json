@@ -132,7 +132,6 @@
   "community.typeCode": "先にリプレイコードを貼り付けるか入力してください。",
   "community.versus": "{a} vs {b}",
   "community.watch": "見る",
-  "community.watchHint": "Discord や友達からのコードを貼り付けて、「見る」を押してください。",
   "community.wonBy": "（{name} の勝ち）",
   "decks.customTestCopies": "Custom Testでは、{rarity}のカードは同じものを{limit}枚まで入れられます。",
   "decks.noOffensive": "攻撃カードはデッキに追加できません。",

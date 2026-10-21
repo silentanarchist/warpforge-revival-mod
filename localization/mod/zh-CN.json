@@ -132,7 +132,6 @@
   "community.typeCode": "请先粘贴或输入回放码。",
   "community.versus": "{a} 对 {b}",
   "community.watch": "观看",
-  "community.watchHint": "粘贴来自 Discord 或朋友的回放码，然后按观看。",
   "community.wonBy": "（{name} 获胜）",
   "decks.customTestCopies": "Custom Test 中每张{rarity}卡牌最多可放 {limit} 张。",
   "decks.noOffensive": "进攻卡不能加入卡组。",

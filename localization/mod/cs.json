@@ -132,7 +132,6 @@
   "community.typeCode": "Nejdřív vlož nebo napiš kód záznamu.",
   "community.versus": "{a} proti {b}",
   "community.watch": "Přehrát",
-  "community.watchHint": "Vlož kód z Discordu nebo od kamaráda a stiskni Přehrát.",
   "community.wonBy": "(vyhrál(a) {name})",
   "decks.customTestCopies": "Custom Test povoluje nejvýše {limit} kopií jedné karty vzácnosti {rarity}.",
   "decks.noOffensive": "Karty Útoku nelze přidat do balíčku.",

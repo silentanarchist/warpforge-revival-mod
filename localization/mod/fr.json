@@ -132,7 +132,6 @@
   "community.typeCode": "Collez ou saisissez d'abord un code de replay.",
   "community.versus": "{a} contre {b}",
   "community.watch": "Regarder",
-  "community.watchHint": "Collez un code venant de Discord ou d'un ami, puis appuyez sur Regarder.",
   "community.wonBy": "({name} a gagné)",
   "decks.customTestCopies": "Custom Test autorise {limit} exemplaire(s) d'une carte {rarity}.",
   "decks.noOffensive": "Les cartes Attaque ne peuvent pas être ajoutées à un deck.",

@@ -132,7 +132,6 @@
   "community.typeCode": "Сначала вставьте или введите код повтора.",
   "community.versus": "{a} против {b}",
   "community.watch": "Смотреть",
-  "community.watchHint": "Вставьте код из Discord или от друга и нажмите «Смотреть».",
   "community.wonBy": "(победа: {name})",
   "decks.customTestCopies": "Custom Test: копий одной карты редкости «{rarity}» — не более {limit}.",
   "decks.noOffensive": "Карты нападения нельзя добавлять в колоду.",
