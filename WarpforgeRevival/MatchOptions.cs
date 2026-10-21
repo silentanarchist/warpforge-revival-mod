@@ -146,28 +146,56 @@ namespace WarpforgeRevival
         /// <summary>
         /// Skulls in friend matches (0.14.31). The game hands out its three skulls (the enemy warlord at
         /// 20, 10 and 0 life) only in some play modes - MatchData.GetMilestones returns no thresholds at
-        /// all for Duel (every friend challenge) and PracticeLodge, so those matches showed no skulls and
-        /// reported none at the end. Both players run the mod, so both games now count them the same way,
-        /// and the match result carries the real count.
+        /// all for Duel (every friend challenge), so those matches showed no skulls, reported none at the
+        /// end, and the cards that trigger on earning a skull (EarnedSkull, 17 of them) never did: the
+        /// trigger fires from the same threshold count. That makes this a change both games must make
+        /// together, so it is on only when the server says the opponent's mod makes it too: with the coin
+        /// the server writes the room property "RevivalMod" = the lower of the two players' mod versions,
+        /// and the skulls are on when that is 0.14.31 or newer. A pair with an older mod plays as before.
         /// </summary>
         [HarmonyPatch(typeof(MatchData), nameof(MatchData.GetMilestones))]
         private static class SkullsInDuels
         {
+            private static readonly Version Needs = new Version(0, 14, 31);
+
             private static void Postfix(MatchData __instance, ref Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<HealthThresholdData> __result)
             {
                 try
                 {
-                    if ((object)__instance == null) return;
-                    var mode = __instance.playMode;
-                    if (mode != PlayModes.Duel && mode != PlayModes.PracticeLodge) return;
+                    if ((object)__instance == null || __instance.playMode != PlayModes.Duel) return;
                     if (__result != null && __result.Length > 0) return;
+                    var pair = PairMod();
+                    if (pair == null || pair < Needs)
+                    {
+                        RevivalMod.Log.Msg("[match] skulls stay off for this friend match (" +
+                                           (pair == null ? "the server did not say the opponent's mod version" : "the opponent's mod is " + pair) + ")");
+                        return;
+                    }
                     __result = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<HealthThresholdData>(3);
                     __result[0] = new HealthThresholdData(20);
                     __result[1] = new HealthThresholdData(10);
                     __result[2] = new HealthThresholdData(0);
+                    RevivalMod.Log.Msg("[match] skulls on for this friend match (both mods " + pair + " or newer)");
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[match] skulls for this match: " + e.Message); }
             }
+        }
+
+        /// <summary>The lower of the two players' mod versions in this match room, as the server wrote it ("RevivalMod"), or null.</summary>
+        internal static Version PairMod()
+        {
+            try
+            {
+                if (!PhotonNetwork.inRoom) return null;
+                var room = PhotonNetwork.room;
+                var props = (object)room == null ? null : room.CustomProperties;
+                if ((object)props == null) return null;
+                var key = (Il2CppSystem.Object)(Il2CppSystem.String)"RevivalMod";
+                if (!props.ContainsKey(key)) return null;
+                string text = props[key]?.ToString();
+                return Version.TryParse(text, out var v) ? v : null;
+            }
+            catch { return null; }
         }
     }
 }
