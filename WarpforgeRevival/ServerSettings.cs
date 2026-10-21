@@ -49,6 +49,9 @@ namespace WarpforgeRevival
         private static volatile System.Collections.Generic.List<string> dealModes = new System.Collections.Generic.List<string>();
         /// <summary>Event ids of the server-deal test modes, as sent in "dealModes".</summary>
         public static System.Collections.Generic.IReadOnlyList<string> DealModes => dealModes;
+        private static volatile System.Collections.Generic.List<string> noAiModes = new System.Collections.Generic.List<string>();
+        /// <summary>Event ids of the modes whose search waits for a person instead of starting an AI match ("noAiModes").</summary>
+        public static System.Collections.Generic.IReadOnlyList<string> NoAiModes => noAiModes;
         public static double LongGameHealth => longGameHealth;
 
         private static volatile int practiceClassicLife;
@@ -245,6 +248,13 @@ namespace WarpforgeRevival
                         foreach (var m in dms.EnumerateArray())
                             if (m.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(m.GetString())) dm.Add(m.GetString());
                     dealModes = dm;
+                    // "noAiModes": modes whose search never falls back to the AI ("aiFallback": false on the server)
+                    var na = new System.Collections.Generic.List<string>();
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("noAiModes", out var nas) && nas.ValueKind == JsonValueKind.Array)
+                        foreach (var m in nas.EnumerateArray())
+                            if (m.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(m.GetString())) na.Add(m.GetString());
+                    if (string.Join(",", na) != string.Join(",", noAiModes)) RevivalMod.Log.Msg("[settings] server settings: no AI opponent in: " + (na.Count == 0 ? "no mode" : string.Join(", ", na)));
+                    noAiModes = na;
                     // the pick is switched on or off for each match as it starts (MatchOptions), not here:
                     // a refresh during a match must not change it
                     if (seconds != turnSeconds) RevivalMod.Log.Msg($"[settings] server settings: turn timer {(seconds > 0 ? seconds + "s" : "not set")}");

@@ -135,8 +135,8 @@ namespace WarpforgeRevival
             }
         }
 
-        /// <summary>A search in a server-deal mode never falls back to the AI: it is a two-player test, so the game keeps
-        /// waiting for a person (the game would otherwise start a practice-style match against a bot after its wait).</summary>
+        /// <summary>A search in a mode whose server rule "aiFallback" is off never starts a match against the AI: the game
+        /// keeps waiting for a person (the Server Deal test mode has it off; any mode can).</summary>
         [HarmonyPatch(typeof(SearchOpponentManager), nameof(SearchOpponentManager.WaitAndStartMatchWithBot))]
         private static class NoBotInDealModes
         {
@@ -148,8 +148,8 @@ namespace WarpforgeRevival
                     var ev = (object)md == null ? null : md.CurrentEvent;
                     var data = (object)ev == null ? null : ev.GetBaseData();
                     string id = (object)data == null ? null : data.eventId;
-                    if (string.IsNullOrEmpty(id) || !ServerSettings.DealModes.Contains(id)) return true;
-                    RevivalMod.Log.Msg($"[deal] no AI opponent in {id}: still waiting for another tester");
+                    if (string.IsNullOrEmpty(id) || !ServerSettings.NoAiModes.Contains(id)) return true;
+                    RevivalMod.Log.Msg($"[deal] no AI opponent in {id} (the mode's rule): still waiting for a person");
                     return false;
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[deal] bot fallback: " + e.Message); return true; }
