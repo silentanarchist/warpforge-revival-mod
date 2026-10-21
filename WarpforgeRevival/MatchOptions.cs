@@ -44,6 +44,7 @@ namespace WarpforgeRevival
                 bool on;
                 string why;
                 int? rule = ChallengeRules.Offence;
+                string ev = ChallengeRules.RulesEvent ?? ((object)md == null ? null : Replays.EventOf(md)) ?? LongGame.PlayingEventId();
                 if (rule != null)
                 {
                     on = rule == 1;
@@ -51,11 +52,12 @@ namespace WarpforgeRevival
                 }
                 else
                 {
-                    string ev = ChallengeRules.RulesEvent ?? ((object)md == null ? null : Replays.EventOf(md)) ?? LongGame.PlayingEventId();
                     on = ServerSettings.OffenceFor(ev);
                     why = "game mode " + (ev ?? "unknown") + (replay ? " (replay without a saved choice)" : "");
                 }
                 BattlefieldCards.Set(on);
+                // the Defence card: from the deck, or picked after the mulligan when the mode has no slot in the editor
+                BattlefieldCards.SetDefenceSource(ev);
                 RevivalMod.Log.Msg($"[match] Offence cards {(on ? "on" : "off")} for this {(replay ? "replay" : "match")} ({why})" +
                                    (BattlefieldCards.PickOn != on ? " - could not be switched on this device" : ""));
             }

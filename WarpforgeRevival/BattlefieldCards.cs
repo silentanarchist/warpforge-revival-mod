@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using HarmonyLib;
 using Il2Cpp;
+using Il2CppEverguild.LiveOps;
 using CardList = Il2CppSystem.Collections.Generic.List<Il2Cpp.RawCardScript>;
 
 namespace WarpforgeRevival
@@ -46,6 +47,34 @@ namespace WarpforgeRevival
         /// <summary>Whether the pick step is on right now (for the match being played).</summary>
         internal static bool PickOn => applied;
         private static bool broken;
+
+        /// <summary>
+        /// Whether the match being played takes the Defence card from the deck (the game as shipped) or lets the
+        /// player going second pick one after the mulligan, as a draft does (0.14.42): the game mode's own
+        /// "assignDefensiveCardsInEditMode" switch, read from its gameplay variables on the server. Off = pick.
+        /// </summary>
+        internal static bool DefenceFromDeck { get; private set; } = true;
+
+        /// <summary>A game mode's switch (true for a mode that is not found, as the game ships).</summary>
+        internal static bool DefenceInEditor(IPlayEvent ev)
+        {
+            try
+            {
+                var gv = ChallengeRules.Variables(ev);
+                return (object)gv == null || gv.assignDefensiveCardsInEditMode;
+            }
+            catch { return true; }
+        }
+
+        /// <summary>Called as a battle starts, with the match's game mode (null when unknown).</summary>
+        internal static void SetDefenceSource(string eventId)
+        {
+            bool fromDeck = true;
+            try { fromDeck = string.IsNullOrEmpty(eventId) || DefenceInEditor(ChallengeRules.FindEvent(eventId)); }
+            catch { }
+            DefenceFromDeck = fromDeck;
+            if (!fromDeck) RevivalMod.Log.Msg($"[cards] Defence card for this match: picked after the mulligan (the mode {eventId} has no Defence slot in the deck editor)");
+        }
 
         private static byte[] Original(long site)
         {
@@ -192,7 +221,7 @@ namespace WarpforgeRevival
                     var source = battle.enviromentalEffectCards;
                     if ((object)warlord == null || (object)source == null) return;
 
-                    if (!shouldUseOffensive)
+                    if (!shouldUseOffensive && DefenceFromDeck)
                     {
                         var own = defender.defensiveCard;
                         if ((object)own != null)

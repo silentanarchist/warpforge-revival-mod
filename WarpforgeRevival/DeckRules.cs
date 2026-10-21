@@ -40,6 +40,39 @@ namespace WarpforgeRevival
             }
         }
 
+        // A game mode whose "assignDefensiveCardsInEditMode" switch is off (Classic since 0.14.42) has no Defence card
+        // in its decks: the player going second picks one after the mulligan, as in a draft (BattlefieldCards).
+        // The game itself already keeps Defence cards out of the editor's collection for such a mode
+        // (DeckEditingWindow.GetCardCollection asks the deck's mode); what it still shows is the deck list's
+        // Defence slot (empty, or holding a card saved before the switch), which is hidden here.
+        private static void HideDefenceSlot(DeckListDrawer drawer)
+        {
+            try
+            {
+                if ((object)drawer == null) return;
+                var deck = drawer.currentCardDeck;
+                if ((object)deck == null) return;
+                if (BattlefieldCards.DefenceInEditor(deck.CustomGameModeEvent)) return;
+                var slot = drawer.defensiveCardInfoItem;
+                if ((object)slot == null || slot.Pointer == IntPtr.Zero) return;
+                var go = slot.gameObject;
+                if ((object)go != null && go.activeSelf) go.SetActive(false);
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[decks] Defence slot: " + e.Message); }
+        }
+
+        [HarmonyPatch(typeof(DeckListDrawer), nameof(DeckListDrawer.ShowEmptySlotsIfNeeded))]
+        private static class NoDefenceSlot
+        {
+            private static void Postfix(DeckListDrawer __instance) => HideDefenceSlot(__instance);
+        }
+
+        [HarmonyPatch(typeof(DeckListDrawer), nameof(DeckListDrawer.SpawnCardInfo))]
+        private static class NoSavedDefenceCard
+        {
+            private static void Postfix(DeckListDrawer __instance) => HideDefenceSlot(__instance);
+        }
+
         // Offensive and defensive cards unlock with a faction's Forge level. The revival server has
         // no Forge, so treat every faction as fully levelled: all of them are available.
         [HarmonyPatch(typeof(EnviromentalEffectCardsSO), nameof(EnviromentalEffectCardsSO.GetEnvCardList))]
