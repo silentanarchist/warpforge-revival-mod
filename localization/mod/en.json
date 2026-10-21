@@ -180,6 +180,7 @@
   "modTab.updating": "Updating...",
   "modTab.watchReplay": "Watch a replay code",
   "mode.classicDraft": "Classic Draft",
+  "mode.skirmishDraft": "Skirmish Draft",
   "playerReport.button": "REPORT",
   "playerReport.heading": "Report {name}",
   "playerReport.notSent": "The report was not sent.",

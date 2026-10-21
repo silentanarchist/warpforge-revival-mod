@@ -44,6 +44,7 @@ namespace WarpforgeRevival
                 case "Skirmish": return Loc.Game("MainMenu/GameMode/Skirmish", text);
                 case "Practice": return Loc.Game("MainMenu/GameMode/Practice", text);
                 case "Classic Draft": return Loc.T("mode.classicDraft", "Classic Draft");
+                case "Skirmish Draft": return Loc.T("mode.skirmishDraft", "Skirmish Draft");
                 default: return text;
             }
         }
