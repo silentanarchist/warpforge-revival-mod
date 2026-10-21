@@ -342,22 +342,6 @@ namespace WarpforgeRevival
                 }
                 catch (Exception e) { RevivalMod.Log.Warning($"[testers] tile for {id}: {e.Message}"); }
             }
-            // 0.14.34: the server-deal test is a friend challenge with a tester-only rule (ServerDeal.cs); this tile
-            // opens Social > Challenge with the Classic preset and that rule on
-            try
-            {
-                var holder = new GameObject("ServerDealTile");
-                var hrt = holder.AddComponent<RectTransform>();
-                hrt.SetParent(row.transform, false);
-                hrt.anchorMin = hrt.anchorMax = hrt.pivot = new Vector2(0, 1);
-                hrt.sizeDelta = new Vector2(300, 170);
-                var hle = holder.AddComponent<LayoutElement>();
-                hle.preferredWidth = 300; hle.preferredHeight = 170;
-                var deal = TestersPage.Button(holder.transform, "ServerDeal", Loc.T("testers.serverDeal", "Server deal (test)") + "\n<size=60%>" + Loc.T("testers.serverDealHint", "Challenge another tester; the server shuffles and deals") + "</size>", 0, 0, 1, 1, TestersPage.Tile);
-                TestersPage.OnClick(deal, () => { try { Close(); } catch { } ChallengeMenu.OpenForServerDeal(); });
-                shown++;
-            }
-            catch (Exception e) { RevivalMod.Log.Warning("[testers] server-deal tile: " + e.Message); }
             if (shown == 0)
                 TestersPage.Text(panel.transform, "Empty", Loc.T("testers.noModes", "No tester modes are set up on this server right now."), 26, TextAlignmentOptions.Left, TestersPage.Dim, 0.05f, 0.6f, 0.9f, 0.75f);
             else

@@ -276,8 +276,6 @@
   "testers.modeHint": "Open this mode's page: pick a deck, play, or build decks for it.",
   "testers.noModes": "No tester modes are set up on this server right now.",
   "testers.note": "Modes and tools for testers. Not shown to other players.",
-  "testers.serverDeal": "Server deal (test)",
-  "testers.serverDealHint": "Challenge another tester; the server shuffles and deals",
   "testers.tabPlay": "Play",
   "update.doneReopen": "Updated to {version}. Open the game again to use it.",
   "update.doneRestart": "Updated to {version}. The game closes and starts again to use it.",

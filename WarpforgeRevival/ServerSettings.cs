@@ -43,6 +43,9 @@ namespace WarpforgeRevival
 
         /// <summary>Event id of the Long Game mode, or null when the server has none.</summary>
         public static string LongGameEvent => longGameEvent;
+        private static volatile System.Collections.Generic.List<string> testerModes = new System.Collections.Generic.List<string>();
+        /// <summary>Event ids of the modes the server shows only to testers (besides the Long Game), as sent in "testerModes".</summary>
+        public static System.Collections.Generic.IReadOnlyList<string> TesterModes => testerModes;
         public static double LongGameHealth => longGameHealth;
 
         private static volatile int practiceClassicLife;
@@ -225,6 +228,14 @@ namespace WarpforgeRevival
                         d == null ? "none" : string.Join(", ", System.Linq.Enumerable.Select(System.Linq.Enumerable.OrderBy(d, kv => kv.Key), kv => kv.Key + (kv.Value ? " on" : " off")));
                     if (Describe(om) != Describe(offenceModes)) RevivalMod.Log.Msg("[settings] server settings: Offence cards per mode: " + Describe(om));
                     offenceModes = om;
+                    // "testerModes": event ids of the modes the server hands only to testers' games (0.14.34: the
+                    // server-deal test); they get a tile in the Testers window
+                    var tm = new System.Collections.Generic.List<string>();
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("testerModes", out var tms) && tms.ValueKind == JsonValueKind.Array)
+                        foreach (var m in tms.EnumerateArray())
+                            if (m.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(m.GetString())) tm.Add(m.GetString());
+                    if (string.Join(",", tm) != string.Join(",", testerModes)) RevivalMod.Log.Msg("[settings] server settings: tester modes: " + (tm.Count == 0 ? "none" : string.Join(", ", tm)));
+                    testerModes = tm;
                     // the pick is switched on or off for each match as it starts (MatchOptions), not here:
                     // a refresh during a match must not change it
                     if (seconds != turnSeconds) RevivalMod.Log.Msg($"[settings] server settings: turn timer {(seconds > 0 ? seconds + "s" : "not set")}");

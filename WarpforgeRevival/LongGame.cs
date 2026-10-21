@@ -188,8 +188,10 @@ namespace WarpforgeRevival
 
         // A Play-screen tile opens "the ranked window", and the game then looks up the one Classic-type
         // event it expects to exist, so the Long Game tile would open the Classic page. Remember which
-        // tile was clicked and hand the window the Long Game event instead.
+        // tile was clicked and hand the window the Long Game event instead. The same for every other
+        // tester-mode tile (0.14.34: the server-deal test, a Classic-rules mode with Classic decks).
         private static float longTileClickedAt = -100f;
+        private static IPlayEvent clickedEvent;
 
         [HarmonyPatch(typeof(LiveopMenuContainer), nameof(LiveopMenuContainer.OnClick))]
         private static class TileClicked
@@ -202,7 +204,9 @@ namespace WarpforgeRevival
                     var e = (object)content == null ? null : content.TryCast<IPlayEvent>();
                     bool isLong = IsLongEvent(e);
                     if (isLong) longEvent = e;
-                    longTileClickedAt = isLong ? UnityEngine.Time.realtimeSinceStartup : -100f;
+                    bool remember = isLong || TestersPage.IsTesterEvent(e);
+                    clickedEvent = remember ? e : null;
+                    longTileClickedAt = remember ? UnityEngine.Time.realtimeSinceStartup : -100f;
                     string id = "?";
                     try { var d = (object)e == null ? null : e.GetBaseData(); if ((object)d != null) id = d.eventId; } catch { }
                     RevivalMod.Log.Msg($"[long] tile clicked: '{id}'");
@@ -220,11 +224,15 @@ namespace WarpforgeRevival
                 {
                     bool fromLongTile = UnityEngine.Time.realtimeSinceStartup - longTileClickedAt < 3f;
                     longTileClickedAt = -100f;
-                    if (fromLongTile && (object)longEvent != null)
+                    var wanted = clickedEvent ?? longEvent;
+                    if (fromLongTile && (object)wanted != null)
                     {
-                        data = new Il2CppSystem.Object(longEvent.Pointer);
-                        RevivalMod.Log.Msg("[long] opening the mode window for Long Game");
+                        data = new Il2CppSystem.Object(wanted.Pointer);
+                        string id = "?";
+                        try { var d = wanted.GetBaseData(); if ((object)d != null) id = d.eventId; } catch { }
+                        RevivalMod.Log.Msg("[long] opening the mode window for " + id);
                     }
+                    clickedEvent = null;
                     var e = (object)data == null ? null : data.TryCast<IPlayEvent>();
                     if ((object)e != null) SetPage(e, "mode window");
                 }

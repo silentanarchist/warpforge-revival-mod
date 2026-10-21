@@ -35,12 +35,27 @@ namespace WarpforgeRevival
         internal static readonly Color Tile = new Color(0.16f, 0.18f, 0.22f, 1f);
         internal static readonly Color Dim = new Color(0.66f, 0.64f, 0.6f, 1f);
 
-        /// <summary>The modes on the Play tab: event ids. For now the Custom Test mode (the server's long-game event).</summary>
+        /// <summary>The modes on the Play tab: event ids. The Custom Test mode (the server's long-game event) and the
+        /// modes the server lists as tester-only ("testerModes", 0.14.34: the server-deal test).</summary>
         internal static List<string> TesterModes()
         {
             var ids = new List<string>();
             if (!string.IsNullOrEmpty(ServerSettings.LongGameEvent)) ids.Add(ServerSettings.LongGameEvent);
+            foreach (var id in ServerSettings.TesterModes)
+                if (!ids.Contains(id)) ids.Add(id);
             return ids;
+        }
+
+        /// <summary>True for an event the Testers window's Play tab shows (its tile opens its own page, see LongGame.TileClicked).</summary>
+        internal static bool IsTesterEvent(IPlayEvent e)
+        {
+            try
+            {
+                if ((object)e == null) return false;
+                var data = e.GetBaseData();
+                return (object)data != null && TesterModes().Contains(data.eventId);
+            }
+            catch { return false; }
         }
 
         internal static bool IsOpen => (object)root != null && root.Pointer != IntPtr.Zero && root.m_CachedPtr != IntPtr.Zero && root.activeSelf;

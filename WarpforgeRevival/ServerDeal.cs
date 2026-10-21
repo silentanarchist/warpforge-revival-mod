@@ -24,14 +24,15 @@ namespace WarpforgeRevival
         private static string lastRoom;
         private static bool lastActive;
 
-        /// <summary>True in a match whose challenge rules asked for the server deal and whose room the server marked.</summary>
+        /// <summary>True in a match whose room the server marked as a server-deal test (a tester's challenge with the
+        /// rule, or the Server Deal game mode); the server decides, the mod only reads the mark. Never in a replay.</summary>
         internal static bool Active
         {
             get
             {
                 try
                 {
-                    if (!ChallengeRules.ServerDealRule) return false;
+                    if (ChallengeRules.ActiveIsReplay) return false;
                     if (!PhotonNetwork.inRoom) return false;
                     var room = PhotonNetwork.room;
                     var props = (object)room == null ? null : room.CustomProperties;
@@ -41,7 +42,8 @@ namespace WarpforgeRevival
                     if (name != lastRoom || on != lastActive)
                     {
                         lastRoom = name; lastActive = on;
-                        RevivalMod.Log.Msg(on ? "[deal] server deal is on for this match" : "[deal] the challenge asked for the server deal but the server did not mark the room (opponent's mod too old?)");
+                        if (on) RevivalMod.Log.Msg("[deal] server deal is on for this match");
+                        else if (ChallengeRules.ServerDealRule) RevivalMod.Log.Msg("[deal] the challenge asked for the server deal but the server did not mark the room (opponent's mod too old?)");
                     }
                     return on;
                 }
