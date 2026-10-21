@@ -16,6 +16,7 @@ Changes made on the server take effect for everyone at once; the ones listed her
 - **Social > Challenge:** the page's text is much larger, and the page is taller to make room. A text too long for its place shrinks back to fit.
 - **Social > Challenge:** the rules say **Energy** instead of mana, the game's own word for it (Starting Energy, Energy gained per turn, Unspent Energy carried over), also in the rules shown on the challenge popup.
 
+- **Skulls in friend matches:** friend challenges (and the practice lodge) now hand out the game's three skulls, the enemy warlord at 20, 10 and 0 life, like the other modes; the game gave none in those matches, so the skull bar stayed empty and the match result said 0. Both players need 0.14.31.
 - **Social > Community (new tab):** Replays, with "Watch a replay code" (moved here from Settings > Mod; plays the code on the clipboard) and the replays shared in Discord with /replay, each with a Watch button; and News from the server, with a "Join the Discord" button when the server names one.
 - **Social > Challenge layout:** the friend list and the rules list each scroll on their own, with a bar, so more rules can be added later; the rules text is larger; the buttons stay at the bottom; the friend-code box sits right under its label.
 - **Challenge by friend code:** Social > Challenge has a friend-code box under the friend list: type someone's friend code and press Find, and you can challenge them with your rules even if you are not friends (the challenge, its online check and the answer get through for 15 minutes).
