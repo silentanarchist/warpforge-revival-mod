@@ -3,6 +3,16 @@
 The Android app that patches the game on the device itself. Write "device", not "phone", unless something only applies to phones. Newest first. A heading ending in
 "(test build)" is published as a pre-release.
 
+## 0.4.0 - 2026-10-21
+
+### New
+- **The app speaks your language.** Every screen, button and message is available in all 13 languages the game ships: English, Spanish, Russian, French, German, Portuguese (Brazil), Italian, Korean, Simplified Chinese, Japanese, Polish, Czech and Turkish. The app follows your device's language; the language button in the top right corner lets you pick another one.
+- Translations are first drafts; corrections reach the app from the server without an app update.
+
+### Changes
+- **Check for updates** and the language button are bigger, and the log at the bottom is a little taller.
+- After **Update the mod only**, the black screen fix or loading a signing key, a short message confirms it worked.
+
 ## 0.3.0 - 2026-10-17
 
 Required update
