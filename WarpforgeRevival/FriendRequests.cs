@@ -304,9 +304,9 @@ namespace WarpforgeRevival
                     ClearRows();
                     if (problem != null) { AddText(problem.TrimEnd('.')); return; }
                     if (incoming.Count == 0 && outgoing.Count == 0) { AddText(Loc.T("friends.none", "No friend requests. Add someone with their friend code above; they will see it here.")); return; }
-                    if (incoming.Count > 0) AddText(Loc.T("friends.incoming", "Waiting for your answer"));
+                    if (incoming.Count > 0) AddHeader(Loc.T("friends.incoming", "Waiting for your answer"));
                     foreach (var r in incoming) AddRow(r, true);
-                    if (outgoing.Count > 0) AddText(Loc.T("friends.outgoing", "Sent by you, waiting for their answer"));
+                    if (outgoing.Count > 0) AddHeader(Loc.T("friends.outgoing", "Sent by you, waiting for their answer"));
                     foreach (var r in outgoing) AddRow(r, false);
                 });
             });
@@ -327,6 +327,59 @@ namespace WarpforgeRevival
                     Code = e.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : "",
                 });
             }
+        }
+
+        // The friend list is a grid (two entries a row on a wide screen). A section heading is put in a row of its own
+        // (0.14.60): empty cells fill the rest of the row before it (so it starts a row) and after it (so the first
+        // entry below it starts the next row) - before, "Sent by you" sat in a row's first cell and the first request
+        // sent beside it.
+        private static int Columns()
+        {
+            try
+            {
+                var grid = tab.friendsContainer.GetComponent<GridLayoutGroup>();
+                if ((object)grid == null) return 1;
+                if (grid.constraint == GridLayoutGroup.Constraint.FixedColumnCount) return Math.Max(1, grid.constraintCount);
+                var rt = tab.friendsContainer.GetComponent<RectTransform>();
+                float width = (object)rt == null ? 0 : rt.rect.width - grid.padding.left - grid.padding.right;
+                float cell = grid.cellSize.x + grid.spacing.x;
+                return cell <= 0 ? 1 : Math.Max(1, (int)((width + grid.spacing.x) / cell));
+            }
+            catch { return 1; }
+        }
+
+        private static int CellsUsed()
+        {
+            int n = 0;
+            var c = tab.friendsContainer;
+            for (int i = 0; i < c.childCount; i++)
+            {
+                var child = c.GetChild(i);
+                if (!child.gameObject.activeSelf) continue;
+                var le = child.GetComponent<LayoutElement>();
+                if ((object)le != null && le.ignoreLayout) continue;
+                n++;
+            }
+            return n;
+        }
+
+        private static void AddSpacer()
+        {
+            var go = new GameObject("Requests spacer", Il2CppInterop.Runtime.Il2CppType.Of<RectTransform>());
+            go.transform.SetParent(tab.friendsContainer, false);
+            rows.Add(go);
+        }
+
+        private static void AddHeader(string text)
+        {
+            try
+            {
+                int cols = Columns();
+                while (cols > 1 && CellsUsed() % cols != 0) AddSpacer();
+                AddText(text);
+                for (int i = 1; i < cols; i++) AddSpacer();
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[friends] requests heading: " + e.Message); AddText(text); }
         }
 
         private static void AddText(string text)
