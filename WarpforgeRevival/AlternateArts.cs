@@ -44,6 +44,10 @@ namespace WarpforgeRevival
             lastAdd = Time.realtimeSinceStartup;
         }
 
+        /// <summary>True once the game's own card library has finished loading (and the styles were added): CustomBundle adds the
+        /// custom cards then.</summary>
+        internal static bool CardsReady => collection != IntPtr.Zero && collection == doneFor;
+
         /// <summary>Called every frame; adds the styles right after the card library finishes loading.</summary>
         public static void Tick()
         {

@@ -10,8 +10,8 @@ and custom-tester.json: {"version", "cards": [{"id", "name", "guid", "art", "sho
 
 Templates: the game's own allcards bundle (card objects and the two MonoScripts) and the Genestealer Cults art bundle
 (textures and sprites), stripped to what is needed. Nothing in them is changed; the originals are read only.
-A card's compiled layout is its creator record's "native" (CardCompiler on the server); {"$art": "upload:ID"} becomes the
-art GUID, {"$ref": id} references to official cards are not supported yet (a custom card can only refer to custom cards
+A card's compiled layout is its creator record's "native" (CardCompiler on the server); {"$art": "upload:ID"} becomes an
+official picture of the card's army (the mod shows the custom picture from the art bundle), {"$ref": id} references to official cards are not supported yet (a custom card can only refer to custom cards
 in the same package).
 """
 import sys, os, json, copy, hashlib, struct, re
@@ -43,6 +43,24 @@ def sha256(path):
         for chunk in iter(lambda: f.read(1 << 20), b''):
             h.update(chunk)
     return h.hexdigest()
+
+
+def rename_cab(bf, kind, platform):
+    """Unity refuses to open two bundles whose inner file has the same name, and the package's bundles are made from
+    the game's own (allcards, a faction's art), which are loaded too: the inner file gets a name of its own."""
+    old = [k for k, f in bf.files.items() if hasattr(f, 'objects')][0]
+    new = 'CAB-' + hashlib.md5(('revival-%s-%s' % (kind, platform)).encode()).hexdigest()
+    items = list(bf.files.items())
+    bf.files.clear()
+    for k, f in items:
+        if k == old:
+            k = new
+            try:
+                f.name = new
+            except Exception:
+                pass
+        bf.files[k] = f
+    return new
 
 
 def serialized(env):
@@ -109,11 +127,16 @@ def build_cards(cards, art_guids, out, platform):
     ab = [o for o in sf.objects.values() if o.type.name == 'AssetBundle'][0]
     abt = ab.read_typetree()
     template = None
+    pictures = {}          # (army, card type) -> an official card's picture GUID, the custom card's stand-in picture
     for o in list(sf.objects.values()):
         if o.type.name == 'MonoBehaviour':
-            if template is None:
-                t = o.read_typetree()
-                if 'uniqueId' in t and 'cardAbilities' in t:
+            t = o.read_typetree()
+            if 'uniqueId' in t and 'cardAbilities' in t:
+                g = (t.get('cardImageReference') or {}).get('m_AssetGUID')
+                if g:
+                    pictures.setdefault((t.get('cardArmy'), t.get('cardType')), g)
+                    pictures.setdefault((t.get('cardArmy'), None), g)
+                if template is None:
                     template = o
             if o is not template:
                 del sf.objects[o.path_id]
@@ -123,7 +146,11 @@ def build_cards(cards, art_guids, out, platform):
     container, preload, built = [], [], []
     for c in cards:
         uid = c['id']
-        layout = merge(template.read_typetree(), fill_art(copy.deepcopy(c['native']), art_guids))
+        # the card's picture reference names an official picture of its army, so every place in the game that preloads
+        # it succeeds; the mod shows the custom picture from the art bundle (RawCardScript.cardSprite)
+        n = c['native']
+        stand_in = pictures.get((n.get('cardArmy'), n.get('cardType'))) or pictures.get((n.get('cardArmy'), None)) or next(iter(pictures.values()))
+        layout = merge(template.read_typetree(), fill_art(copy.deepcopy(n), {k: stand_in for k in art_guids}))
         layout['uniqueId'] = uid
         layout['cardShortId'] = c['shortId']
         layout['m_Script'] = template.read_typetree()['m_Script']
@@ -144,6 +171,7 @@ def build_cards(cards, art_guids, out, platform):
     ab.save_typetree(abt)
     if platform == 'android':
         sf._m_target_platform = ANDROID
+    rename_cab(bf, 'cards', platform)
     data = bf.save(packer='lz4')
     path = os.path.join(out, 'custom-cards_%s.bundle' % platform)
     open(path, 'wb').write(data)
@@ -208,10 +236,11 @@ def build_art(cards, art_dir, out, platform):
     ab.save_typetree(abt)
     # the template's streamed picture data file is no longer referred to
     for name in list(bf.files.keys()):
-        if name.endswith('.resS'):
+        if name.endswith('.resS') or name.endswith('.resource'):      # the template's streamed pictures and sounds
             del bf.files[name]
     if platform == 'android':
         sf._m_target_platform = ANDROID
+    rename_cab(bf, 'art', platform)
     data = bf.save(packer='lz4')
     path = os.path.join(out, 'custom-art_%s.bundle' % platform)
     open(path, 'wb').write(data)
@@ -235,7 +264,8 @@ def verify(path, want_types):
     for f in env.file.files.values():
         if hasattr(f, 'objects'):
             plat = f.target_platform
-    print('  %s: %s, platform %s, container %d, dangling %d, %d bytes' % (os.path.basename(path), kinds, plat, len(abt['m_Container']), len(dangling), os.path.getsize(path)))
+    names = [k for k in env.file.files.keys()]
+    print('  %s: %s, platform %s, container %d, dangling %d, %d bytes, inner %s' % (os.path.basename(path), kinds, plat, len(abt['m_Container']), len(dangling), os.path.getsize(path), names))
     for t in want_types:
         assert t in kinds, t
     assert not dangling
@@ -265,7 +295,8 @@ def main():
     art_guids = {c['id']: guid_for('art', c['id']) for c in cards}
     manifest = {'version': version, 'cards': [], 'text': {}, 'files': {}}
     for c in cards:
-        manifest['cards'].append({'id': c['id'], 'name': c['name'], 'guid': guid_for('card', c['id']), 'art': art_guids[c['id']], 'shortId': c['shortId']})
+        manifest['cards'].append({'id': c['id'], 'name': c['name'], 'guid': guid_for('card', c['id']), 'art': art_guids[c['id']], 'shortId': c['shortId'],
+                                  'rarity': c['native'].get('cardRarity', 1), 'army': c['native'].get('cardArmy', 0)})
         # English from the design; other languages fall back to it until the creator site carries translations
         manifest['text'][c['id']] = {'en': {'name': c['name'], 'text': c['text'], 'lore': c['lore']}}
     for platform in ('pc', 'android'):

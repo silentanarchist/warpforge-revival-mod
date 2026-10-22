@@ -5,12 +5,8 @@ using System.Text.Json;
 using HarmonyLib;
 using Il2Cpp;
 using Il2CppInterop.Runtime;
-using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
-using UnityEngine.AddressableAssets.ResourceLocators;
-using UnityEngine.ResourceManagement.ResourceLocations;
-using UnityEngine.ResourceManagement.ResourceProviders;
 
 namespace WarpforgeRevival
 {
@@ -19,24 +15,25 @@ namespace WarpforgeRevival
     /// cards): custom-tester.json next to custom-cards_&lt;platform&gt;.bundle (the RawCardScript objects) and
     /// custom-art_&lt;platform&gt;.bundle (a texture and sprite per card), in UserData/WarpforgeRevival/content/custom/.
     ///
-    /// The game loads its cards through Addressables (every asset labelled "cards") and a card's picture by the
-    /// GUID in its cardImageReference, so the package is made known to Addressables rather than read by hand: one
-    /// resource locator, added before the game loads its card library, with a location per bundle
-    /// (AssetBundleProvider) and, depending on it, one per card (keyed by the card's GUID and the label "cards") and
-    /// one per picture (keyed by its GUID, as a Sprite and as a Texture2D - the game's catalog lists pictures twice
-    /// the same way). Addressables merges every locator's answers for a key, so the game's own LoadAllCards then
-    /// takes the custom cards in with the official ones and their pictures load through the normal path.
-    /// Texts come from the package too (CardText.SetPackageTexts; per language, English fallback).
+    /// Loading (0.14.61): the mod opens the two bundles itself (AssetBundle.LoadFromFile) once the game has loaded its
+    /// own cards, and hands each custom card to the game's card collection the way the game's own card library does
+    /// (AddressableCardLibrary.AssetCompletedLoading with the card's key, as AlternateArts does for card styles), so
+    /// it is in the one card list every screen reads. The picture: each card's cardImageReference names an official
+    /// picture of its army (so every place that preloads it succeeds), and RawCardScript.cardSprite - the property
+    /// the card displays ask for the picture - answers the custom card's own sprite from the art bundle.
+    /// (0.14.53-0.14.60 made the package known to Addressables instead; Unity's bundle loader refused the mod-made
+    /// bundle location every time - "Invalid path in AssetBundleProvider" - so that route is dropped.)
+    /// Texts come from the package too (CardText.SetPackageTexts; per language, English fallback). Where the custom
+    /// cards may be seen or used is CustomCards.cs.
     ///
     /// The package comes from the server (0.14.54): at start-up a game with a saved sign-in asks
     /// /api/v1/content/custom/custom-tester.json (the server answers only a tester's or admin's sign-in) and fetches
     /// the files for this platform whose checksum differs from what is in the folder; the manifest is written last, so
-    /// a half-finished fetch leaves the previous package usable. The card library load waits for a fetch still running
-    /// (at most 20 s). A game without the package (not a tester, server unreachable) plays as before.
+    /// a half-finished fetch leaves the previous package usable. A game without the package (not a tester, server
+    /// unreachable) plays as before.
     /// </summary>
     internal static class CustomBundle
     {
-        private static bool registered;
         private static string Folder => Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival", "content", "custom");
         private static string Platform =>
 #if ANDROID_PORT
@@ -112,34 +109,22 @@ namespace WarpforgeRevival
             return Convert.ToHexString(sha.ComputeHash(f)).ToLowerInvariant();
         }
 
-        /// <summary>As the game starts Addressables (AddressablesManager.Init, the same moment AddressablesRedirect installs its
-        /// rewrite; PlayerDataManager.LoadAllCards and BaseAddressableLibrary.LoadLibrary are compiled into their callers, so
-        /// neither can be hooked): the package, if there is one, is made known to Addressables. A locator added here stays in
-        /// the list when the game's own catalog is added by the initialisation.</summary>
-        [HarmonyPatch(typeof(AddressablesManager), nameof(AddressablesManager.Init))]
-        private static class BeforeCards
+        private static bool done;
+        private static AssetBundle cardsBundle, artBundle;
+        private static readonly Dictionary<string, Sprite> sprites = new Dictionary<string, Sprite>();
+
+        /// <summary>Called every frame: once the game's own cards are in, the package's cards are added (once).</summary>
+        internal static void Tick()
         {
-            private static void Postfix()
-            {
-                if (registered) return;
-                try
-                {
-                    var f = fetching;
-                    if (f != null && !f.IsCompleted)
-                    {
-                        RevivalMod.Log.Msg("[custom] waiting for the custom-card package fetch before the cards load");
-                        f.Wait(TimeSpan.FromSeconds(20));
-                    }
-                    Register();
-                }
-                catch (Exception e) { RevivalMod.Log.Warning("[custom] package: " + e); }
-            }
+            if (done) return;
+            if (fetching != null && !fetching.IsCompleted) return;
+            if (!AlternateArts.CardsReady) return;
+            done = true;
+            try { Load(); } catch (Exception e) { RevivalMod.Log.Warning("[custom] package: " + e); }
         }
 
-        private static void Register()
+        private static void Load()
         {
-            if (registered) return;
-            registered = true;
             string folder = Folder;
             string manifest = Path.Combine(folder, "custom-tester.json");
             if (!File.Exists(manifest)) { RevivalMod.Log.Msg("[custom] no custom-card package in " + folder); return; }
@@ -151,36 +136,43 @@ namespace WarpforgeRevival
             foreach (var f in new[] { cardsFile, artFile })
                 if (!File.Exists(f)) { RevivalMod.Log.Warning("[custom] package file missing: " + f); return; }
 
-            // the locations, built directly (ResourceLocationBase with the bundle's request options as Data; a map built
-            // from ResourceLocationData lost the options in this game's Addressables - 0.14.57: "Invalid path in
-            // AssetBundleProvider" although the file was there - and without them the bundle is never opened)
-            var cardsBundle = BundleLocation("custom-cards", cardsFile);
-            var artBundle = BundleLocation("custom-art", artFile);
-            var map = new ResourceLocationMap("custom-tester-" + version, 16);
-            var locations = map.Locations;
-            var texts = new Dictionary<string, Dictionary<string, (string name, string text)>>();
-            int count = 0;
-            Add(locations, "custom-cards", cardsBundle);
-            Add(locations, "custom-art", artBundle);
+            var keys = new Dictionary<string, string>();      // card id -> the card's key (its GUID in the inventory)
             foreach (var card in root.GetProperty("cards").EnumerateArray())
             {
-                string id = card.GetProperty("id").GetString();
-                string guid = card.GetProperty("guid").GetString();
-                string art = card.GetProperty("art").GetString();
-                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(guid) || string.IsNullOrEmpty(art)) continue;
-                var cardLoc = new ResourceLocationBase(guid, guid, Il2CppType.Of<BundledAssetProvider>().FullName, Il2CppType.Of<RawCardScript>(), Deps(cardsBundle));
-                Add(locations, guid, cardLoc);
-                Add(locations, "cards", cardLoc);
-                Add(locations, art, new ResourceLocationBase(art, art, Il2CppType.Of<BundledAssetProvider>().FullName, Il2CppType.Of<Sprite>(), Deps(artBundle)));
-                Add(locations, art, new ResourceLocationBase(art, art, Il2CppType.Of<BundledAssetProvider>().FullName, Il2CppType.Of<Texture2D>(), Deps(artBundle)));
-                count++;
+                string id = card.GetProperty("id").GetString(), guid = card.GetProperty("guid").GetString();
+                if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(guid)) keys[id] = guid;
             }
-            if (count == 0) { RevivalMod.Log.Warning("[custom] the package lists no cards"); return; }
-            bool hasOptions = false;
-            try { hasOptions = (object)cardsBundle.Cast<IResourceLocation>().Data?.TryCast<AssetBundleRequestOptions>() != null; } catch { }
-            Addressables.AddResourceLocator(map.Cast<IResourceLocator>(), null, null);
 
+            artBundle = AssetBundle.LoadFromFile(artFile);
+            if ((object)artBundle == null) { RevivalMod.Log.Warning("[custom] the art bundle could not be opened"); return; }
+            foreach (var o in artBundle.LoadAllAssets(Il2CppType.Of<Sprite>()))
+            {
+                var sp = o?.TryCast<Sprite>();
+                if ((object)sp == null) continue;
+                sp.hideFlags = HideFlags.DontUnloadUnusedAsset;
+                string name = sp.name ?? "";
+                if (name.StartsWith("Custom_")) sprites[name.Substring("Custom_".Length)] = sp;
+            }
+
+            cardsBundle = AssetBundle.LoadFromFile(cardsFile);
+            if ((object)cardsBundle == null) { RevivalMod.Log.Warning("[custom] the card bundle could not be opened"); return; }
+            var library = new AddressableCardLibrary();
+            int added = 0;
+            foreach (var o in cardsBundle.LoadAllAssets(Il2CppType.Of<RawCardScript>()))
+            {
+                var card = o?.TryCast<RawCardScript>();
+                if ((object)card == null) continue;
+                string id = card.uniqueId;
+                if (string.IsNullOrEmpty(id) || !keys.TryGetValue(id, out var key)) { RevivalMod.Log.Warning($"[custom] card '{id}' is not in the package list; left out"); continue; }
+                card.hideFlags = HideFlags.DontUnloadUnusedAsset;
+                UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationHandle handle =
+                    Addressables.ResourceManager.CreateCompletedOperation<RawCardScript>(card, "");
+                library.AssetCompletedLoading(handle, key);
+                added++;
+            }
             if (root.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.Object)
+            {
+                var texts = new Dictionary<string, Dictionary<string, (string name, string text)>>();
                 foreach (var entry in text.EnumerateObject())
                 {
                     var langs = new Dictionary<string, (string, string)>();
@@ -192,51 +184,29 @@ namespace WarpforgeRevival
                     }
                     if (langs.Count > 0) texts[entry.Name] = langs;
                 }
-            CardText.SetPackageTexts(texts);
-            Version = version; CardCount = count;
-            int locators = 0;
-            try { var it = Addressables.ResourceLocators.GetEnumerator().Cast<Il2CppSystem.Collections.IEnumerator>(); while (it.MoveNext()) locators++; } catch { }
-            RevivalMod.Log.Msg($"[custom] custom-card package v{version}: {count} card(s) made known to Addressables (bundles {Path.GetFileName(cardsFile)}, {Path.GetFileName(artFile)}; {locators} locator(s) now; bundle options {(hasOptions ? "set" : "MISSING")}); texts for {texts.Count}");
-        }
-
-        private static Il2CppReferenceArray<IResourceLocation> Deps(ResourceLocationBase bundle)
-        {
-            var deps = new Il2CppReferenceArray<IResourceLocation>(1);
-            deps[0] = bundle.Cast<IResourceLocation>();
-            return deps;
-        }
-
-        private static void Add(Il2CppSystem.Collections.Generic.Dictionary<Il2CppSystem.Object, Il2CppSystem.Collections.Generic.IList<IResourceLocation>> map, string key, ResourceLocationBase loc)
-        {
-            var k = (Il2CppSystem.Object)(Il2CppSystem.String)key;
-            Il2CppSystem.Collections.Generic.List<IResourceLocation> list;
-            if (map.TryGetValue(k, out var have) && (object)have != null) list = have.TryCast<Il2CppSystem.Collections.Generic.List<IResourceLocation>>();
-            else list = null;
-            if (list == null)
-            {
-                list = new Il2CppSystem.Collections.Generic.List<IResourceLocation>();
-                map[k] = list.Cast<Il2CppSystem.Collections.Generic.IList<IResourceLocation>>();
+                CardText.SetPackageTexts(texts);
             }
-            list.Add(loc.Cast<IResourceLocation>());
+            Version = version; CardCount = added;
+            int total = 0;
+            try { total = PlayerDataManager.singletonManager.allCardCollection.Count; } catch { }
+            RevivalMod.Log.Msg($"[custom] custom-card package v{version}: {added} card(s) added to the collection ({total} cards now), {sprites.Count} picture(s)");
         }
 
-        /// <summary>A bundle file on disk as an Addressables location (loaded with AssetBundle.LoadFromFile; no CRC or hash check: the
-        /// server's checksum is checked when the file is fetched).</summary>
-        private static ResourceLocationBase BundleLocation(string name, string path)
+        /// <summary>The picture a card display shows: a custom card's own, from the art bundle.</summary>
+        [HarmonyPatch(typeof(RawCardScript), nameof(RawCardScript.cardSprite), MethodType.Getter)]
+        private static class Picture
         {
-            var loc = new ResourceLocationBase(name, path, Il2CppType.Of<AssetBundleProvider>().FullName, Il2CppType.Of<IAssetBundleResource>(), new Il2CppReferenceArray<IResourceLocation>(0));
-            var options = new AssetBundleRequestOptions
+            private static void Postfix(RawCardScript __instance, ref Sprite __result)
             {
-                BundleName = name,
-                BundleSize = new FileInfo(path).Length,
-                Crc = 0,
-                Hash = "",
-                UseCrcForCachedBundle = false,
-                Timeout = 0,
-                RetryCount = 0,
-            };
-            loc.Data = options;
-            return loc;
+                if (sprites.Count == 0) return;
+                try
+                {
+                    string id = __instance.uniqueId;
+                    if (id != null && id.StartsWith(CustomCards.Prefix, StringComparison.Ordinal) && sprites.TryGetValue(id, out var sp) && Ui.Alive(sp))
+                        __result = sp;
+                }
+                catch { }
+            }
         }
     }
 }
