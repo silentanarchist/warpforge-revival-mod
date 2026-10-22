@@ -47,10 +47,40 @@ namespace WarpforgeRevival
         // chart on its own; otherwise it is set under the last row by hand).
         private const string LineName = "RevivalTypeCounts";
 
+        // the chart is filled through three overloads (a deck, a prebuilt deck, a card list) and the game's own code
+        // does not route the first two through the third, so each one is patched
+        [HarmonyPatch(typeof(DeckEnergyCostDrawer), nameof(DeckEnergyCostDrawer.Initialize), new[] { typeof(CardDeck), typeof(bool) })]
+        private static class TypeLineDeck
+        {
+            private static void Postfix(DeckEnergyCostDrawer __instance, CardDeck deck)
+            {
+                try { TypeLine.Show(__instance, (object)deck == null ? null : deck.cardLibrary); }
+                catch (Exception e) { RevivalMod.Log.Warning("[deck] type counts (deck): " + e.Message); }
+            }
+        }
+
+        [HarmonyPatch(typeof(DeckEnergyCostDrawer), nameof(DeckEnergyCostDrawer.Initialize), new[] { typeof(PrebuiltDeck) })]
+        private static class TypeLinePrebuilt
+        {
+            private static void Postfix(DeckEnergyCostDrawer __instance, PrebuiltDeck deck)
+            {
+                try { TypeLine.Show(__instance, (object)deck == null ? null : deck.GetCardLibrary()); }
+                catch (Exception e) { RevivalMod.Log.Warning("[deck] type counts (prebuilt): " + e.Message); }
+            }
+        }
+
         [HarmonyPatch(typeof(DeckEnergyCostDrawer), nameof(DeckEnergyCostDrawer.Initialize), new[] { typeof(Il2CppSystem.Collections.Generic.List<RawCardScript>) })]
         private static class TypeLine
         {
             private static void Postfix(DeckEnergyCostDrawer __instance, Il2CppSystem.Collections.Generic.List<RawCardScript> cards)
+            {
+                try { Show(__instance, cards); }
+                catch (Exception e) { RevivalMod.Log.Warning("[deck] type counts (cards): " + e.Message); }
+            }
+
+            private static bool noted;
+
+            internal static void Show(DeckEnergyCostDrawer __instance, Il2CppSystem.Collections.Generic.List<RawCardScript> cards)
             {
                 try
                 {
@@ -98,6 +128,7 @@ namespace WarpforgeRevival
                     Ui.SetText(label, Loc.Game("MenuDeck/HUD/DeckDescription/Minions", "Troops") + ": " + troops + "    " +
                                       Loc.Game("MenuDeck/HUD/DeckDescription/Spells", "Stratagems") + ": " + stratagems);
                     label.gameObject.SetActive(true);
+                    if (!noted) { noted = true; RevivalMod.Log.Msg($"[deck] type counts under the cost chart: {troops} troops, {stratagems} stratagems (holder {holder.name}, layout group: {(object)holder.GetComponent<UnityEngine.UI.VerticalLayoutGroup>() != null})"); }
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[deck] type counts under the cost chart: " + e.Message); }
             }
