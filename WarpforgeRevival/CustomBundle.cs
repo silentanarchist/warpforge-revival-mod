@@ -112,12 +112,14 @@ namespace WarpforgeRevival
             return Convert.ToHexString(sha.ComputeHash(f)).ToLowerInvariant();
         }
 
-        /// <summary>Before the game loads its card library: the package, if there is one, is made known to Addressables.</summary>
-        [HarmonyPatch(typeof(PlayerDataManager), nameof(PlayerDataManager.LoadAllCards))]
+        /// <summary>Before the game loads any of its asset libraries (the card library among them; PlayerDataManager.LoadAllCards
+        /// is compiled away, so the libraries' own loader is the hook): the package, if there is one, is made known to Addressables.</summary>
+        [HarmonyPatch(typeof(BaseAddressableLibrary), nameof(BaseAddressableLibrary.LoadLibrary))]
         private static class BeforeCards
         {
             private static void Prefix()
             {
+                if (registered) return;
                 try
                 {
                     var f = fetching;

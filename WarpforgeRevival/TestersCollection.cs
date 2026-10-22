@@ -71,18 +71,24 @@ namespace WarpforgeRevival
             catch (Exception e) { RevivalMod.Log.Warning("[testers] could not open the Testers window: " + e); return false; }
         }
 
-        /// <summary>The mode the Decks tab shows: the first tester mode on this server (Custom Test for now).</summary>
+        /// <summary>The mode the Decks tab shows: the one tester mode with decks of its own, straight to its list; with
+        /// several (0.14.55: Custom Test and Custom Cards) no mode, so the tab opens on the format picker, which then
+        /// shows only those modes (DeckFormatPicker).</summary>
         private static CollectionScreen.OpenDeckCollectionContext DecksContext()
         {
+            var withDecks = new List<IPlayEvent>();
             foreach (var id in TestersPage.TesterModes())
             {
                 var ev = TestersPage.Find(id);
                 var playEvent = (object)ev == null ? null : ev.TryCast<IPlayEvent>();
-                if ((object)playEvent == null) continue;
-                return new CollectionScreen.OpenDeckCollectionContext { eventReference = playEvent };
+                if ((object)playEvent == null || !LongGame.HasOwnDecks(playEvent)) continue;
+                withDecks.Add(playEvent);
             }
-            RevivalMod.Log.Warning("[testers] no tester mode for the Decks tab");
-            return null;
+            pickerShown = withDecks.Count > 1;
+            if (withDecks.Count == 1) return new CollectionScreen.OpenDeckCollectionContext { eventReference = withDecks[0] };
+            if (withDecks.Count == 0) RevivalMod.Log.Warning("[testers] no tester mode with decks for the Decks tab");
+            else RevivalMod.Log.Msg($"[testers] Decks tab: format picker for {withDecks.Count} tester modes");
+            return new CollectionScreen.OpenDeckCollectionContext { eventReference = null };
         }
 
         /// <summary>The window, made the first time from the window file behind the menu bar's Collection button.</summary>
@@ -383,38 +389,6 @@ namespace WarpforgeRevival
         }
 
         // Decks skips the format picker: straight to the tester mode's deck list.
-        [HarmonyPatch(typeof(SelectDecksTab), nameof(SelectDecksTab.ChooseTabToOpen))]
-        private static class DecksStraightToMode
-        {
-            private static void Postfix(SelectDecksTab __instance)
-            {
-                try
-                {
-                    if (!IsCopy(__instance.Window)) return;
-                    // the tester modes with decks of their own: one -> straight to its list; more -> the picker (0.14.52)
-                    var withDecks = new List<(string id, IOwnDeckPlayEvent own)>();
-                    foreach (var id in TestersPage.TesterModes())
-                    {
-                        var ev = TestersPage.Find(id);
-                        var play = (object)ev == null ? null : ev.TryCast<IPlayEvent>();
-                        var own = (object)ev == null ? null : ev.TryCast<IOwnDeckPlayEvent>();
-                        if ((object)own == null || !LongGame.HasOwnDecks(play)) continue;
-                        withDecks.Add((id, own));
-                    }
-                    pickerShown = withDecks.Count > 1;
-                    if (withDecks.Count == 1)
-                    {
-                        __instance.OnClickDeckCollection(withDecks[0].own);
-                        RevivalMod.Log.Msg($"[testers] Decks tab: {withDecks[0].id} decks");
-                        return;
-                    }
-                    if (withDecks.Count == 0) RevivalMod.Log.Warning("[testers] Decks tab: no tester mode with decks");
-                    else RevivalMod.Log.Msg($"[testers] Decks tab: format picker for {withDecks.Count} tester modes");
-                }
-                catch (Exception e) { RevivalMod.Log.Warning("[testers] decks: " + e.Message); }
-            }
-        }
-
         // Back from a tester mode's deck list closes the window instead of showing the format picker - unless the
         // window has a picker of its own (several tester modes with decks): then Back goes to it as the game does,
         // and Back from the picker closes.
