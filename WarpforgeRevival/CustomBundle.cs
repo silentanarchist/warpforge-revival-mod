@@ -28,8 +28,11 @@ namespace WarpforgeRevival
     /// takes the custom cards in with the official ones and their pictures load through the normal path.
     /// Texts come from the package too (CardText.SetPackageTexts; per language, English fallback).
     ///
-    /// 0.14.53: loaded from the folder when it holds a package (the owner's test); fetching it from the server for
-    /// testers comes next.
+    /// The package comes from the server (0.14.54): at start-up a game with a saved sign-in asks
+    /// /api/v1/content/custom/custom-tester.json (the server answers only a tester's or admin's sign-in) and fetches
+    /// the files for this platform whose checksum differs from what is in the folder; the manifest is written last, so
+    /// a half-finished fetch leaves the previous package usable. The card library load waits for a fetch still running
+    /// (at most 20 s). A game without the package (not a tester, server unreachable) plays as before.
     /// </summary>
     internal static class CustomBundle
     {
@@ -46,11 +49,87 @@ namespace WarpforgeRevival
         internal static int Version { get; private set; }
         internal static int CardCount { get; private set; }
 
+        private static System.Threading.Tasks.Task fetching;
+        private static string server;
+
+        /// <summary>Mod start-up: fetch the package in the background when the game has a saved sign-in (the server decides
+        /// whether it is a tester's).</summary>
+        internal static void Start(string serverUrl)
+        {
+            server = serverUrl;
+            string login = null;
+            try { login = GameSignIn.Token(); } catch { }
+            if (string.IsNullOrEmpty(login)) { RevivalMod.Log.Msg("[custom] no saved sign-in yet: the custom-card package is not asked for this start"); return; }
+            fetching = System.Threading.Tasks.Task.Run(() => Fetch(login));
+        }
+
+        private static async System.Threading.Tasks.Task Fetch(string login)
+        {
+            try
+            {
+                using var http = Net.Client(TimeSpan.FromSeconds(60));
+                http.DefaultRequestHeaders.TryAddWithoutValidation("X-Revival-Login", login);
+                using var reply = await http.GetAsync(server + "/api/v1/content/custom/custom-tester.json");
+                if (reply.StatusCode == System.Net.HttpStatusCode.Forbidden) { RevivalMod.Log.Msg("[custom] the server's custom-card package is for testers; none fetched"); return; }
+                if (reply.StatusCode == System.Net.HttpStatusCode.NotFound) { RevivalMod.Log.Msg("[custom] the server has no custom-card package"); return; }
+                if (!reply.IsSuccessStatusCode) { RevivalMod.Log.Warning($"[custom] package manifest: HTTP {(int)reply.StatusCode}"); return; }
+                string manifest = await reply.Content.ReadAsStringAsync();
+                string folder = Folder;
+                Directory.CreateDirectory(folder);
+                var wanted = new List<(string name, string sha)>();
+                using (var doc = JsonDocument.Parse(manifest))
+                {
+                    if (doc.RootElement.TryGetProperty("files", out var files) && files.TryGetProperty(Platform, out var mine))
+                        foreach (var f in mine.EnumerateObject())
+                            wanted.Add((f.Name, f.Value.TryGetProperty("sha256", out var sh) ? sh.GetString() ?? "" : ""));
+                }
+                if (wanted.Count == 0) { RevivalMod.Log.Warning("[custom] the package manifest lists no files for " + Platform); return; }
+                int fetched = 0;
+                foreach (var (name, sha) in wanted)
+                {
+                    if (name.IndexOfAny(new[] { '/', '\\' }) >= 0 || !name.StartsWith("custom-")) continue;
+                    string path = Path.Combine(folder, name);
+                    if (File.Exists(path) && Sha256(path) == sha) continue;
+                    var data = await http.GetByteArrayAsync(server + "/api/v1/content/custom/" + name);
+                    string got = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(data)).ToLowerInvariant();
+                    if (got != sha) { RevivalMod.Log.Warning($"[custom] {name} does not match the server's checksum; package not updated"); return; }
+                    File.WriteAllBytes(path + ".new", data);
+                    File.Move(path + ".new", path, true);
+                    fetched++;
+                }
+                string manifestPath = Path.Combine(folder, "custom-tester.json");
+                if (fetched > 0 || !File.Exists(manifestPath) || File.ReadAllText(manifestPath) != manifest)
+                    File.WriteAllText(manifestPath, manifest);
+                RevivalMod.Log.Msg($"[custom] custom-card package: {(fetched > 0 ? fetched + " file(s) fetched" : "up to date")}");
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[custom] package fetch: " + e.Message); }
+        }
+
+        private static string Sha256(string path)
+        {
+            using var f = File.OpenRead(path);
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            return Convert.ToHexString(sha.ComputeHash(f)).ToLowerInvariant();
+        }
+
         /// <summary>Before the game loads its card library: the package, if there is one, is made known to Addressables.</summary>
         [HarmonyPatch(typeof(PlayerDataManager), nameof(PlayerDataManager.LoadAllCards))]
         private static class BeforeCards
         {
-            private static void Prefix() { try { Register(); } catch (Exception e) { RevivalMod.Log.Warning("[custom] package: " + e); } }
+            private static void Prefix()
+            {
+                try
+                {
+                    var f = fetching;
+                    if (f != null && !f.IsCompleted)
+                    {
+                        RevivalMod.Log.Msg("[custom] waiting for the custom-card package fetch before the cards load");
+                        f.Wait(TimeSpan.FromSeconds(20));
+                    }
+                    Register();
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[custom] package: " + e); }
+            }
         }
 
         private static void Register()

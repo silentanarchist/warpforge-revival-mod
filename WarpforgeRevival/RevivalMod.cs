@@ -20,9 +20,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.14.53-a";
+        public const string Version = "0.14.54-a";
 #else
-        public const string Version = "0.14.53-w";
+        public const string Version = "0.14.54-w";
 #endif
 
         /// <summary>
@@ -149,6 +149,7 @@ namespace WarpforgeRevival
             DraftPacks.Apply(HarmonyInstance);
             ServerSettings.Start(Config.ServerUrl);
             CardText.Start(Config.ServerUrl);
+            CustomBundle.Start(Config.ServerUrl);
             Loc.Start(Config.ServerUrl, dataDir);
             GlobalChat.Start(Config.ServerUrl);
             Updater.Start(Config.ServerUrl, dataDir);
