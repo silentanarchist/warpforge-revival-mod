@@ -8,55 +8,118 @@ using Il2CppEverguild.LiveOps;
 namespace WarpforgeRevival
 {
     /// <summary>
-    /// A third constructed format ("Long Game") next to Classic and Skirmish, with its own decks.
-    /// The game files a deck under a play mode and only knows Classic and Skirmish decks, so Long Game
-    /// decks are stored under a play mode the game never uses (Battle4Warpforge). That keeps them a
-    /// separate set for good: nothing has to be converted later. Where the game would otherwise not
-    /// show them, they are presented as Classic decks:
-    ///  - on the Long Game page (and the deck editor opened from it) Long Game decks are listed and
-    ///    Classic decks are not, and a deck created there becomes a Long Game deck;
-    ///  - on any other mode page Long Game decks are not listed;
+    /// Constructed formats with their own decks next to Classic and Skirmish: the "Long Game" (Custom Test),
+    /// and since 0.14.52 any mode the server gives a deck list of its own ("deckListMode" in its gameplay
+    /// variables, sent to the mod as "deckModes"; first: the custom-card test mode).
+    /// The game files a deck under a play mode and only knows Classic and Skirmish decks, so each such
+    /// format's decks are stored under a play mode the game never uses (Long Game: Battle4Warpforge; the
+    /// server names the others from Dungeon, RankedFriendly, OwnDeckTraining). That keeps them separate
+    /// sets for good: nothing has to be converted later. Where the game would otherwise not show them,
+    /// they are presented as Classic decks:
+    ///  - on the format's page (and the deck editor opened from it) its decks are listed and Classic
+    ///    decks are not, and a deck created there becomes one of its decks;
+    ///  - on any other mode page they are not listed;
     ///  - in the Collection they appear next to the Classic decks so they can be edited or deleted.
-    /// Long Game decks always follow the Long Game event's rules (deck size, copies per rarity), and
-    /// Long Game matches use the warlord health multiplier. Settings come from the server's
-    /// revival-settings.json ("longGame").
+    /// Such decks always follow their event's rules (deck size, copies). The Long Game also has copies
+    /// per rarity and the warlord health multiplier, from the server's revival-settings.json ("longGame").
     /// </summary>
     internal static class LongGame
     {
-        private enum Page { None, Long, Other }
-
-        private static Page page = Page.None;
-        private static bool editingLong;                 // deck editor was opened from the Long Game page
-        private static IPlayEvent longEvent;
+        private static string pageFormat;                // event id of the format whose page is open (null: none, or a normal mode)
+        private static string editingFormat;             // event id of the format whose deck is open in the editor (null: none)
+        private static readonly Dictionary<string, IPlayEvent> events = new Dictionary<string, IPlayEvent>();
         private const PlayModes LongMode = PlayModes.Battle4Warpforge;
         private static bool inside;                      // guards against re-entry from our own calls
 
         private static string EventId => ServerSettings.LongGameEvent;
+        private static bool editingLong => editingFormat != null && editingFormat == EventId;
+        private static bool onLongPage => pageFormat != null && pageFormat == EventId;
 
-        private static IPlayEvent Event()
+        /// <summary>The stored play mode of a format's decks, or null when the event is not a format with its own decks.</summary>
+        private static PlayModes? ModeOf(string eventId)
         {
-            if (longEvent != null) return longEvent;
-            string id = EventId;
+            if (string.IsNullOrEmpty(eventId)) return null;
+            if (eventId == EventId) return LongMode;
+            return ServerSettings.DeckModes.TryGetValue(eventId, out int m) && m > 0 ? (PlayModes)m : (PlayModes?)null;
+        }
+
+        /// <summary>The format whose decks are stored under this play mode, or null.</summary>
+        private static string FormatOfMode(PlayModes mode)
+        {
+            if (mode == LongMode && !string.IsNullOrEmpty(EventId)) return EventId;
+            foreach (var kv in ServerSettings.DeckModes) if (kv.Value == (int)mode) return kv.Key;
+            return null;
+        }
+
+        /// <summary>The event id when the event is a format with its own decks, else null.</summary>
+        private static string FormatOf(IPlayEvent e)
+        {
+            try
+            {
+                if ((object)e == null) return null;
+                var data = e.GetBaseData();
+                string id = (object)data == null ? null : data.eventId;
+                if (ModeOf(id) == null) return null;
+                events[id] = e;
+                return id;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>A format's deck is or becomes one of its decks: a deck stored as any other format's stays as it is.</summary>
+        private static void MakeFormat(CardDeck deck, string format)
+        {
+            var mode = ModeOf(format);
+            if (mode == null || (object)deck == null || deck.Pointer == IntPtr.Zero) return;
+            if (TryStoredMode(deck, out var stored)) { if (stored == mode.Value || stored != PlayModes.Classic) return; }   // never a Skirmish deck
+            StoreMode(deck, mode.Value);
+            RevivalMod.Log.Msg($"[long] '{deck.deckName}' is now a {format} deck");
+        }
+
+        /// <summary>The format a deck is stored under, or null (Classic, Skirmish, draft).</summary>
+        private static string StoredFormat(CardDeck deck)
+        {
+            if ((object)deck == null || deck.Pointer == IntPtr.Zero || !TryStoredMode(deck, out var stored)) return null;
+            return FormatOfMode(stored);
+        }
+
+        /// <summary>Whether a deck is stored as one of the given format's decks.</summary>
+        internal static bool IsStoredAs(CardDeck deck, string format) => format != null && StoredFormat(deck) == format;
+
+        /// <summary>The format a deck belongs to right now: stored as one, or the editor's working copy of one opened from a format's list.</summary>
+        internal static string FormatOfDeck(CardDeck deck)
+        {
+            if ((object)deck == null || deck.Pointer == IntPtr.Zero) return null;
+            if (TryStoredMode(deck, out var stored))
+            {
+                var f = FormatOfMode(stored);
+                if (f != null) return f;
+                return stored == PlayModes.Classic ? editingFormat : null;
+            }
+            return editingFormat;
+        }
+
+        private static IPlayEvent Event() => EventOf(EventId);
+
+        /// <summary>A format's event (looked up once by id).</summary>
+        private static IPlayEvent EventOf(string id)
+        {
             if (string.IsNullOrEmpty(id)) return null;
+            if (events.TryGetValue(id, out var known) && (object)known != null) return known;
             try
             {
                 var found = LiveOpsManager.GetEvent(id);
-                if ((object)found != null) longEvent = found.TryCast<IPlayEvent>();
+                var e = (object)found == null ? null : found.TryCast<IPlayEvent>();
+                if ((object)e != null) events[id] = e;
+                return e;
             }
-            catch { }
-            return longEvent;
+            catch { return null; }
         }
 
-        internal static bool IsLongEvent(IPlayEvent e)
-        {
-            try
-            {
-                if ((object)e == null || string.IsNullOrEmpty(EventId)) return false;
-                var data = e.GetBaseData();
-                return (object)data != null && data.eventId == EventId;
-            }
-            catch { return false; }
-        }
+        internal static bool IsLongEvent(IPlayEvent e) => !string.IsNullOrEmpty(EventId) && FormatOf(e) == EventId;
+
+        /// <summary>True when the event is a format with decks of its own (the Long Game or a server-named mode).</summary>
+        internal static bool HasOwnDecks(IPlayEvent e) => FormatOf(e) != null;
 
         // A deck's play mode is an optional value stored inside the deck (CardDeck.gameMode, a PlayModes?: the
         // "has a value" flag, then the mode 4 bytes on). The generated wrapper for that field reads it wrongly, so
@@ -102,25 +165,23 @@ namespace WarpforgeRevival
             try { return !string.IsNullOrEmpty(EventId) && StoredAsLong(deck); } catch { return false; }
         }
 
-        /// <summary>Forgets that the Long Game page is open (a friend challenge is never Long Game; see ChallengeDecks).</summary>
+        /// <summary>A deck stored as one of any own-deck format's decks (never usable in Classic or Skirmish), and which.</summary>
+        internal static string StoredOwnFormat(CardDeck deck)
+        {
+            try { return StoredFormat(deck); } catch { return null; }
+        }
+
+        /// <summary>Forgets that a format's page is open (a friend challenge is never one of them; see ChallengeDecks).</summary>
         internal static void LeavePage()
         {
-            if (page == Page.Long || editingLong) RevivalMod.Log.Msg("[long] Long Game page state cleared for a friend challenge");
-            page = Page.None; editingLong = false;
+            if (pageFormat != null || editingFormat != null) RevivalMod.Log.Msg("[long] format page state cleared for a friend challenge");
+            pageFormat = null; editingFormat = null;
         }
 
-        /// <summary>Whether this is a Long Game deck (it is stored under the Long Game play mode).</summary>
-        internal static bool Applies(CardDeck deck)
-        {
-            if ((object)deck == null || deck.Pointer == IntPtr.Zero || string.IsNullOrEmpty(EventId)) return false;
-            if (TryStoredMode(deck, out var stored)) return stored == LongMode || (editingLong && stored == PlayModes.Classic);
-            return editingLong;          // the editor's working copy of a deck opened from a Long Game list
-        }
+        /// <summary>Whether this is a Long Game deck (stored under the Long Game play mode, or being edited from its list).</summary>
+        internal static bool Applies(CardDeck deck) => !string.IsNullOrEmpty(EventId) && FormatOfDeck(deck) == EventId;
 
-        private static bool StoredAsLong(CardDeck deck)
-        {
-            return (object)deck != null && deck.Pointer != IntPtr.Zero && TryStoredMode(deck, out var stored) && stored == LongMode;
-        }
+        private static bool StoredAsLong(CardDeck deck) => IsStoredAs(deck, EventId);
 
         /// <summary>How a deck's play mode is presented to the rest of the game (see the class summary).</summary>
         [HarmonyPatch(typeof(CardDeck), nameof(CardDeck.GameMode), MethodType.Getter)]
@@ -130,10 +191,11 @@ namespace WarpforgeRevival
             {
                 try
                 {
-                    if (saving > 0 || string.IsNullOrEmpty(EventId)) return;      // what gets saved is the real mode
-                    bool onLongPage = page == Page.Long || editingLong;
-                    if (__result == LongMode) { if (onLongPage) __result = PlayModes.Classic; }
-                    else if (__result == PlayModes.Classic && onLongPage) __result = LongMode;
+                    if (saving > 0) return;      // what gets saved is the real mode
+                    string open = pageFormat ?? editingFormat;
+                    var ownFormat = FormatOfMode(__result);
+                    if (ownFormat != null) { if (open != null && open == ownFormat) __result = PlayModes.Classic; }
+                    else if (__result == PlayModes.Classic && open != null) __result = ModeOf(open) ?? __result;
                 }
                 catch { }
             }
@@ -147,16 +209,16 @@ namespace WarpforgeRevival
             {
                 try
                 {
-                    if (editingLong) MakeLong(deck);
+                    if (editingFormat != null) MakeFormat(deck, editingFormat);
                 }
-                catch (Exception e) { RevivalMod.Log.Warning("[long] could not mark the deck as Long Game: " + e.Message); }
+                catch (Exception e) { RevivalMod.Log.Warning("[long] could not mark the deck's format: " + e.Message); }
             }
 
             // The editor works on its own copy of the deck; make sure that copy, and what gets saved, is a
             // Long Game deck too. (One patch class with the prefix since 0.13.75, M-26.)
             private static void Postfix(DeckEditingPanel __instance)
             {
-                try { if (editingLong) MakeLong(__instance.editingDeck); }
+                try { if (editingFormat != null) MakeFormat(__instance.editingDeck, editingFormat); }
                 catch (Exception ex) { RevivalMod.Log.Warning("[long] editor copy: " + ex.Message); }
             }
         }
@@ -165,13 +227,12 @@ namespace WarpforgeRevival
 
         private static void SetPage(IPlayEvent e, string seenFrom)
         {
-            bool isLong = IsLongEvent(e);
-            if (isLong) longEvent = e;
+            string format = FormatOf(e);
             string id = "?";
             try { var d = (object)e == null ? null : e.GetBaseData(); if ((object)d != null) id = d.eventId; } catch { }
-            page = isLong ? Page.Long : Page.Other;
-            editingLong = false;
-            RevivalMod.Log.Msg($"[long] {seenFrom}: page for event '{id}' -> {(isLong ? "Long Game decks only" : "Long Game decks hidden")}");
+            pageFormat = format;
+            editingFormat = null;
+            RevivalMod.Log.Msg($"[long] {seenFrom}: page for event '{id}' -> {(format != null ? "its own decks only" : "own-deck formats hidden")}");
         }
 
         // The deck picker on a mode page rebuilds its list here (when the page opens and whenever the
@@ -206,9 +267,7 @@ namespace WarpforgeRevival
                 {
                     var content = __instance.Content;
                     var e = (object)content == null ? null : content.TryCast<IPlayEvent>();
-                    bool isLong = IsLongEvent(e);
-                    if (isLong) longEvent = e;
-                    bool remember = isLong || TestersPage.IsTesterEvent(e);
+                    bool remember = FormatOf(e) != null || TestersPage.IsTesterEvent(e);
                     clickedEvent = remember ? e : null;
                     try { if ((object)e != null && (object)e.TryCast<IDraftEvent>() != null) lastDraft = e; } catch { }
                     longTileClickedAt = remember ? UnityEngine.Time.realtimeSinceStartup : -100f;
@@ -229,7 +288,7 @@ namespace WarpforgeRevival
                 {
                     bool fromLongTile = UnityEngine.Time.realtimeSinceStartup - longTileClickedAt < 3f;
                     longTileClickedAt = -100f;
-                    var wanted = clickedEvent ?? longEvent;
+                    var wanted = clickedEvent ?? Event();
                     if (fromLongTile && (object)wanted != null)
                     {
                         data = new Il2CppSystem.Object(wanted.Pointer);
@@ -259,18 +318,10 @@ namespace WarpforgeRevival
         [HarmonyPatch(typeof(SelectDecksTab), nameof(SelectDecksTab.ToggleSelectGameModeDeck))]
         private static class DeckListModeChooser
         {
-            private static void Prefix() { page = Page.None; editingLong = false; }
+            private static void Prefix() { pageFormat = null; editingFormat = null; }
         }
 
-        private static void MakeLong(CardDeck deck)
-        {
-            if ((object)deck == null || deck.Pointer == IntPtr.Zero || StoredAsLong(deck)) return;
-            if (TryStoredMode(deck, out var stored) && stored != PlayModes.Classic) return;   // never a Skirmish deck
-            StoreMode(deck, LongMode);
-            RevivalMod.Log.Msg($"[long] '{deck.deckName}' is now a Long Game deck");
-        }
-
-        // Whatever opens the deck editor while a Long Game list is showing is editing a Long Game deck.
+        // Whatever opens the deck editor while a format's list is showing is editing one of its decks.
         [HarmonyPatch(typeof(DeckEditingWindow), nameof(DeckEditingWindow.TryOpen))]
         private static class EditorOpening
         {
@@ -279,11 +330,11 @@ namespace WarpforgeRevival
                 editorOpen = true; browseActive = false;
                 try
                 {
-                    if (page != Page.Long) return;
-                    editingLong = true;
+                    if (pageFormat == null) return;
+                    editingFormat = pageFormat;
                     var deck = (object)data == null ? null : data.TryCast<CardDeck>();
-                    RevivalMod.Log.Msg($"[long] deck editor opening from a Long Game list (given: {((object)data == null ? "nothing" : data.GetIl2CppType().Name)})");
-                    MakeLong(deck);
+                    RevivalMod.Log.Msg($"[long] deck editor opening from the {pageFormat} list (given: {((object)data == null ? "nothing" : data.GetIl2CppType().Name)})");
+                    MakeFormat(deck, editingFormat);
                 }
                 catch (Exception ex) { RevivalMod.Log.Warning("[long] editor: " + ex); }
             }
@@ -296,9 +347,9 @@ namespace WarpforgeRevival
             {
                 try
                 {
-                    if (!editingLong) return;
+                    if (editingFormat == null) return;
                     var panel = __instance.editingPanel;
-                    if ((object)panel != null) MakeLong(panel.editingDeck);
+                    if ((object)panel != null) MakeFormat(panel.editingDeck, editingFormat);
                 }
                 catch (Exception ex) { RevivalMod.Log.Warning("[long] saving: " + ex.Message); }
             }
@@ -313,7 +364,7 @@ namespace WarpforgeRevival
         {
             private static void Prefix(CardDeck deckData)
             {
-                try { if (editingLong || page == Page.Long) MakeLong(deckData); } catch { }
+                try { var f = editingFormat ?? pageFormat; if (f != null) MakeFormat(deckData, f); } catch { }
                 saving++;
             }
             private static void Finalizer() { if (saving > 0) saving--; }
@@ -339,7 +390,7 @@ namespace WarpforgeRevival
         {
             private static void Postfix(CardDeck __instance, CardDeck deckToCopy)
             {
-                try { if ((object)deckToCopy != null && StoredAsLong(deckToCopy)) MakeLong(__instance); } catch { }
+                try { var f = StoredFormat(deckToCopy); if (f != null) MakeFormat(__instance, f); } catch { }
             }
         }
 
@@ -359,10 +410,10 @@ namespace WarpforgeRevival
                         __result = lastDraft;
                         return;
                     }
-                    if (string.IsNullOrEmpty(EventId)) return;
-                    if (playMode == LongMode || (playMode == PlayModes.Classic && (page == Page.Long || editingLong)))
+                    string f = FormatOfMode(playMode) ?? (playMode == PlayModes.Classic ? pageFormat ?? editingFormat : null);
+                    if (f != null)
                     {
-                        var e = Event();
+                        var e = EventOf(f);
                         if ((object)e != null) __result = e;
                     }
                 }
@@ -381,18 +432,18 @@ namespace WarpforgeRevival
             {
                 try
                 {
-                    if (string.IsNullOrEmpty(EventId) || (object)deck == null) return;
+                    if ((object)deck == null) return;
                     var current = __instance.CurrentEvent;
-                    bool longList = IsLongEvent((object)current == null ? null : current.TryCast<IPlayEvent>());
-                    bool longDeck = StoredAsLong(deck);
+                    string listFormat = FormatOf((object)current == null ? null : current.TryCast<IPlayEvent>());
+                    string deckFormat = StoredFormat(deck);
                     bool game = __result;
-                    if (longDeck) __result = longList;
-                    else if (longList) __result = false;
+                    if (deckFormat != null) __result = listFormat == deckFormat;
+                    else if (listFormat != null) __result = false;
                     if (filterLines > 0)
                     {
                         filterLines--;
                         bool has = TryStoredMode(deck, out var stored);
-                        RevivalMod.Log.Msg($"[long] list check '{deck.deckName}': stored mode {(has ? stored.ToString() : "none")}, {deck.CardCount(false)} cards, list is {(longList ? "Long Game" : "other")}, game said {game} -> {__result}");
+                        RevivalMod.Log.Msg($"[long] list check '{deck.deckName}': stored mode {(has ? stored.ToString() : "none")}, {deck.CardCount(false)} cards, list is {listFormat ?? "other"}, game said {game} -> {__result}");
                     }
                 }
                 catch (Exception ex) { RevivalMod.Log.Warning("[long] deck list filter: " + ex.Message); }
@@ -402,25 +453,25 @@ namespace WarpforgeRevival
         [HarmonyPatch(typeof(RankedDeckSelector), nameof(RankedDeckSelector.OnDisable))]
         private static class PageClosed
         {
-            private static void Postfix() { page = Page.None; }
+            private static void Postfix() { pageFormat = null; }
         }
 
         [HarmonyPatch(typeof(RankedDeckSelector), nameof(RankedDeckSelector.OnCreateDeckButtonClick))]
         private static class CreateFromPage
         {
-            private static void Prefix() { if (page == Page.Long) editingLong = true; }
+            private static void Prefix() { if (pageFormat != null) editingFormat = pageFormat; }
         }
 
         [HarmonyPatch(typeof(RankedDeckSelector), nameof(RankedDeckSelector.OnViewDeckButtonClick))]
         private static class ViewFromPage
         {
-            private static void Prefix() { if (page == Page.Long) editingLong = true; }
+            private static void Prefix() { if (pageFormat != null) editingFormat = pageFormat; }
         }
 
         [HarmonyPatch(typeof(DeckEditingWindow), nameof(DeckEditingWindow.Close))]
         private static class EditorClosed
         {
-            private static void Postfix() { editingLong = false; editorOpen = false; }
+            private static void Postfix() { editingFormat = null; editorOpen = false; }
         }
 
         // ------------------------------------------------------------------ deck rules
@@ -434,8 +485,9 @@ namespace WarpforgeRevival
                 inside = true;
                 try
                 {
-                    if (!Applies(__instance)) return;
-                    var e = Event();
+                    string f = FormatOfDeck(__instance);
+                    if (f == null) return;
+                    var e = EventOf(f);
                     if ((object)e != null) __result = e;
                 }
                 catch (Exception ex) { RevivalMod.Log.Warning("[long] deck rules: " + ex.Message); }
@@ -592,7 +644,7 @@ namespace WarpforgeRevival
         private static int ShownHealth(RawCardScript item, int change, bool grid)
         {
             if ((object)item == null || item.cardType != CardTypeOptions.Hero) return -1;
-            if (page == Page.Long || editingLong)
+            if (onLongPage || editingLong)
             {
                 double factor = ServerSettings.LongGameHealth;
                 if (factor <= 0 || Math.Abs(factor - 1.0) < 0.001) return -1;

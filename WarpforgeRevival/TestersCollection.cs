@@ -391,22 +391,47 @@ namespace WarpforgeRevival
                 try
                 {
                     if (!IsCopy(__instance.Window)) return;
+                    // the tester modes with decks of their own: one -> straight to its list; more -> the picker (0.14.52)
+                    var withDecks = new List<(string id, IOwnDeckPlayEvent own)>();
                     foreach (var id in TestersPage.TesterModes())
                     {
                         var ev = TestersPage.Find(id);
+                        var play = (object)ev == null ? null : ev.TryCast<IPlayEvent>();
                         var own = (object)ev == null ? null : ev.TryCast<IOwnDeckPlayEvent>();
-                        if ((object)own == null) continue;
-                        __instance.OnClickDeckCollection(own);
-                        RevivalMod.Log.Msg($"[testers] Decks tab: {id} decks");
+                        if ((object)own == null || !LongGame.HasOwnDecks(play)) continue;
+                        withDecks.Add((id, own));
+                    }
+                    pickerShown = withDecks.Count > 1;
+                    if (withDecks.Count == 1)
+                    {
+                        __instance.OnClickDeckCollection(withDecks[0].own);
+                        RevivalMod.Log.Msg($"[testers] Decks tab: {withDecks[0].id} decks");
                         return;
                     }
-                    RevivalMod.Log.Warning("[testers] Decks tab: no tester mode with decks");
+                    if (withDecks.Count == 0) RevivalMod.Log.Warning("[testers] Decks tab: no tester mode with decks");
+                    else RevivalMod.Log.Msg($"[testers] Decks tab: format picker for {withDecks.Count} tester modes");
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[testers] decks: " + e.Message); }
             }
         }
 
-        // Back from the Custom Test deck list closes the window instead of showing the format picker.
+        // Back from a tester mode's deck list closes the window instead of showing the format picker - unless the
+        // window has a picker of its own (several tester modes with decks): then Back goes to it as the game does,
+        // and Back from the picker closes.
+        private static bool pickerShown, inDeckList;
+
+        [HarmonyPatch(typeof(SelectDecksTab), nameof(SelectDecksTab.ToggleSelectDeck))]
+        private static class ListShown
+        {
+            private static void Postfix(SelectDecksTab __instance) { if (IsCopy(__instance.Window)) inDeckList = true; }
+        }
+
+        [HarmonyPatch(typeof(SelectDecksTab), nameof(SelectDecksTab.ToggleSelectGameModeDeck))]
+        private static class PickerShown
+        {
+            private static void Postfix(SelectDecksTab __instance) { if (IsCopy(__instance.Window)) inDeckList = false; }
+        }
+
         [HarmonyPatch(typeof(SelectDecksTab), nameof(SelectDecksTab.BackButtonClicked))]
         private static class BackCloses
         {
@@ -415,6 +440,7 @@ namespace WarpforgeRevival
                 try
                 {
                     if (!IsCopy(__instance.Window)) return true;
+                    if (pickerShown && inDeckList) return true;
                     Close();
                     return false;
                 }

@@ -25,10 +25,11 @@ namespace WarpforgeRevival
             LongGame.LeavePage();
             try
             {
-                if ((object)ev == null || LongGame.IsLongEvent(ev)) return true;
+                if ((object)ev == null || LongGame.HasOwnDecks(ev)) return true;
                 var deck = ev.GetEventDeck();
-                if ((object)deck == null || !LongGame.IsStoredLong(deck)) return true;
-                RevivalMod.Log.Warning($"[challenge] {where}: the deck for {ev.GetBaseData()?.eventId} is a Custom Test deck (\"{deck.deckName}\"); match not started");
+                string own = (object)deck == null ? null : LongGame.StoredOwnFormat(deck);
+                if (own == null) return true;
+                RevivalMod.Log.Warning($"[challenge] {where}: the deck for {ev.GetBaseData()?.eventId} is a {own} deck (\"{deck.deckName}\"); match not started");
                 try { WindowsManager.Instance?.ShowPopUp(Message, false, true, Loc.Game("MainMenu/General/OK", "OK"), (Il2CppSystem.Action)null); } catch { }
                 return false;
             }

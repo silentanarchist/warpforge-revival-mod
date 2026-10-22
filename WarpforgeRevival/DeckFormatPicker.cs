@@ -66,7 +66,7 @@ namespace WarpforgeRevival
                 string id = IdOf(tile, out var e);
                 seen.Add(id);
                 if (LongGame.IsLongEvent(e)) longGame = tile;
-                else if (TestersPage.IsTesterEvent(e)) testerTiles.Add(tile);
+                else if (TestersPage.IsTesterEvent(e) || LongGame.HasOwnDecks(e)) testerTiles.Add(tile);
                 else if (id.IndexOf("Skirmish", StringComparison.OrdinalIgnoreCase) >= 0) skirmish = tile;
                 else if (id.IndexOf("Classic", StringComparison.OrdinalIgnoreCase) >= 0) classic = tile;
             }
@@ -81,7 +81,24 @@ namespace WarpforgeRevival
             }
             // Custom Test (the long-game mode) is for testers, who build its decks in the Testers window;
             // the normal picker leaves it out, so Classic and Skirmish are two full-size tiles side by side.
-            if (TestersCollection.IsUnder(tab.transform)) return;
+            if (TestersCollection.IsUnder(tab.transform))
+            {
+                // the Testers window's picker (shown since 0.14.52 when more than one tester mode has decks of its own):
+                // only those modes' tiles; everything else is the normal Collection's business
+                int shown = 0;
+                for (int i = 0; i < tiles.Count; i++)
+                {
+                    var tile = tiles[i];
+                    if ((object)tile == null) continue;
+                    IdOf(tile, out var e);
+                    bool keep = LongGame.HasOwnDecks(e) && (LongGame.IsLongEvent(e) || TestersPage.IsTesterEvent(e));
+                    tile.gameObject.SetActive(keep);
+                    if (keep) shown++;
+                }
+                LayoutRebuilder.MarkLayoutForRebuild(anchor.TryCast<RectTransform>());
+                if (report) RevivalMod.Log.Msg($"[decks] Testers window format picker: {shown} tester format(s) with their own decks");
+                return;
+            }
             if ((object)longGame != null) longGame.gameObject.SetActive(false);
             // the other tester modes (the Server Deal test) play Classic decks: no format of their own
             foreach (var t in testerTiles) t.gameObject.SetActive(false);

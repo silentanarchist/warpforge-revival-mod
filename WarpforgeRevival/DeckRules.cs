@@ -16,11 +16,18 @@ namespace WarpforgeRevival
         {
             private static bool noted;
 
-            private static void Postfix(RawCardScript card, ref string error, ref bool __result)
+            private static void Postfix(CardDeck __instance, RawCardScript card, ref string error, ref bool __result)
             {
                 try
                 {
                     if (!__result || (object)card == null) return;
+                    // Custom cards (the tester bundle, 0.14.52) go only into decks of a mode the server allows them in
+                    if (CustomCards.IsCustom(card) && !CustomCards.AllowedIn(__instance))
+                    {
+                        __result = false;
+                        error = Loc.T("decks.customOnlyTest", "Custom cards can only be added to a deck of the custom-card test mode.");
+                        return;
+                    }
                     // Defensive cards are chosen in the deck editor (they fill the deck's defensive slot),
                     // so they must stay addable even though some carry the "can't add to deck" mark.
                     if (card.spellType == SpellType.DefensiveCard) return;

@@ -44,6 +44,13 @@ namespace WarpforgeRevival
         /// <summary>Event id of the Long Game mode, or null when the server has none.</summary>
         public static string LongGameEvent => longGameEvent;
         private static volatile System.Collections.Generic.List<string> testerModes = new System.Collections.Generic.List<string>();
+        private static volatile System.Collections.Generic.Dictionary<string, int> deckModes = new System.Collections.Generic.Dictionary<string, int>();
+        /// <summary>Modes with a deck list of their own, as sent in "deckModes": {event id: the play-mode number its decks are stored under}
+        /// (0.14.52; the Long Game is not listed here, it has "longGame").</summary>
+        public static System.Collections.Generic.IReadOnlyDictionary<string, int> DeckModes => deckModes;
+        private static volatile System.Collections.Generic.List<string> customCardModes = new System.Collections.Generic.List<string>();
+        /// <summary>Modes whose decks may hold custom (CUSTOM-) cards, as sent in "customCardModes" (0.14.52).</summary>
+        public static System.Collections.Generic.IReadOnlyList<string> CustomCardModes => customCardModes;
         /// <summary>Event ids of the modes the server shows only to testers (besides the Long Game), as sent in "testerModes".</summary>
         public static System.Collections.Generic.IReadOnlyList<string> TesterModes => testerModes;
         private static volatile System.Collections.Generic.List<string> dealModes = new System.Collections.Generic.List<string>();
@@ -242,6 +249,21 @@ namespace WarpforgeRevival
                             if (m.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(m.GetString())) tm.Add(m.GetString());
                     if (string.Join(",", tm) != string.Join(",", testerModes)) RevivalMod.Log.Msg("[settings] server settings: tester modes: " + (tm.Count == 0 ? "none" : string.Join(", ", tm)));
                     testerModes = tm;
+                    // "deckModes": {event id: play-mode number} for modes with their own deck list (LongGame.cs)
+                    var dmodes = new System.Collections.Generic.Dictionary<string, int>();
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("deckModes", out var dmo) && dmo.ValueKind == JsonValueKind.Object)
+                        foreach (var m in dmo.EnumerateObject())
+                            if (m.Value.ValueKind == JsonValueKind.Number && m.Value.TryGetInt32(out int pm) && pm > 0) dmodes[m.Name] = pm;
+                    if (string.Join(",", System.Linq.Enumerable.Select(System.Linq.Enumerable.OrderBy(dmodes, kv => kv.Key), kv => kv.Key + "=" + kv.Value)) !=
+                        string.Join(",", System.Linq.Enumerable.Select(System.Linq.Enumerable.OrderBy(deckModes, kv => kv.Key), kv => kv.Key + "=" + kv.Value)))
+                        RevivalMod.Log.Msg("[settings] server settings: modes with their own decks: " + (dmodes.Count == 0 ? "none" : string.Join(", ", System.Linq.Enumerable.Select(dmodes, kv => kv.Key + " (play mode " + kv.Value + ")"))));
+                    deckModes = dmodes;
+                    // "customCardModes": modes whose decks may hold custom cards (DeckRules.cs)
+                    var ccm = new System.Collections.Generic.List<string>();
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("customCardModes", out var ccms) && ccms.ValueKind == JsonValueKind.Array)
+                        foreach (var m in ccms.EnumerateArray())
+                            if (m.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(m.GetString())) ccm.Add(m.GetString());
+                    customCardModes = ccm;
                     // "dealModes": the modes that are server-deal tests (ServerDeal.cs: no AI opponent in them)
                     var dm = new System.Collections.Generic.List<string>();
                     if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("dealModes", out var dms) && dms.ValueKind == JsonValueKind.Array)
