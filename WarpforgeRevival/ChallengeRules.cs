@@ -449,6 +449,26 @@ namespace WarpforgeRevival
             if (active != null && activeIsReplay) Restore();
         }
 
+        /// <summary>The replay's Restart button (0.14.56): the game reloads the battle scene, and for a moment there is no battle.
+        /// Tick would take that for the replay's end and drop its saved rules, so the restarted replay played under the
+        /// mode's plain rules (and without its "who went first") and went wrong. The rules are kept as for a replay that
+        /// has not started yet.</summary>
+        [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.ClickRestartReplay))]
+        private static class ReplayRestart
+        {
+            private static void Prefix()
+            {
+                try
+                {
+                    if (active == null || !activeIsReplay) return;
+                    battleSeen = false;
+                    activeAt = Time.realtimeSinceStartup;
+                    RevivalMod.Log.Msg("[replay] restarting: the replay's saved rules are kept for the restart");
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[replay] restart: " + e.Message); }
+            }
+        }
+
         // Both sides start a challenge match through here: the challenger once the friend accepts, the
         // friend when accepting. With custom rules for this opponent, the match is played in the rules'
         // mode and by its values.
