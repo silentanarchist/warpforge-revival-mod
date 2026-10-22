@@ -169,14 +169,27 @@ namespace WarpforgeRevival
             return "<link=" + trait + "><nobr><sprite name=Atlas_trait_icon_" + trait + "> <b>" + name + "</b></nobr></link>";
         }
 
+        // Texts of the custom-card package (CustomBundle, 0.14.53): {id: {lang: (name, text)}}; the game's language,
+        // then English. Set by CustomBundle when the package is read; looked up before the server's card-text.json.
+        private static volatile Dictionary<string, Dictionary<string, (string name, string text)>> packageTexts = new Dictionary<string, Dictionary<string, (string, string)>>();
+
+        internal static void SetPackageTexts(Dictionary<string, Dictionary<string, (string name, string text)>> texts) => packageTexts = texts ?? new Dictionary<string, Dictionary<string, (string, string)>>();
+
         private static bool Find(RawCardScript card, out (string name, string text) entry)
         {
             entry = default;
             if ((object)card == null || card.Pointer == IntPtr.Zero) return false;
+            string id = card.uniqueId;
+            if (id == null) return false;
+            var pkg = packageTexts;
+            if (pkg.Count > 0 && pkg.TryGetValue(id, out var langs))
+            {
+                string lang = Loc.Language() ?? "en";
+                if (langs.TryGetValue(lang, out entry) || langs.TryGetValue("en", out entry)) return true;
+            }
             var known = table;
             if (known.Count == 0) { Refresh(); return false; }
-            string id = card.uniqueId;
-            return id != null && known.TryGetValue(id, out entry);
+            return known.TryGetValue(id, out entry);
         }
 
         [HarmonyPatch(typeof(RawCardScript), nameof(RawCardScript.GetLocalizedCardName))]
