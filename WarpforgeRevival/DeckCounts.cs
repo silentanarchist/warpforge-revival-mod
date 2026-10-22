@@ -112,7 +112,7 @@ namespace WarpforgeRevival
                         if ((object)loc != null) UnityEngine.Object.Destroy(loc);
                         label = go.GetComponent<TMP_Text>();
                         if ((object)label == null) { UnityEngine.Object.Destroy(go); return; }
-                        label.alignment = TextAlignmentOptions.Center;
+                        label.alignment = TextAlignmentOptions.Bottom;   // centred, text at the bottom of its box: the extra height above is the gap to the chart
                         label.enableAutoSizing = false;
                         label.enableWordWrapping = false;
                         label.overflowMode = TextOverflowModes.Overflow;
@@ -121,8 +121,9 @@ namespace WarpforgeRevival
                         var lastRt = last.GetComponent<RectTransform>();
                         if ((object)rt != null && (object)lastRt != null)
                         {
-                            // two lines (Troops / Stratagems, stacked as in the deck editor's Deck info), as tall as two rows
-                            float h = lastRt.rect.height * 1.7f;
+                            // two lines (Troops / Stratagems, stacked as in the deck editor's Deck info): two rows of text plus
+                            // half a row of gap above them
+                            float h = lastRt.rect.height * 2.2f;
                             rt.anchorMin = lastRt.anchorMin; rt.anchorMax = lastRt.anchorMax; rt.pivot = lastRt.pivot;
                             rt.sizeDelta = new Vector2(lastRt.sizeDelta.x, h);
                             var le = go.GetComponent<UnityEngine.UI.LayoutElement>() ?? go.AddComponent<UnityEngine.UI.LayoutElement>();
