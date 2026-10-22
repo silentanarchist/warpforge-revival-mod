@@ -49,6 +49,18 @@ namespace WarpforgeRevival
 
         // the chart is filled through three overloads (a deck, a prebuilt deck, a card list) and the game's own code
         // does not route the first two through the third, so each one is patched
+        /// <summary>True when the panel around the chart has the game's own Troops / Stratagems counter.</summary>
+        private static bool HasOwnCounts(Transform chart)
+        {
+            var t = chart;
+            for (int up = 0; up < 4 && (object)t != null; up++, t = t.parent)
+            {
+                var own = t.GetComponentInChildren<DeckTypeCounterDrawer>(true);
+                if ((object)own != null) return true;
+            }
+            return false;
+        }
+
         [HarmonyPatch(typeof(DeckEnergyCostDrawer), nameof(DeckEnergyCostDrawer.Initialize), new[] { typeof(CardDeck), typeof(bool) })]
         private static class TypeLineDeck
         {
@@ -108,6 +120,14 @@ namespace WarpforgeRevival
                     if ((object)model == null) return;
                     var holder = last.transform.parent;
                     if ((object)holder == null) return;
+                    // the deck editor's Deck info shows its own Troops / Stratagems lines (DeckTypeCounterDrawer) next to the
+                    // chart: no second copy there (0.14.63)
+                    if (HasOwnCounts(__instance.transform))
+                    {
+                        var mine = holder.Find(LineName);
+                        if ((object)mine != null) mine.gameObject.SetActive(false);
+                        return;
+                    }
 
                     TMP_Text label = null;
                     var existing = holder.Find(LineName);
