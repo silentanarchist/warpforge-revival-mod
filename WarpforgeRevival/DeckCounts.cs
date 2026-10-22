@@ -69,12 +69,20 @@ namespace WarpforgeRevival
             }
         }
 
-        [HarmonyPatch(typeof(DeckEnergyCostDrawer), nameof(DeckEnergyCostDrawer.Initialize), new[] { typeof(Il2CppSystem.Collections.Generic.List<RawCardScript>) })]
+        [HarmonyPatch(typeof(DeckEnergyCostDrawer), nameof(DeckEnergyCostDrawer.Initialize), new[] { typeof(Il2CppSystem.Collections.Generic.IEnumerable<RawCardScript>) })]
         private static class TypeLine
         {
-            private static void Postfix(DeckEnergyCostDrawer __instance, Il2CppSystem.Collections.Generic.List<RawCardScript> cards)
+            private static void Postfix(DeckEnergyCostDrawer __instance, Il2CppSystem.Collections.Generic.IEnumerable<RawCardScript> cards)
             {
-                try { Show(__instance, cards); }
+                try
+                {
+                    if (cards == null) return;
+                    var list = new Il2CppSystem.Collections.Generic.List<RawCardScript>();
+                    var asList = cards.TryCast<Il2CppSystem.Collections.Generic.List<RawCardScript>>();
+                    if (asList != null) list = asList;
+                    else { var it = cards.GetEnumerator(); var plain = it.Cast<Il2CppSystem.Collections.IEnumerator>(); while (plain.MoveNext()) { var c = plain.Current?.TryCast<RawCardScript>(); if ((object)c != null) list.Add(c); } }
+                    Show(__instance, list);
+                }
                 catch (Exception e) { RevivalMod.Log.Warning("[deck] type counts (cards): " + e.Message); }
             }
 
