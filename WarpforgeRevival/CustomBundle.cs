@@ -112,12 +112,14 @@ namespace WarpforgeRevival
             return Convert.ToHexString(sha.ComputeHash(f)).ToLowerInvariant();
         }
 
-        /// <summary>Before the game loads any of its asset libraries (the card library among them; PlayerDataManager.LoadAllCards
-        /// is compiled away, so the libraries' own loader is the hook): the package, if there is one, is made known to Addressables.</summary>
-        [HarmonyPatch(typeof(BaseAddressableLibrary), nameof(BaseAddressableLibrary.LoadLibrary))]
+        /// <summary>As the game starts Addressables (AddressablesManager.Init, the same moment AddressablesRedirect installs its
+        /// rewrite; PlayerDataManager.LoadAllCards and BaseAddressableLibrary.LoadLibrary are compiled into their callers, so
+        /// neither can be hooked): the package, if there is one, is made known to Addressables. A locator added here stays in
+        /// the list when the game's own catalog is added by the initialisation.</summary>
+        [HarmonyPatch(typeof(AddressablesManager), nameof(AddressablesManager.Init))]
         private static class BeforeCards
         {
-            private static void Prefix()
+            private static void Postfix()
             {
                 if (registered) return;
                 try
@@ -185,7 +187,9 @@ namespace WarpforgeRevival
                 }
             CardText.SetPackageTexts(texts);
             Version = version; CardCount = count;
-            RevivalMod.Log.Msg($"[custom] custom-card package v{version}: {count} card(s) made known to Addressables (bundles {Path.GetFileName(cardsFile)}, {Path.GetFileName(artFile)}); texts for {texts.Count}");
+            int locators = 0;
+            try { var it = Addressables.ResourceLocators.GetEnumerator().Cast<Il2CppSystem.Collections.IEnumerator>(); while (it.MoveNext()) locators++; } catch { }
+            RevivalMod.Log.Msg($"[custom] custom-card package v{version}: {count} card(s) made known to Addressables (bundles {Path.GetFileName(cardsFile)}, {Path.GetFileName(artFile)}; {locators} locator(s) now); texts for {texts.Count}");
         }
 
         private static Il2CppStringArray Keys(params string[] keys)
