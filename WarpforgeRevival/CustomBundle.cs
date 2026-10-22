@@ -143,31 +143,41 @@ namespace WarpforgeRevival
                 if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(guid)) keys[id] = guid;
             }
 
+            // AssetBundle.LoadAllAssets is stripped from this game's engine (MissingMethodException in 0.14.61), so each asset
+            // is asked for by its name in the bundle (the GUID it is listed under), with LoadAllAssetsAsync as the fallback
+            var arts = new Dictionary<string, string>();       // card id -> its picture's name in the art bundle
+            foreach (var card in root.GetProperty("cards").EnumerateArray())
+            {
+                string id = card.GetProperty("id").GetString(), art = card.TryGetProperty("art", out var a) ? a.GetString() : null;
+                if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(art)) arts[id] = art;
+            }
+
             artBundle = AssetBundle.LoadFromFile(artFile);
             if ((object)artBundle == null) { RevivalMod.Log.Warning("[custom] the art bundle could not be opened"); return; }
-            foreach (var o in artBundle.LoadAllAssets(Il2CppType.Of<Sprite>()))
+            foreach (var kv in arts)
             {
-                var sp = o?.TryCast<Sprite>();
-                if ((object)sp == null) continue;
+                Sprite sp = null;
+                try { sp = artBundle.LoadAsset(kv.Value, Il2CppType.Of<Sprite>())?.TryCast<Sprite>(); } catch (Exception e) { RevivalMod.Log.Warning("[custom] picture " + kv.Key + ": " + e.Message); }
+                if ((object)sp == null) sp = FromAll<Sprite>(artBundle, "Custom_" + kv.Key);
+                if ((object)sp == null) { RevivalMod.Log.Warning("[custom] no picture for " + kv.Key + " in the art bundle"); continue; }
                 sp.hideFlags = HideFlags.DontUnloadUnusedAsset;
-                string name = sp.name ?? "";
-                if (name.StartsWith("Custom_")) sprites[name.Substring("Custom_".Length)] = sp;
+                sprites[kv.Key] = sp;
             }
 
             cardsBundle = AssetBundle.LoadFromFile(cardsFile);
             if ((object)cardsBundle == null) { RevivalMod.Log.Warning("[custom] the card bundle could not be opened"); return; }
             var library = new AddressableCardLibrary();
             int added = 0;
-            foreach (var o in cardsBundle.LoadAllAssets(Il2CppType.Of<RawCardScript>()))
+            foreach (var kv in keys)
             {
-                var card = o?.TryCast<RawCardScript>();
-                if ((object)card == null) continue;
-                string id = card.uniqueId;
-                if (string.IsNullOrEmpty(id) || !keys.TryGetValue(id, out var key)) { RevivalMod.Log.Warning($"[custom] card '{id}' is not in the package list; left out"); continue; }
+                RawCardScript card = null;
+                try { card = cardsBundle.LoadAsset(kv.Value, Il2CppType.Of<RawCardScript>())?.TryCast<RawCardScript>(); } catch (Exception e) { RevivalMod.Log.Warning("[custom] card " + kv.Key + ": " + e.Message); }
+                if ((object)card == null) card = FromAll<RawCardScript>(cardsBundle, null, kv.Key);
+                if ((object)card == null) { RevivalMod.Log.Warning("[custom] card " + kv.Key + " is not in the card bundle"); continue; }
                 card.hideFlags = HideFlags.DontUnloadUnusedAsset;
                 UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationHandle handle =
                     Addressables.ResourceManager.CreateCompletedOperation<RawCardScript>(card, "");
-                library.AssetCompletedLoading(handle, key);
+                library.AssetCompletedLoading(handle, kv.Value);
                 added++;
             }
             if (root.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.Object)
@@ -190,6 +200,27 @@ namespace WarpforgeRevival
             int total = 0;
             try { total = PlayerDataManager.singletonManager.allCardCollection.Count; } catch { }
             RevivalMod.Log.Msg($"[custom] custom-card package v{version}: {added} card(s) added to the collection ({total} cards now), {sprites.Count} picture(s)");
+        }
+
+        /// <summary>The fallback: every asset of a type in a bundle (loaded asynchronously, waited for), the one with that name
+        /// (or, for cards, that unique id).</summary>
+        private static T FromAll<T>(AssetBundle bundle, string name, string cardId = null) where T : UnityEngine.Object
+        {
+            try
+            {
+                var req = bundle.LoadAllAssetsAsync(Il2CppType.Of<T>());
+                var all = req.allAssets;
+                if (all == null) return null;
+                foreach (var o in all)
+                {
+                    var t = o?.TryCast<T>();
+                    if ((object)t == null) continue;
+                    if (name != null && t.name == name) return t;
+                    if (cardId != null && t.TryCast<RawCardScript>()?.uniqueId == cardId) return t;
+                }
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[custom] loading from the bundle: " + e.Message); }
+            return null;
         }
 
         /// <summary>The picture a card display shows: a custom card's own, from the art bundle.</summary>
