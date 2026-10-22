@@ -20,7 +20,8 @@ namespace WarpforgeRevival
     ///    its content swapped for these tiles.)
     ///  - Decks: the copy's deck tab, opened straight on the Custom Test deck list (no format picker).
     ///    Back closes the window. The window is given the mode, so other modes can be passed later.
-    ///  - Cards: the copy's card list. As a check that it is separate, Space Wolves are left out.
+    ///  - Cards: the copy's card list (the whole collection; Space Wolves were left out until 0.14.51 as a
+    ///    check that the copy is separate - owner 2026-10-21: show them again).
     /// The Styles tab is hidden. The ribbon (labels, Play icon, order, Styles hidden) is set once as the window is
     /// built, by MenuLayout (0.13.51; re-applied here every 0.25 s before).
     /// The normal Collection > Decks keeps every format, Custom Test included.
@@ -30,7 +31,6 @@ namespace WarpforgeRevival
         private const string CopyName = "RevivalTestersWindow", PanelName = "RevivalTestersPlay";
         private static CollectionScreen copy;
         private static GameObject sourcePrefab;
-        private static int hidden;
         private static float nextDress, closedAt;
         private static bool placedLogged, switchOffChanged, unlitLogged;
         private static IntPtr groupPtr;
@@ -377,30 +377,6 @@ namespace WarpforgeRevival
                     if (!IsCopy(__instance)) return;
                     var tab = Ui.TabOf<CardbackCollectionTab>(__instance);
                     if ((object)tab != null) __result = tab;
-                }
-                catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }
-            }
-        }
-
-        // The separation check: the Testers window's card list leaves out Space Wolves.
-        [HarmonyPatch(typeof(CardCollectionTab), "GetCollection")]
-        private static class NoSpaceWolves
-        {
-            private static void Postfix(CardCollectionTab __instance, ref Il2CppSystem.Collections.Generic.List<RawCardScript> __result)
-            {
-                try
-                {
-                    if (__result == null || !IsCopy(__instance.Window)) return;
-                    var kept = new Il2CppSystem.Collections.Generic.List<RawCardScript>();
-                    int left = 0;
-                    for (int i = 0; i < __result.Count; i++)
-                    {
-                        var c = __result[i];
-                        if ((object)c != null && c.cardArmy == CardArmy.SpaceWolves) { left++; continue; }
-                        kept.Add(c);
-                    }
-                    __result = kept;
-                    if (left != hidden) { hidden = left; RevivalMod.Log.Msg($"[testers] Testers collection: {kept.Count} cards shown, {left} Space Wolves left out"); }
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[testers] " + e.Message); }
             }
