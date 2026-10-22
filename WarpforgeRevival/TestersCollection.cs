@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using Il2Cpp;
+using Il2CppInterop.Runtime;
 using Il2CppEverguild.LiveOps;
 using Il2CppTMPro;
 using UnityEngine;
@@ -71,24 +72,28 @@ namespace WarpforgeRevival
             catch (Exception e) { RevivalMod.Log.Warning("[testers] could not open the Testers window: " + e); return false; }
         }
 
-        /// <summary>The mode the Decks tab shows: the one tester mode with decks of its own, straight to its list; with
-        /// several (0.14.55: Custom Test and Custom Cards) no mode, so the tab opens on the format picker, which then
-        /// shows only those modes (DeckFormatPicker).</summary>
-        private static CollectionScreen.OpenDeckCollectionContext DecksContext()
+        /// <summary>The tester modes with decks of their own, in the Testers window's order (Custom Test, then the server's).</summary>
+        private static List<IPlayEvent> OwnDeckModes()
         {
-            var withDecks = new List<IPlayEvent>();
+            var list = new List<IPlayEvent>();
             foreach (var id in TestersPage.TesterModes())
             {
                 var ev = TestersPage.Find(id);
                 var playEvent = (object)ev == null ? null : ev.TryCast<IPlayEvent>();
                 if ((object)playEvent == null || !LongGame.HasOwnDecks(playEvent)) continue;
-                withDecks.Add(playEvent);
+                list.Add(playEvent);
             }
-            pickerShown = withDecks.Count > 1;
-            if (withDecks.Count == 1) return new CollectionScreen.OpenDeckCollectionContext { eventReference = withDecks[0] };
-            if (withDecks.Count == 0) RevivalMod.Log.Warning("[testers] no tester mode with decks for the Decks tab");
-            else RevivalMod.Log.Msg($"[testers] Decks tab: format picker for {withDecks.Count} tester modes");
-            return new CollectionScreen.OpenDeckCollectionContext { eventReference = null };
+            return list;
+        }
+
+        /// <summary>The mode the Decks tab opens on: the first tester mode with decks of its own. (The format picker is not
+        /// used in this window: the picker tab hands its choice to the game's Collection window, not to this copy - seen
+        /// 0.14.55-57 - so a mode switch button on the deck list does the job instead, see ModeSwitch.)</summary>
+        private static CollectionScreen.OpenDeckCollectionContext DecksContext()
+        {
+            var modes = OwnDeckModes();
+            if (modes.Count == 0) { RevivalMod.Log.Warning("[testers] no tester mode with decks for the Decks tab"); return null; }
+            return new CollectionScreen.OpenDeckCollectionContext { eventReference = modes[0] };
         }
 
         /// <summary>The window, made the first time from the window file behind the menu bar's Collection button.</summary>
@@ -389,23 +394,93 @@ namespace WarpforgeRevival
         }
 
         // Decks skips the format picker: straight to the tester mode's deck list.
-        // Back from a tester mode's deck list closes the window instead of showing the format picker - unless the
-        // window has a picker of its own (several tester modes with decks): then Back goes to it as the game does,
-        // and Back from the picker closes.
-        private static bool pickerShown, inDeckList;
+        // The deck list of a tester mode (0.14.58): a button next to Import Deck switches to the next tester mode's list
+        // ("Custom Cards (test)" while Custom Test's decks show, and the other way round). Made once per window from
+        // the Import Deck button; relabelled whenever a list is shown.
+        private const string SwitchName = "RevivalDeckModeSwitch";
+        private static string shownModeId;
+
+        private static string NameOf(IPlayEvent e)
+        {
+            try { var d = e.GetBaseData(); return (object)d == null ? "?" : d.eventId; } catch { return "?"; }
+        }
+
+        private static string LabelOf(IPlayEvent e)
+        {
+            try
+            {
+                var label = LiveOpsAssetUtility.GetLabel(e.GetBaseData(), EventLabelReferenceType.Title, new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppSystem.Object>(0));
+                if (!string.IsNullOrEmpty(label)) return label;
+            }
+            catch { }
+            return NameOf(e);
+        }
+
+        private static void ShowSwitch(SelectDecksTab tab, IOwnDeckPlayEvent shown)
+        {
+            var modes = OwnDeckModes();
+            var importBtn = tab.importDeck;
+            if ((object)importBtn == null) return;
+            var importGo = importBtn.gameObject;
+            var holder = importGo.transform.parent;
+            if ((object)holder == null) return;
+            var existing = holder.Find(SwitchName);
+            if (modes.Count < 2) { if ((object)existing != null) existing.gameObject.SetActive(false); return; }
+            var shownPlay = (object)shown == null ? null : shown.TryCast<IPlayEvent>();
+            shownModeId = (object)shownPlay == null ? modes[0].GetBaseData().eventId : NameOf(shownPlay);
+            int at = 0;
+            for (int i = 0; i < modes.Count; i++) if (NameOf(modes[i]) == shownModeId) at = i;
+            var next = modes[(at + 1) % modes.Count];
+            GameObject go;
+            if ((object)existing == null)
+            {
+                go = UnityEngine.Object.Instantiate(importGo, holder, false);
+                go.name = SwitchName;
+                go.transform.SetSiblingIndex(importGo.transform.GetSiblingIndex());
+                var btn = go.GetComponent<UnityEngine.UI.Button>();
+                if ((object)btn != null)
+                {
+                    btn.onClick = new UnityEngine.UI.Button.ButtonClickedEvent();
+                    var tabRef = tab;
+                    btn.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityEngine.Events.UnityAction>(new Action(() => SwitchList(tabRef))));
+                }
+                foreach (var loc in go.GetComponentsInChildren<Il2CppI2.Loc.Localize>(true)) loc.enabled = false;
+                RevivalMod.Log.Msg("[testers] deck list: mode switch button added next to Import Deck");
+            }
+            else go = existing.gameObject;
+            go.SetActive(true);
+            var label = go.GetComponentInChildren<Il2CppTMPro.TMP_Text>(true);
+            if ((object)label != null) Ui.SetText(label, LabelOf(next));
+        }
+
+        private static void SwitchList(SelectDecksTab tab)
+        {
+            try
+            {
+                var modes = OwnDeckModes();
+                if (modes.Count < 2) return;
+                int at = 0;
+                for (int i = 0; i < modes.Count; i++) if (NameOf(modes[i]) == shownModeId) at = i;
+                var next = modes[(at + 1) % modes.Count];
+                var own = next.TryCast<IOwnDeckPlayEvent>();
+                if ((object)own == null) return;
+                RevivalMod.Log.Msg("[testers] deck list: switching to " + NameOf(next));
+                tab.OnClickDeckCollection(own);
+            }
+            catch (Exception e) { RevivalMod.Log.Warning("[testers] deck list switch: " + e.Message); }
+        }
 
         [HarmonyPatch(typeof(SelectDecksTab), nameof(SelectDecksTab.ToggleSelectDeck))]
         private static class ListShown
         {
-            private static void Postfix(SelectDecksTab __instance) { if (IsCopy(__instance.Window)) inDeckList = true; }
+            private static void Postfix(SelectDecksTab __instance, IOwnDeckPlayEvent deckPlayEvent)
+            {
+                try { if (IsCopy(__instance.Window)) ShowSwitch(__instance, deckPlayEvent); }
+                catch (Exception e) { RevivalMod.Log.Warning("[testers] deck list switch button: " + e.Message); }
+            }
         }
 
-        [HarmonyPatch(typeof(SelectDecksTab), nameof(SelectDecksTab.ToggleSelectGameModeDeck))]
-        private static class PickerShown
-        {
-            private static void Postfix(SelectDecksTab __instance) { if (IsCopy(__instance.Window)) inDeckList = false; }
-        }
-
+        // Back from a tester mode's deck list closes the window instead of showing the format picker.
         [HarmonyPatch(typeof(SelectDecksTab), nameof(SelectDecksTab.BackButtonClicked))]
         private static class BackCloses
         {
@@ -414,7 +489,6 @@ namespace WarpforgeRevival
                 try
                 {
                     if (!IsCopy(__instance.Window)) return true;
-                    if (pickerShown && inDeckList) return true;
                     Close();
                     return false;
                 }

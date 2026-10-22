@@ -151,26 +151,33 @@ namespace WarpforgeRevival
             foreach (var f in new[] { cardsFile, artFile })
                 if (!File.Exists(f)) { RevivalMod.Log.Warning("[custom] package file missing: " + f); return; }
 
-            // the locations as ResourceLocationData (keys, where, provider, type, dependency keys): the map wires the
-            // dependencies up by key, like a built catalog does
-            var data = new Il2CppSystem.Collections.Generic.List<ResourceLocationData>();
-            data.Add(BundleData("custom-cards", cardsFile));
-            data.Add(BundleData("custom-art", artFile));
+            // the locations, built directly (ResourceLocationBase with the bundle's request options as Data; a map built
+            // from ResourceLocationData lost the options in this game's Addressables - 0.14.57: "Invalid path in
+            // AssetBundleProvider" although the file was there - and without them the bundle is never opened)
+            var cardsBundle = BundleLocation("custom-cards", cardsFile);
+            var artBundle = BundleLocation("custom-art", artFile);
+            var map = new ResourceLocationMap("custom-tester-" + version, 16);
+            var locations = map.Locations;
             var texts = new Dictionary<string, Dictionary<string, (string name, string text)>>();
             int count = 0;
+            Add(locations, "custom-cards", cardsBundle);
+            Add(locations, "custom-art", artBundle);
             foreach (var card in root.GetProperty("cards").EnumerateArray())
             {
                 string id = card.GetProperty("id").GetString();
                 string guid = card.GetProperty("guid").GetString();
                 string art = card.GetProperty("art").GetString();
                 if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(guid) || string.IsNullOrEmpty(art)) continue;
-                data.Add(new ResourceLocationData(Keys(guid, "cards"), guid, Il2CppType.Of<BundledAssetProvider>(), Il2CppType.Of<RawCardScript>(), Keys("custom-cards")));
-                data.Add(new ResourceLocationData(Keys(art), art, Il2CppType.Of<BundledAssetProvider>(), Il2CppType.Of<Sprite>(), Keys("custom-art")));
-                data.Add(new ResourceLocationData(Keys(art), art, Il2CppType.Of<BundledAssetProvider>(), Il2CppType.Of<Texture2D>(), Keys("custom-art")));
+                var cardLoc = new ResourceLocationBase(guid, guid, Il2CppType.Of<BundledAssetProvider>().FullName, Il2CppType.Of<RawCardScript>(), Deps(cardsBundle));
+                Add(locations, guid, cardLoc);
+                Add(locations, "cards", cardLoc);
+                Add(locations, art, new ResourceLocationBase(art, art, Il2CppType.Of<BundledAssetProvider>().FullName, Il2CppType.Of<Sprite>(), Deps(artBundle)));
+                Add(locations, art, new ResourceLocationBase(art, art, Il2CppType.Of<BundledAssetProvider>().FullName, Il2CppType.Of<Texture2D>(), Deps(artBundle)));
                 count++;
             }
             if (count == 0) { RevivalMod.Log.Warning("[custom] the package lists no cards"); return; }
-            var map = new ResourceLocationMap("custom-tester-" + version, data.Cast<Il2CppSystem.Collections.Generic.IList<ResourceLocationData>>());
+            bool hasOptions = false;
+            try { hasOptions = (object)cardsBundle.Cast<IResourceLocation>().Data?.TryCast<AssetBundleRequestOptions>() != null; } catch { }
             Addressables.AddResourceLocator(map.Cast<IResourceLocator>(), null, null);
 
             if (root.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.Object)
@@ -189,21 +196,35 @@ namespace WarpforgeRevival
             Version = version; CardCount = count;
             int locators = 0;
             try { var it = Addressables.ResourceLocators.GetEnumerator().Cast<Il2CppSystem.Collections.IEnumerator>(); while (it.MoveNext()) locators++; } catch { }
-            RevivalMod.Log.Msg($"[custom] custom-card package v{version}: {count} card(s) made known to Addressables (bundles {Path.GetFileName(cardsFile)}, {Path.GetFileName(artFile)}; {locators} locator(s) now); texts for {texts.Count}");
+            RevivalMod.Log.Msg($"[custom] custom-card package v{version}: {count} card(s) made known to Addressables (bundles {Path.GetFileName(cardsFile)}, {Path.GetFileName(artFile)}; {locators} locator(s) now; bundle options {(hasOptions ? "set" : "MISSING")}); texts for {texts.Count}");
         }
 
-        private static Il2CppStringArray Keys(params string[] keys)
+        private static Il2CppReferenceArray<IResourceLocation> Deps(ResourceLocationBase bundle)
         {
-            var arr = new Il2CppStringArray(keys.Length);
-            for (int i = 0; i < keys.Length; i++) arr[i] = keys[i];
-            return arr;
+            var deps = new Il2CppReferenceArray<IResourceLocation>(1);
+            deps[0] = bundle.Cast<IResourceLocation>();
+            return deps;
+        }
+
+        private static void Add(Il2CppSystem.Collections.Generic.Dictionary<Il2CppSystem.Object, Il2CppSystem.Collections.Generic.IList<IResourceLocation>> map, string key, ResourceLocationBase loc)
+        {
+            var k = (Il2CppSystem.Object)(Il2CppSystem.String)key;
+            Il2CppSystem.Collections.Generic.List<IResourceLocation> list;
+            if (map.TryGetValue(k, out var have) && (object)have != null) list = have.TryCast<Il2CppSystem.Collections.Generic.List<IResourceLocation>>();
+            else list = null;
+            if (list == null)
+            {
+                list = new Il2CppSystem.Collections.Generic.List<IResourceLocation>();
+                map[k] = list.Cast<Il2CppSystem.Collections.Generic.IList<IResourceLocation>>();
+            }
+            list.Add(loc.Cast<IResourceLocation>());
         }
 
         /// <summary>A bundle file on disk as an Addressables location (loaded with AssetBundle.LoadFromFile; no CRC or hash check: the
         /// server's checksum is checked when the file is fetched).</summary>
-        private static ResourceLocationData BundleData(string name, string path)
+        private static ResourceLocationBase BundleLocation(string name, string path)
         {
-            var loc = new ResourceLocationData(Keys(name), path, Il2CppType.Of<AssetBundleProvider>(), Il2CppType.Of<IAssetBundleResource>(), new Il2CppStringArray(0));
+            var loc = new ResourceLocationBase(name, path, Il2CppType.Of<AssetBundleProvider>().FullName, Il2CppType.Of<IAssetBundleResource>(), new Il2CppReferenceArray<IResourceLocation>(0));
             var options = new AssetBundleRequestOptions
             {
                 BundleName = name,
