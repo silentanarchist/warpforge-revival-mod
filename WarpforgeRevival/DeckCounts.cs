@@ -114,18 +114,25 @@ namespace WarpforgeRevival
                         if ((object)label == null) { UnityEngine.Object.Destroy(go); return; }
                         label.alignment = TextAlignmentOptions.Center;
                         label.enableAutoSizing = false;
+                        label.enableWordWrapping = false;
+                        label.overflowMode = TextOverflowModes.Overflow;
+                        label.fontSize = model.fontSize * 0.85f;
                         var rt = go.GetComponent<RectTransform>();
                         var lastRt = last.GetComponent<RectTransform>();
                         if ((object)rt != null && (object)lastRt != null)
                         {
+                            // two lines (Troops / Stratagems, stacked as in the deck editor's Deck info), as tall as two rows
+                            float h = lastRt.rect.height * 1.7f;
                             rt.anchorMin = lastRt.anchorMin; rt.anchorMax = lastRt.anchorMax; rt.pivot = lastRt.pivot;
-                            rt.sizeDelta = new Vector2(lastRt.sizeDelta.x, lastRt.sizeDelta.y);
+                            rt.sizeDelta = new Vector2(lastRt.sizeDelta.x, h);
+                            var le = go.GetComponent<UnityEngine.UI.LayoutElement>() ?? go.AddComponent<UnityEngine.UI.LayoutElement>();
+                            le.preferredHeight = h; le.minHeight = h; le.flexibleHeight = 0;
                             if ((object)holder.GetComponent<UnityEngine.UI.VerticalLayoutGroup>() == null)
                                 rt.anchoredPosition = lastRt.anchoredPosition - new Vector2(0, lastRt.rect.height + 4f);
                         }
                         go.transform.SetAsLastSibling();
                     }
-                    Ui.SetText(label, Loc.Game("MenuDeck/HUD/DeckDescription/Minions", "Troops") + ": " + troops + "    " +
+                    Ui.SetText(label, Loc.Game("MenuDeck/HUD/DeckDescription/Minions", "Troops") + ": " + troops + "\n" +
                                       Loc.Game("MenuDeck/HUD/DeckDescription/Spells", "Stratagems") + ": " + stratagems);
                     label.gameObject.SetActive(true);
                     if (!noted) { noted = true; RevivalMod.Log.Msg($"[deck] type counts under the cost chart: {troops} troops, {stratagems} stratagems (holder {holder.name}, layout group: {(object)holder.GetComponent<UnityEngine.UI.VerticalLayoutGroup>() != null})"); }
