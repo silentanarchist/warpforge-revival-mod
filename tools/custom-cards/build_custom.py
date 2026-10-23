@@ -201,18 +201,25 @@ def build_art(cards, art_dir, out, platform):
     bf, sf = serialized(env)
     ab = [o for o in sf.objects.values() if o.type.name == 'AssetBundle'][0]
     abt = ab.read_typetree()
-    tex_t = spr_t = None
+    # the game's pictures come in two shapes: troops (and warlords) at 180 pixels per unit, their alpha a mask of where
+    # the figure is drawn OVER the frame (almost all 0: the frame shows); stratagems at 360, opaque. A custom picture
+    # takes the shape of its kind, or the card is drawn at the wrong size with the frame hidden under the picture.
+    tex_t, spr_by_kind = None, {}
     for o in list(sf.objects.values()):
         if o.type.name == 'Texture2D' and tex_t is None:
             tex_t = o
-        elif o.type.name == 'Sprite' and spr_t is None and o.read_typetree()['m_RD']['texture']['m_PathID'] == (tex_t.path_id if tex_t else None):
-            spr_t = o
-    if spr_t is None:          # any sprite will do as a template; its texture pointer is rewritten
-        spr_t = [o for o in sf.objects.values() if o.type.name == 'Sprite'][0]
+        elif o.type.name == 'Sprite':
+            name = o.read_typetree()['m_Name']
+            kind = 'troop' if '_inf_' in name else 'stratagem' if '_strat_' in name else None
+            if kind and kind not in spr_by_kind:
+                spr_by_kind[kind] = o
+    if set(spr_by_kind) != {'troop', 'stratagem'}:
+        raise SystemExit('the art template has no troop or no stratagem picture')
+    templates = {kind: o.read_typetree() for kind, o in spr_by_kind.items()}
+    spr_t = spr_by_kind['troop']
     for o in list(sf.objects.values()):
         if o.type.name != 'AssetBundle' and o is not tex_t and o is not spr_t:
             del sf.objects[o.path_id]
-    sprite_layout = spr_t.read_typetree()
     container, preload, built = [], [], []
     for c in cards:
         uid = c['id']
@@ -222,6 +229,18 @@ def build_art(cards, art_dir, out, platform):
         img = Image.open(png).convert('RGBA')
         if img.size != (1024, 1024):
             img = img.resize((1024, 1024), Image.LANCZOS)
+        kind = 'stratagem' if c.get('kind') == 'stratagem' else 'troop'
+        if kind == 'troop':
+            # where the figure is drawn over the frame: the card's own mask (<id>-mask.png, white = over the frame)
+            # when there is one, otherwise nowhere
+            mask_png = os.path.join(art_dir, uid + '-mask.png')
+            if os.path.isfile(mask_png):
+                mask = Image.open(mask_png).convert('RGBA').resize((1024, 1024), Image.LANCZOS).getchannel('A')
+            else:
+                mask = Image.new('L', (1024, 1024), 0)
+            img.putalpha(mask)
+        else:
+            img.putalpha(255)
         tex = copy.copy(tex_t)
         tex.path_id = pid_for('tex', uid)
         sf.objects[tex.path_id] = tex
@@ -232,7 +251,7 @@ def build_art(cards, art_dir, out, platform):
         spr = copy.copy(spr_t)
         spr.path_id = pid_for('spr', uid)
         sf.objects[spr.path_id] = spr
-        s = copy.deepcopy(sprite_layout)
+        s = copy.deepcopy(templates[kind])
         s['m_Name'] = 'Custom_' + uid
         s['m_Rect'] = {'x': 0.0, 'y': 0.0, 'width': 1024.0, 'height': 1024.0}
         s['m_RD']['texture'] = {'m_FileID': 0, 'm_PathID': tex.path_id}
