@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using HarmonyLib;
 using Il2Cpp;
 
@@ -24,6 +25,95 @@ namespace WarpforgeRevival
             CardRarity.Special => CardTier.Tier4,
             _ => CardTier.Tier1,
         };
+
+        // ---- cards hidden from the opponent (owner, 2026-10-23)
+        // With frames by rarity, a card the opponent may not see showed its rarity anyway: a Genestealer Cults troop
+        // played in Ambush (face hidden until it springs) and a Dark Angels secret were drawn in their real frame
+        // and foil. While an opponent's card is hidden it gets the plain first frame and foil; when it is revealed it
+        // gets its own back. The player's own hidden cards keep their frame (they know what they played).
+        private static readonly HashSet<IntPtr> hidden = new HashSet<IntPtr>();
+
+        private static void Show(CardScript card, CardTier tier)
+        {
+            card.CardTier = tier;
+            var ui = card.CardUI;
+            if ((object)ui == null) return;
+            ui.CardTier = tier;
+            var raw = card.rawCardData;
+            var frame = ui.cardTierUI;
+            if ((object)frame != null && (object)raw != null) frame.SetFrame(raw, tier);
+            try { ui.RefreshCardVisualEffects(tier); } catch { }
+        }
+
+        private static CardTier Real(CardScript card)
+        {
+            var raw = card.rawCardData;
+            return (object)raw == null ? CardTier.Tier1 : CardServices.GetCardTier(raw);
+        }
+
+        [HarmonyPatch(typeof(CardScript), nameof(CardScript.SetAmbush))]
+        private static class Ambush
+        {
+            private static bool noted;
+
+            private static void Postfix(CardScript __instance, bool activateAmbush)
+            {
+                try
+                {
+                    if ((object)__instance == null || __instance.isPlayer) return;
+                    if (activateAmbush)
+                    {
+                        if (hidden.Count > 500) hidden.Clear();
+                        hidden.Add(__instance.Pointer);
+                        Show(__instance, CardTier.Tier1);
+                        if (!noted) { noted = true; RevivalMod.Log.Msg("[frames] an opponent's card in Ambush shows the plain frame until it is revealed"); }
+                    }
+                    else if (hidden.Remove(__instance.Pointer)) Show(__instance, Real(__instance));
+                }
+                catch (Exception e) { RevivalMod.Log.Warning("[frames] ambush: " + e.Message); }
+            }
+        }
+
+        [HarmonyPatch(typeof(CardScript), nameof(CardScript.TriggerAmbush))]
+        private static class AmbushSprung
+        {
+            private static void Prefix(CardScript __instance)
+            {
+                try { if ((object)__instance != null && hidden.Remove(__instance.Pointer)) Show(__instance, Real(__instance)); }
+                catch (Exception e) { RevivalMod.Log.Warning("[frames] ambush sprung: " + e.Message); }
+            }
+        }
+
+        // a hidden card's frame is redrawn by the game (a refresh while it is still hidden): keep it plain
+        [HarmonyPatch(typeof(CardTierUIController), nameof(CardTierUIController.SetFrame))]
+        private static class HiddenFrame
+        {
+            private static void Prefix(CardTierUIController __instance, ref CardTier tier)
+            {
+                try
+                {
+                    if (hidden.Count == 0 && !secretSetup) return;
+                    if (secretSetup) { tier = CardTier.Tier1; return; }
+                    var card = __instance.GetComponentInParent<CardScript>();
+                    if ((object)card != null && hidden.Contains(card.Pointer)) tier = CardTier.Tier1;
+                }
+                catch { }
+            }
+        }
+
+        // an opponent's secret (Dark Angels) is set up face hidden: its frame and foil are drawn plain
+        private static bool secretSetup;
+
+        [HarmonyPatch(typeof(BattleCardUI), nameof(BattleCardUI.SetEnemySecret))]
+        private static class Secret
+        {
+            private static void Prefix(CardScript cardScript)
+            {
+                secretSetup = true;
+                try { if ((object)cardScript != null) cardScript.CardTier = CardTier.Tier1; } catch { }
+            }
+            private static void Finalizer() { secretSetup = false; }
+        }
 
         [HarmonyPatch(typeof(CardServices), nameof(CardServices.GetCardTier))]
         private static class TierIsRarity
