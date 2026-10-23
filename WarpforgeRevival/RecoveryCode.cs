@@ -88,7 +88,7 @@ namespace WarpforgeRevival
                     passBox.interactable = true;
                     passBox.SetTextWithoutNotify("");
                     var ph = passBox.placeholder?.TryCast<TMP_Text>();
-                    if ((object)ph != null) Loc.Bind(ph, () => Loc.T("recovery.passwordHint", "Password (for a recovery code)"));
+                    if ((object)ph != null) { Loc.Bind(ph, () => Loc.T("recovery.passwordHint", "Password (for a recovery code)")); Ui.BrighterHint(ph); }
                 }
                 passT = go.transform;
 
@@ -130,7 +130,17 @@ namespace WarpforgeRevival
             var m = Ui.WorldBox(makeT.GetComponent<RectTransform>());
             if ((object)showT != null) { PutAt(showT, m.right + gap, m.top); showT.gameObject.SetActive(code != null); }
             if ((object)copyT != null && (object)showT != null) { var s = Ui.WorldBox(showT.GetComponent<RectTransform>()); PutAt(copyT, s.right + gap, m.top); copyT.gameObject.SetActive(code != null); }
-            if ((object)textT != null) PutAt(textT, u.left, m.bottom - gap * 0.6f);
+            if ((object)textT != null)
+            {
+                // the line wraps inside the page: from the username box's left edge to the furthest right of the
+                // username box and the Copy button (it was 1.9 x the box's width and ran off the page in Spanish, 0.14.65)
+                float right = u.right;
+                if ((object)copyT != null) right = Math.Max(right, Ui.WorldBox(copyT.GetComponent<RectTransform>()).right);
+                var trt = textT.GetComponent<RectTransform>();
+                float scale = Math.Abs(trt.lossyScale.x) > 1e-5f ? Math.Abs(trt.lossyScale.x) : 1f;
+                trt.sizeDelta = new Vector2((right - u.left) / scale, userRt.rect.height * 4f);
+                PutAt(textT, u.left, m.bottom - gap * 0.6f);
+            }
             var mb = makeT.GetComponent<Button>();
             if ((object)mb != null) mb.interactable = !busy;
             Refresh();

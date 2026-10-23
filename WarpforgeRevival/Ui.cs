@@ -42,6 +42,20 @@ namespace WarpforgeRevival
         }
 
         /// <summary>Where a rectangle is on screen (world space): its top, bottom, left and right edges.</summary>
+        /// <summary>An input box's grey hint text (placeholder), made easier to read: still grey, but lighter and less
+        /// see-through than the game's (a tester found it too dark, 2026-10-23). Done once per text.</summary>
+        internal static void BrighterHint(TMP_Text hint)
+        {
+            try
+            {
+                if ((object)hint == null) return;
+                var c = hint.color;
+                float grey = Math.Max(0.62f, (c.r + c.g + c.b) / 3f);
+                hint.color = new Color(grey, grey, grey, Math.Max(c.a, 0.85f));
+            }
+            catch { }
+        }
+
         internal static (float top, float bottom, float left, float right) WorldBox(RectTransform rt)
         {
             var c = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);

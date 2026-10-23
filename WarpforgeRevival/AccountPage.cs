@@ -60,7 +60,7 @@ namespace WarpforgeRevival
             var ph = input.placeholder;
             if ((object)ph == null) return;
             var label = ph.TryCast<TMP_Text>();
-            if ((object)label != null) label.text = text;
+            if ((object)label != null) { label.text = text; Ui.BrighterHint(label); }
         }
 
         private static void Label(Transform form, string child, string text)
