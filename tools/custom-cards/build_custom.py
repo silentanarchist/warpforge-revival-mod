@@ -29,6 +29,24 @@ SHORT_ID_BASE = 90000          # cardShortId range reserved for custom cards (of
 LANGS = ['en', 'cs', 'de', 'es', 'fr', 'it', 'ja', 'ko', 'pl', 'pt-BR', 'ru', 'tr', 'zh-CN']
 
 
+# the creator site's **Keyword** becomes the game's [[keyword]] (the keyword's name and icon in the card text, as the
+# game writes its own cards; build_set.py's list); other **bold** is left as plain text
+KEYWORDS = {'Hunt Mark': 'huntMark', 'Blood Thirst': 'bloodThirst', 'Ferocity': 'ferocity', 'Pack': 'pack', 'Rally': 'rally',
+            'Camouflage': 'camouflage', 'Tide': 'tide', 'Flying': 'flying', 'Flank': 'flank', 'Vanguard': 'vanguard',
+            'Sniper': 'sniper', 'Strike': 'strike', 'Slay': 'slay', 'Artifice': 'artifice', 'Shield': 'shield',
+            'Invulnerable': 'invulnerable', 'Regeneration': 'regeneration', 'Blind': 'blind', 'Ephemeral': 'ephemeral',
+            'Talent': 'talent', 'Armour': 'armour', 'Stealth': 'stealth', 'Stun': 'stun', 'Fast': 'fast',
+            'Codex': 'codex', 'Melee': 'melee', 'Ranged': 'ranged', 'Agenda': 'agenda', 'Teleport': 'teleport', 'Oath': 'oath', 'Blast': 'blast'}
+
+
+def markup(text):
+    def bold(m):
+        word = m.group(1).strip()
+        key = KEYWORDS.get(word) or KEYWORDS.get(word.title())
+        return '[[%s]]' % key if key else word
+    return re.sub(r'\*\*([^*]+)\*\*', bold, text or '')
+
+
 def guid_for(kind, uid):
     return hashlib.md5(('revival-%s:%s' % (kind, uid)).encode()).hexdigest()
 
@@ -298,7 +316,7 @@ def main():
         manifest['cards'].append({'id': c['id'], 'name': c['name'], 'guid': guid_for('card', c['id']), 'art': art_guids[c['id']], 'shortId': c['shortId'],
                                   'rarity': c['native'].get('cardRarity', 1), 'army': c['native'].get('cardArmy', 0)})
         # English from the design; other languages fall back to it until the creator site carries translations
-        manifest['text'][c['id']] = {'en': {'name': c['name'], 'text': c['text'], 'lore': c['lore']}}
+        manifest['text'][c['id']] = {'en': {'name': c['name'], 'text': markup(c['text']), 'lore': c['lore']}}
     for platform in ('pc', 'android'):
         p1, _ = build_cards(cards, art_guids, out, platform)
         p2, _ = build_art(cards, art_dir, out, platform)
