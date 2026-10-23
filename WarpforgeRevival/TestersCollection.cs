@@ -21,6 +21,7 @@ namespace WarpforgeRevival
     ///    its content swapped for these tiles.)
     ///  - Decks: the copy's deck tab, opened straight on the Custom Test deck list (no format picker).
     ///    Back closes the window. The window is given the mode, so other modes can be passed later.
+    ///  - Its decks open in the Testers window's own deck editor (TestersEditor, 0.14.64).
     ///  - Cards: the copy's card list (the whole collection; Space Wolves were left out until 0.14.51 as a
     ///    check that the copy is separate - owner 2026-10-21: show them again).
     /// The Styles tab is hidden. The ribbon (labels, Play icon, order, Styles hidden) is set once as the window is
@@ -47,6 +48,22 @@ namespace WarpforgeRevival
         }
 
         internal static bool IsCopy(GameWindow w) => Ui.Alive(copy) && (object)w != null && w.Pointer == copy.Pointer;
+
+        /// <summary>The Testers window is open (on screen, or under a popup or its deck editor).</summary>
+        internal static bool InUse()
+        {
+            try
+            {
+                if (!Ui.Alive(copy)) return false;
+                if (copy.IsOpen()) return true;
+                var list = WindowsManager.Instance?.openWindows;
+                if (list != null)
+                    for (int i = 0; i < list.Count; i++)
+                        if ((object)list[i] != null && list[i].Pointer == copy.Pointer) return true;
+            }
+            catch { }
+            return false;
+        }
 
         internal static void Close()
         {
@@ -214,6 +231,7 @@ namespace WarpforgeRevival
             copy = null;
             closedAt = 0;
             RevivalMod.Log.Msg("[testers] Testers window closed and removed");
+            TestersEditor.Drop();
         }
 
         /// <summary>

@@ -10,7 +10,8 @@ namespace WarpforgeRevival
     /// Step 1 (0.14.52): where they may go. They are shown only in the Testers window's Cards tab and in the deck
     /// editor of a mode the server lists in "customCardModes" (the custom-card test mode), and DeckRules lets
     /// them into such a mode's decks only. The normal Collection and every other mode's editor leave them out,
-    /// so a player who somehow has one loaded never sees it elsewhere. Loading the bundle itself comes later.
+    /// so a player who somehow has one loaded never sees it elsewhere. Since 0.14.64 the editor that offers them is
+    /// only the Testers window's own copy of the deck editor (TestersEditor).
     /// </summary>
     internal static class CustomCards
     {
@@ -66,7 +67,8 @@ namespace WarpforgeRevival
             }
         }
 
-        /// <summary>The deck editor's card list: custom cards only when editing a deck of a mode that allows them.</summary>
+        /// <summary>The deck editor's card list: custom cards only in the Testers window's own deck editor (TestersEditor,
+        /// 0.14.64), and there only when editing a deck of a mode that allows them. The game's shared editor never offers them.</summary>
         [HarmonyPatch(typeof(DeckEditingWindow), nameof(DeckEditingWindow.GetCardCollection))]
         private static class EditorList
         {
@@ -78,11 +80,12 @@ namespace WarpforgeRevival
                     var panel = __instance.editingPanel;
                     var deck = (object)panel == null ? null : panel.editingDeck;
                     if ((object)deck == null) deck = __instance.EditingDeck;
-                    if (AllowedIn(deck)) return;
+                    bool testers = TestersEditor.IsCopy(__instance);
+                    if (testers && AllowedIn(deck)) return;
                     var kept = Without(__result, out int left);
                     if (left == 0) return;
                     __result = kept;
-                    if (left != notedEditor) { notedEditor = left; RevivalMod.Log.Msg($"[custom] deck editor: {left} custom card(s) left out (not a custom-card mode's deck)"); }
+                    if (left != notedEditor) { notedEditor = left; RevivalMod.Log.Msg($"[custom] deck editor: {left} custom card(s) left out ({(testers ? "not a custom-card mode's deck" : "the game's own editor")})"); }
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[custom] editor: " + e.Message); }
             }
