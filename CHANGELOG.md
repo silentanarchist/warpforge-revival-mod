@@ -8,24 +8,35 @@ Changes made on the server take effect for everyone at once; the ones listed her
 
 ## Unreleased
 
+## 0.15.0 - 2026-10-24
+
+The mod is now called **WF Revival**: its file is `WFRevival.dll` (PC) / `WFRevival.Android.dll` (Android). A game with an older mod updates itself and moves the mod to its new name by itself; nothing to do. Android devices with Warpforge Patcher 0.4.0 or older need WF Revival Patcher 0.4.1 installed by hand once (see the Patcher guide).
+
 ### New
-- **Server deal (test), for testers:** a "Server Deal (test)" mode in the Testers window (a normal Classic queue with Classic decks, seen by testers only); a friend challenge can ask for the same test with a rule on Social > Challenge that only testers see. In such a match the server supplies the match's random numbers (the shuffle and every random effect) instead of one player's game, and hovering or dragging a card in your hand no longer tells the opponent's game which card it was. First step of hidden hands and decks; every other match plays exactly as before.
-- **Translations (groundwork):** the mod's own texts can now be shown in the game's language (the language set in the game's Settings). Translations come from the server, so they can be added and corrected without a mod update; texts not yet translated stay in English. First texts: Friends / Requests, the alliance invite box, the Social > Challenge page (its mode names too), the Challenge tab, the Testers button and window tabs, the mod's sign-in window (and its Updating / Signed out screens), Settings > Account and Settings > Mod (with their messages, the update messages and the card art export's progress). Words the game already has (Friends, Offline, On / Off, Random, OK, the card rarities) use the game's own translations, so they match the rest of the game. First translations, made by machine and waiting for players who speak each language to check them, are up for all 12 languages the game has besides English.
+- **Your language:** the mod's own screens and messages follow the game's language (Settings > General > Language, or the new language button at the bottom right of the sign-in window). Translations come from the server, so they improve without a mod update; most are machine drafts waiting for players who speak the language to check them (help on the translation site). Words the game already has use the game's own translations. Server messages (sign-in problems and the like) come in your language too.
+- **Social > Challenge, much improved:** a larger page with its own scrolling friend list and rules list; rules change in place; challenge anyone by **friend code** (type it under the friend list and press Find, even if you are not friends); the Challenge button on a profile, an alliance member or a chat profile opens this page with that player picked.
+- **Social > Community (new tab):** replays shared in Discord with `/replay`, each with a Watch button; a box to paste a replay code and watch it; news from the server with a "Join the Discord" button.
+- **Skulls in friend matches:** friend challenges hand out the three skulls like the other modes, and cards that trigger on earning a skull work there.
+- **Card frames follow rarity:** Common, Rare, Epic and Legendary cards each show their own frame and foil everywhere (hand, board, collection, deck lists). An opponent's hidden card (an Ambush troop, a secret) keeps the plain frame until it is revealed.
+- **Hold Tab** (PC) during a match to see the cards left in both decks and both hand sizes.
+- **Deck details:** Troop and Stratagem counts under the deck's Energy chart on the Play screen and in the deck editor.
+- **Classic Defence card:** in Classic you pick your Defence card at the start of the match (going second), so the deck editor has no Defence slot there any more.
+- **Space Wolves** are back in the card set with their art and texts.
+- **Chat:** messages up to 600 characters; alliance chat shows earlier messages straight away.
 
 ### Changed
-- **Sign-in window:** a language button at its bottom right lists the game's 13 languages; picking one sets the game's own language (the same setting as Settings > General > Language, kept for the next start), so new players can switch before they reach Settings.
-- **Social > Challenge:** the page's text is much larger, and the page is taller to make room. A text too long for its place shrinks back to fit.
-- **Social > Challenge:** the rules say **Energy** instead of mana, the game's own word for it (Starting Energy, Energy gained per turn, Unspent Energy carried over), also in the rules shown on the challenge popup.
-
-- **Skulls in friend matches:** friend challenges now hand out the game's three skulls (the enemy warlord at 20, 10 and 0 life) like the other modes, and cards that trigger on earning a skull work in them; the game gave none in those matches, so the skull bar stayed empty, those cards never fired and the match result said 0. On only when both players have 0.14.32 or newer (the server tells each game the other's version); with an older opponent the match plays as before.
-- **Social > Community (new tab):** Replays, with "Watch a replay code" (moved here from Settings > Mod; plays the code on the clipboard) and the replays shared in Discord with /replay, each with a Watch button; and News from the server, with a "Join the Discord" button when the server names one.
-- **Social > Challenge layout:** the friend list and the rules list each scroll on their own, with a bar, so more rules can be added later; the rules text is larger; the buttons stay at the bottom; the friend-code box sits right under its label.
-- **Challenge by friend code:** Social > Challenge has a friend-code box under the friend list: type someone's friend code and press Find, and you can challenge them with your rules even if you are not friends (the challenge, its online check and the answer get through for 15 minutes).
-- **Challenge from a profile or the alliance list:** the Challenge button there now opens Social > Challenge with that player picked (the game's Classic / Skirmish popup is skipped), instead of sending a challenge that cannot carry the mode or any rules (it played as a default challenge).
+- **Who goes first** is decided by the server in every online match and both games follow it, so the two games can never both start first.
+- The AI fallback follows each mode's own setting, so a mode can keep you waiting for a real opponent.
+- A draft run uses its own event's deck size ("Skirmish Draft" is named as such).
+- Settings > Account: the grey hint text in the boxes is lighter, and the recovery-code message wraps inside the page in every language.
+- Social > Friends: request headings sit on rows of their own; the gold line under the buttons matches the alliance page.
 
 ### Fixes
-- **Who goes first (0.14.17):** the server now decides who goes first in every online match and tells both games, so both games always agree. Friend challenges with custom rules could have both players start first, which broke the match on the first move (not yet confirmed in play). The challenge's own "Goes first" choice still applies. Takes effect when both players have 0.14.17 or newer; until then the match plays as before.
-- **Social > Friends:** the gold line under the Friends / Requests buttons is as long as on the alliance page, instead of running over the menu on the left.
+- A restarted replay keeps the rules it was recorded with.
+- Friend challenges with custom rules no longer let both players start first.
+
+### Behind the scenes
+- At the end of each turn the game sends the server a short fingerprint of the board, so when two games ever disagree about a match (a "desync") the exact turn and card can be found and fixed. Nothing private is sent.
 
 ## 0.14.0 - 2026-10-17
 

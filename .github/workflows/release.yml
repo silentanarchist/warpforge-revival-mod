@@ -1,6 +1,6 @@
 # Publishes a Release for the build zips committed under releases/.
-# Since 0.14.0 (2026-10-17) one Release holds both builds of a version: releases/WarpforgeRevival-<x.y.z>-w.zip (PC)
-# and releases/WarpforgeRevival.Android-<x.y.z>-a.zip (Android) become the Release "WF Revival <x.y.z>", tag
+# Since 0.14.0 (2026-10-17) one Release holds both builds of a version: releases/WFRevival-<x.y.z>-w.zip (PC)
+# and releases/WFRevival.Android-<x.y.z>-a.zip (Android) (WarpforgeRevival-... before 0.15.0) become the Release "WF Revival <x.y.z>", tag
 # v<x.y.z>, with install steps for each build it holds and the "## <x.y.z>" section of CHANGELOG.md. A zip committed
 # after its version's Release exists is added to it. Releases from before 0.14.0 (one per build, tags v<x.y.z>-w /
 # v<x.y.z>-a) are left alone: a zip that already has such a Release is skipped. Only the current builds are kept in releases/.
@@ -84,8 +84,10 @@ jobs:
 
           # the versions (x.y.z, without -w / -a) that have a zip here
           bases=""
-          for zip in releases/WarpforgeRevival-*.zip releases/WarpforgeRevival.Android-*.zip; do
-            v="$(basename "$zip" .zip)"; v="${v#WarpforgeRevival.Android-}"; v="${v#WarpforgeRevival-}"
+          # the zip names: WFRevival-<v>-w.zip / WFRevival.Android-<v>-a.zip from 0.15.0, WarpforgeRevival-... before
+          shopt -s nullglob
+          for zip in releases/WFRevival-*.zip releases/WFRevival.Android-*.zip releases/WarpforgeRevival-*.zip releases/WarpforgeRevival.Android-*.zip; do
+            v="$(basename "$zip" .zip)"; v="${v#WFRevival.Android-}"; v="${v#WFRevival-}"; v="${v#WarpforgeRevival.Android-}"; v="${v#WarpforgeRevival-}"
             if gh release view "v$v" >/dev/null 2>&1; then echo "v$v already published (a release from before 0.14.0)"; continue; fi
             base="${v%-*}"
             case " $bases " in *" $base "*) ;; *) bases="$bases $base" ;; esac
@@ -93,8 +95,8 @@ jobs:
 
           for base in $bases; do
             tag="v$base"
-            pc=(releases/WarpforgeRevival-"$base"-*.zip)
-            android=(releases/WarpforgeRevival.Android-"$base"-*.zip)
+            pc=(releases/WFRevival-"$base"-*.zip releases/WarpforgeRevival-"$base"-*.zip)
+            android=(releases/WFRevival.Android-"$base"-*.zip releases/WarpforgeRevival.Android-"$base"-*.zip)
             if gh release view "$tag" >/dev/null 2>&1; then
               have="$(gh release view "$tag" --json assets --jq '.assets[].name')"
               for zip in "${pc[@]}" "${android[@]}"; do
@@ -115,7 +117,7 @@ jobs:
               if [ ${#android[@]} -gt 0 ]; then
                 echo
                 echo "**Android** (\`$(basename "${android[0]}")\`)"
-                echo "The game on the device has to be patched with the mod loader first: the Warpforge Patcher app does that and"
+                echo "The game on the device has to be patched with the mod loader first: the WF Revival Patcher app does that and"
                 echo "also puts this mod in place. Install guides: https://wf-revival.silentanarchist.com/guides/phone (Patcher app),"
                 echo "https://wf-revival.silentanarchist.com/guides/android-pc (with a PC), https://wf-revival.silentanarchist.com/guides/mumu (MuMu Player)."
               fi
