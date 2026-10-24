@@ -20,7 +20,8 @@ namespace WarpforgeRevival
     /// server's checksum and the project owner's signature (ModSignature, 0.14.0), and the game closes and
     /// starts again with it.
     ///
-    /// Updates go to Mods\WarpforgeRevival\WarpforgeRevival.dll. If the running copy is somewhere
+    /// Updates go to Mods\WFRevival\WFRevival.dll (Mods\WarpforgeRevival\WarpforgeRevival.dll before 0.15.0;
+    /// Migration moves a copy found there). If the running copy is somewhere
     /// else (straight in Mods, say) it is removed after the update so the game never loads two
     /// copies. The game keeps the installed file open, so a small script swaps the files once the
     /// game has closed and then starts it again.
@@ -35,11 +36,10 @@ namespace WarpforgeRevival
         /// <summary>Where MelonLoader loaded this mod from (set at start-up; empty when unknown).</summary>
         internal static string LoadedFrom = "";
 
+        private const string FileName = Migration.FileName;      // WFRevival(.Android).dll since the rename (0.15.0)
 #if ANDROID_PORT
-        private const string FileName = "WarpforgeRevival.Android.dll";
         private const string ManifestQuery = "?platform=android";
 #else
-        private const string FileName = "WarpforgeRevival.dll";
         private const string ManifestQuery = "";
 #endif
         private static string server, dataDir;
@@ -69,7 +69,7 @@ namespace WarpforgeRevival
                         return;
                     }
                     RevivalMod.Log.Msg($"[update] server has mod {m.Value.label} (installed {RevivalMod.Version})");
-                    await Run(Loc.T("update.newer", "A newer Warpforge Revival mod is available from the server. Downloading it..."), false, m);
+                    await Run(Loc.T("update.newer", "A newer WF Revival mod is available from the server. Downloading it..."), false, m);
                 }
                 catch (Exception e) { RevivalMod.Log.Warning("[update] update check failed: " + e.Message); }
             });
@@ -94,7 +94,7 @@ namespace WarpforgeRevival
         }
 
         /// <summary>The server refused to sign in because this mod is out of date: update now.</summary>
-        internal static Task<bool> UpdateNow() => Run(Loc.T("update.needed", "This server needs a newer Warpforge Revival mod. Downloading it..."));
+        internal static Task<bool> UpdateNow() => Run(Loc.T("update.needed", "This server needs a newer WF Revival mod. Downloading it..."));
 
         /// <summary>
         /// The "Check for updates" button (Settings > Mod): asks the server now, even with AutoUpdate Off.
@@ -180,10 +180,7 @@ namespace WarpforgeRevival
         private static void Install(string remote, byte[] data)
         {
             string mods = MelonLoader.Utils.MelonEnvironment.ModsDirectory;
-            string dll = !string.IsNullOrEmpty(LoadedFrom) && File.Exists(LoadedFrom)
-                         && string.Equals(Path.GetFileName(LoadedFrom), FileName, StringComparison.OrdinalIgnoreCase)
-                ? Path.GetFullPath(LoadedFrom)
-                : Path.Combine(mods, FileName);
+            string dll = Migration.NewPath;
             string fresh = dll + ".new";
             File.WriteAllBytes(fresh, data);
             // Put in place in one step; the running game keeps using the copy it already loaded.
@@ -197,13 +194,15 @@ namespace WarpforgeRevival
         private static void Install(string remote, byte[] data)
         {
             string mods = MelonLoader.Utils.MelonEnvironment.ModsDirectory;
-            string folder = Path.Combine(mods, "WarpforgeRevival");
-            string dll = Path.Combine(folder, FileName);
-            // Any other copy the game could load: the one running now, and one left straight in Mods.
+            string dll = Migration.NewPath;
+            string folder = Path.GetDirectoryName(dll);
+            // Any other copy the game could load: the one running now, one left straight in Mods, and the old names
             var old = new System.Collections.Generic.List<string>();
-            foreach (string p in new[] { LoadedFrom, typeof(Updater).Assembly.Location, Path.Combine(mods, FileName) })
+            var candidates = new System.Collections.Generic.List<string> { LoadedFrom, typeof(Updater).Assembly.Location, Path.Combine(mods, FileName) };
+            candidates.AddRange(Migration.OldPaths());
+            foreach (string p in candidates)
                 if (!string.IsNullOrEmpty(p) && File.Exists(p) && !SameFile(p, dll) && !old.Exists(o => SameFile(o, p))
-                    && string.Equals(Path.GetFileName(p), FileName, StringComparison.OrdinalIgnoreCase))
+                    && Array.Exists(ModSignature.FileNames, n => string.Equals(Path.GetFileName(p), n, StringComparison.OrdinalIgnoreCase)))
                     old.Add(Path.GetFullPath(p));
             string fresh = dll + ".new";
             try { if (File.Exists(fresh)) File.Delete(fresh); } catch { }
@@ -214,7 +213,7 @@ namespace WarpforgeRevival
             string manifestFile = Path.Combine(folder, "manifest.json");
             if (!File.Exists(manifestFile))
                 File.WriteAllText(manifestFile,
-                    "{\n  \"name\": \"WarpforgeRevival\",\n  \"description\": \"Warpforge Revival mod. MelonLoader needs this file to load mods from this folder - do not delete it.\"\n}\n");
+                    "{\n  \"name\": \"WFRevival\",\n  \"description\": \"WF Revival mod. MelonLoader needs this file to load mods from this folder - do not delete it.\"\n}\n");
             File.WriteAllBytes(fresh, data);
 
             // Swap the files after this process has exited, then start the game again.

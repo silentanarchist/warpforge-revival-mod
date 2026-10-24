@@ -2,7 +2,7 @@
   <!-- The Android build of the mod: the shared source in ..\WarpforgeRevival, compiled with ANDROID_PORT (Windows-only parts are left out by #if, not by leaving files out). -->
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <AssemblyName>WarpforgeRevival.Android</AssemblyName>
+    <AssemblyName>WFRevival.Android</AssemblyName>
     <RootNamespace>WarpforgeRevival</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>

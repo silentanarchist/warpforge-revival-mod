@@ -7,10 +7,29 @@ echo.
 echo  Warpforge for Android - put the mod on the phone
 echo  -----------------------------------------------------
 echo.
-if not exist "mods\WarpforgeRevival.Android.dll" (
-    echo  The mod ^(WarpforgeRevival.Android.dll^) is missing from the "mods" folder.
+rem the mod's file: WFRevival.Android.dll from 0.15.0 (the rename), WarpforgeRevival.Android.dll before
+set "MOD="
+if exist "mods\WarpforgeRevival.Android.dll" set "MOD=WarpforgeRevival.Android.dll"
+if exist "mods\WFRevival.Android.dll" set "MOD=WFRevival.Android.dll"
+if not defined MOD (
+    echo  The mod ^(WFRevival.Android.dll^) is missing from the "mods" folder.
     goto :end
 )
+rem where it goes on the phone: under its own name, or - for WFRevival.Android.dll - under the old name the way a
+rem 0.14.x updater puts it, to test the mod moving itself (it moves at the next start of the game)
+set "TARGET=%MOD%"
+set "OTHER=WFRevival.Android.dll"
+if "%MOD%"=="WFRevival.Android.dll" set "OTHER=WarpforgeRevival.Android.dll"
+if not "%MOD%"=="WFRevival.Android.dll" goto picked
+echo  WFRevival.Android.dll: put it on the phone as
+echo    N = WFRevival.Android.dll ^(a normal install^)
+echo    O = WarpforgeRevival.Android.dll, the old name, like a 0.14.x updater does - to test the mod moving itself
+choice /C NO /M " New or Old name"
+if errorlevel 2 (
+    set "TARGET=WarpforgeRevival.Android.dll"
+    set "OTHER=WFRevival.Android.dll"
+)
+:picked
 
 set "ADB="
 if exist "tool\platform-tools\adb.exe" set "ADB=%~dp0tool\platform-tools\adb.exe"
@@ -52,7 +71,9 @@ rem the earlier test build must not load next to the real mod: it is moved aside
 "%ADB%" -s !DEV! shell "mkdir -p %P%/Mods-disabled; if [ -f %P%/Mods/WarpforgeRevival.AndroidTest.dll ]; then mv %P%/Mods/WarpforgeRevival.AndroidTest.dll %P%/Mods-disabled/; fi"
 rem the retired OpenGL graphics plugin is moved aside too (the game then draws the way it chooses itself)
 "%ADB%" -s !DEV! shell "mkdir -p %P%/Plugins-disabled; if [ -f %P%/Plugins/WarpforgeRevival.AndroidGraphics.dll ]; then mv %P%/Plugins/WarpforgeRevival.AndroidGraphics.dll %P%/Plugins-disabled/; fi"
-"%ADB%" -s !DEV! push "mods\WarpforgeRevival.Android.dll" %P%/Mods/WarpforgeRevival.Android.dll
+rem only one copy of the mod on the phone: the other name is removed
+"%ADB%" -s !DEV! shell "rm -f %P%/Mods/!OTHER!"
+"%ADB%" -s !DEV! push "mods\!MOD!" %P%/Mods/!TARGET!
 if errorlevel 1 (
     echo.
     echo  Copying failed. Has the patched game been started at least once on this phone?

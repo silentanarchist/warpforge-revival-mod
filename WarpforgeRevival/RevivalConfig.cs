@@ -147,14 +147,14 @@ namespace WarpforgeRevival
 
         public static RevivalConfig Load()
         {
-            var cat = MelonPreferences.CreateCategory("WarpforgeRevival", "Warpforge Revival");
+            var cat = MelonPreferences.CreateCategory("WarpforgeRevival", "WF Revival");
             // A full path: on a phone the game's working folder is not the loader's folder.
             cat.SetFilePath(System.IO.Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival.cfg"), autoload: true);
             var c = new RevivalConfig
             {
                 category = cat,
                 serverUrl = cat.CreateEntry("ServerUrl", DefaultServer,
-                    description: "Address of the Warpforge Revival server, for example example.com (port 8780 is assumed, and an encrypted connection is used when the server offers one). Write http://... to force an unencrypted connection or https://... to insist on an encrypted one. Use 127.0.0.1 for a server on this computer"),
+                    description: "Address of the WF Revival server, for example example.com (port 8780 is assumed, and an encrypted connection is used when the server offers one). Write http://... to force an unencrypted connection or https://... to insist on an encrypted one. Use 127.0.0.1 for a server on this computer"),
                 diagnostics = cat.CreateEntry("DiagnosticLogging", true,
                     description: "Log the game's login/loading steps (useful while the mod is in development)"),
                 timeoutSeconds = cat.CreateEntry("TimeoutSeconds", 15,

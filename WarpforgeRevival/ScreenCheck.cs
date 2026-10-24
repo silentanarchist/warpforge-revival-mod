@@ -72,7 +72,7 @@ namespace WarpforgeRevival
             // stays in English on purpose: the translations need the parts of .NET that failed to load here
             // (Loc starts an HttpClient and reads JSON), so Loc.T could fail just when this has to show
             GUI.Label(new Rect(w * 0.12f, h * 0.32f, w * 0.76f, h * 0.36f),
-                "Warpforge Revival could not start properly this time (the mod loader failed to load part of .NET).\n\n" +
+                "WF Revival could not start properly this time (the mod loader failed to load part of .NET).\n\n" +
                 "Close the game fully (swipe it away) and open it again.", brokenStyle);
         }
 

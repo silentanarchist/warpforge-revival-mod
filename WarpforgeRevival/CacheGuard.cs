@@ -175,7 +175,7 @@ namespace WarpforgeRevival
                 }
                 File.WriteAllText(Path.Combine(target, "READ ME.txt"),
                     "These are copies of the original Warpforge game files from this computer's cache,\r\n" +
-                    "made by the Warpforge Revival mod so they cannot be lost. The game's own servers\r\n" +
+                    "made by the WF Revival mod so they cannot be lost. The game's own servers\r\n" +
                     "are gone, so these files cannot be downloaded again.\r\n\r\n" +
                     "If the server owner asked for the original card and text files, zip this whole\r\n" +
                     "folder and send it to them.\r\n");

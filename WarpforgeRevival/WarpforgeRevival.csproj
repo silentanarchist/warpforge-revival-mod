@@ -8,7 +8,7 @@
   -->
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <AssemblyName>WarpforgeRevival</AssemblyName>
+    <AssemblyName>WFRevival</AssemblyName>
     <RootNamespace>WarpforgeRevival</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>

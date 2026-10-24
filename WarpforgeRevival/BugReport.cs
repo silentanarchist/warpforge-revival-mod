@@ -289,7 +289,7 @@ namespace WarpforgeRevival
                 {
                     MessageBoxW(IntPtr.Zero,
                         Loc.T("bugReport.frozenBox", "Warpforge seems frozen.\n\nA bug report has been saved. It will be offered the next time you start the game (if the game recovers by itself, nothing is sent)."),
-                        "Warpforge Revival", 0x30 | 0x10000 | 0x40000);   // warning icon, set foreground, topmost
+                        "WF Revival", 0x30 | 0x10000 | 0x40000);   // warning icon, set foreground, topmost
                 }
                 catch { }
                 boxOpen = false;
@@ -352,9 +352,7 @@ namespace WarpforgeRevival
             try
             {
                 string mods = MelonLoader.Utils.MelonEnvironment.ModsDirectory;
-                files.Add(Path.Combine(mods, "WarpforgeRevival.Android.dll"));
-                files.Add(Path.Combine(mods, "WarpforgeRevival", "WarpforgeRevival.dll"));
-                files.Add(Path.Combine(mods, "WarpforgeRevival.dll"));
+                files.AddRange(Migration.AllPaths());          // the new and old file names (the rename, 0.15.0)
             }
             catch { }
             try { files.Add(UnityEngine.Application.dataPath); } catch { }       // Android: the installed game's APK

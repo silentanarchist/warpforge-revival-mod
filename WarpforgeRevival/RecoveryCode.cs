@@ -233,7 +233,7 @@ namespace WarpforgeRevival
         {
             string safe = System.Text.RegularExpressions.Regex.Replace(name, @"[^\w.'-]+", "_");
             string file = $"warpforge-recovery-{safe}.txt";
-            string text = Loc.T("recovery.fileTitle", "Warpforge Revival - account recovery code") + "\r\n\r\n" +
+            string text = Loc.T("recovery.fileTitle", "WF Revival - account recovery code") + "\r\n\r\n" +
                           Loc.T("recovery.fileUser", "Username: {name}", ("name", name)) + "\r\n" + Loc.T("recovery.code", "Recovery code: {code}", ("code", c)) + "\r\n" +
                           Loc.T("recovery.fileMade", "Made: {date}", ("date", at.Length >= 10 ? at.Substring(0, 10) : at)) + "\r\n\r\n" +
                           Loc.T("recovery.fileHow", "If you forget your password: open the website, choose \"Forgot your password?\" and enter your username, this code and a new password.") + "\r\n" +

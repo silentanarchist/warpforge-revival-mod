@@ -19,7 +19,7 @@ namespace WarpforgeRevival
         private static string TabName => Loc.T("modTab.title", "Mod");
         private static string ButtonText => Loc.T("modTab.open", "Open");
         private static string CheckText => Loc.T("modTab.checkUpdates", "Check for updates");
-        private static string Intro => Loc.T("modTab.intro", "Warpforge Revival mod {version}. The website: design your own cards, manage your account and share decks.", ("version", RevivalMod.Version));
+        private static string Intro => Loc.T("modTab.intro", "WF Revival mod {version}. The website: design your own cards, manage your account and share decks.", ("version", RevivalMod.Version));
 
         private static bool reported;
 

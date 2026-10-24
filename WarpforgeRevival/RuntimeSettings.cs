@@ -30,7 +30,7 @@ namespace WarpforgeRevival
     internal static class RuntimeSettings
     {
         private const string Wanted =
-            "# Written by Warpforge Revival; read by the patched loader before .NET starts.\n" +
+            "# Written by WF Revival; read by the patched loader before .NET starts.\n" +
             "MONO_GC_PARAMS=nursery-size=64m\n" +
             "MONO_THREADS_SUSPEND=coop\n";
 

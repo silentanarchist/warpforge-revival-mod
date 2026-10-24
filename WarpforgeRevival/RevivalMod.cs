@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(WarpforgeRevival.RevivalMod), "Warpforge Revival", WarpforgeRevival.RevivalMod.Version, "Warpforge Revival community")]
+[assembly: MelonInfo(typeof(WarpforgeRevival.RevivalMod), "WF Revival", WarpforgeRevival.RevivalMod.Version, "WF Revival community")]
 [assembly: MelonGame("Everguild", "Warpforge")]
 // The mod applies its hooks itself, one class at a time (SafePatch): MelonLoader's automatic PatchAll stops
 // at the first hook that fails. The phone build also pauses the game's garbage collector meanwhile (PatchQuietly).
@@ -20,9 +20,9 @@ namespace WarpforgeRevival
     public class RevivalMod : MelonMod
     {
         #if ANDROID_PORT
-        public const string Version = "0.14.66-a";
+        public const string Version = "0.15.0-a";
 #else
-        public const string Version = "0.14.66-w";
+        public const string Version = "0.15.0-w";
 #endif
 
         /// <summary>
@@ -107,9 +107,21 @@ namespace WarpforgeRevival
         }
 #endif
 
+        /// <summary>This copy stays switched off for this run (another copy of the mod runs; the WF Revival rename, Migration).</summary>
+        private static bool inactive;
+
         public override void OnInitializeMelon()
         {
             Log = LoggerInstance;
+            // first: the rename (0.15.0) - a copy started from the old file name moves itself, and a second copy stays off
+            string here = "";
+            try { here = MelonAssembly.Location ?? ""; } catch { }
+            if (!Migration.Run(here, Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival")))
+            {
+                inactive = true;
+                LoggerInstance.Msg($"WF Revival {Version} at {here}: switched off for this run (another copy runs)");
+                return;
+            }
             ScreenCheck.CheckRuntime();      // first: the loader sometimes fails to load parts of .NET (seen on a Pixel 6 Pro)
 #if ANDROID_PORT
             RuntimeSettings.Apply();         // before the hooks: they are where the runtime has crashed
@@ -129,7 +141,7 @@ namespace WarpforgeRevival
             }
             catch (Exception e) { Log.Warning("[mods] could not read this mod's own file: " + e.Message); }
             try { Updater.LoadedFrom = MelonAssembly.Location ?? ""; } catch { }
-            Log.Msg($"Warpforge Revival {Version} - server: {Config.ServerUrl}" + (Config.Secure ? " (encrypted)" : " (not encrypted)"));
+            Log.Msg($"WF Revival {Version} - server: {Config.ServerUrl}" + (Config.Secure ? " (encrypted)" : " (not encrypted)"));
 
             string dataDir = Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "WarpforgeRevival");
             Directory.CreateDirectory(dataDir);
@@ -191,6 +203,7 @@ namespace WarpforgeRevival
 
         public override void OnGUI()
         {
+            if (inactive) return;
             ScreenCheck.OnGUI();
             if (ScreenCheck.RuntimeBroken) return;
             GameSignIn.Draw();
@@ -198,13 +211,14 @@ namespace WarpforgeRevival
             PlayerReports.OnGUI();
         }
 
-        public override void OnApplicationQuit() => BugReport.End();
+        public override void OnApplicationQuit() { if (!inactive) BugReport.End(); }
 
 #if ANDROID_PORT
         private static bool graphicsNoted;
 #endif
         public override void OnUpdate()
         {
+            if (inactive) return;
             if (ScreenCheck.RuntimeBroken) return;     // nothing of the mod can run; the screen says to restart
             // The game freezes when its window loses focus, and a frozen game drops out of the match
             // service within seconds: the room you were waiting in closes and nobody can find you.
