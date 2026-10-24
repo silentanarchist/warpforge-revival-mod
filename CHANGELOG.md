@@ -21,7 +21,6 @@ The mod is now called **WF Revival**: its file is `WFRevival.dll` (PC) / `WFRevi
 - **Hold Tab** (PC) during a match to see the cards left in both decks and both hand sizes.
 - **Deck details:** Troop and Stratagem counts under the deck's Energy chart on the Play screen and in the deck editor.
 - **Classic Defence card:** in Classic you pick your Defence card at the start of the match (going second), so the deck editor has no Defence slot there any more.
-- **Space Wolves** are back in the card set with their art and texts.
 - **Chat:** messages up to 600 characters; alliance chat shows earlier messages straight away.
 
 ### Changed
