@@ -26,7 +26,6 @@ The mod is now called **WF Revival**: its file is `WFRevival.dll` (PC) / `WFRevi
 
 ### Changed
 - **Who goes first** is decided by the server in every online match and both games follow it, so the two games can never both start first.
-- The AI fallback follows each mode's own setting, so a mode can keep you waiting for a real opponent.
 - A draft run uses its own event's deck size ("Skirmish Draft" is named as such).
 - Settings > Account: the grey hint text in the boxes is lighter, and the recovery-code message wraps inside the page in every language.
 - Social > Friends: request headings sit on rows of their own; the gold line under the buttons matches the alliance page.
