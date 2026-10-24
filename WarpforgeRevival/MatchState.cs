@@ -78,6 +78,14 @@ namespace WarpforgeRevival
             return string.Join(",", rows.Values);
         }
 
+        // a new battle starts its count at 1, also when it is played in a room of the same name (a friend's Practice_<id>
+        // room is reused for the next challenge, seen 2026-10-23: the second match was numbered from turn 11)
+        [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.StartBattleManager))]
+        private static class NewBattle
+        {
+            private static void Prefix() { room = null; turn = 0; }
+        }
+
         [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.ResolveEndTurn))]
         private static class EndOfTurn
         {
